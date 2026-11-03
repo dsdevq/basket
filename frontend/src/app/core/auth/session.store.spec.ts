@@ -26,13 +26,31 @@ describe('SessionStore', () => {
     expect(session).toHaveBeenCalledTimes(1);
   });
 
-  it('treats a failed session call as signed out', async () => {
-    const store = setup({session: vi.fn().mockRejectedValue(new Error('offline'))});
+  it('does not call a failed session call "signed out": it says why and asks again next time', async () => {
+    const session = vi
+      .fn()
+      .mockRejectedValueOnce({status: 0})
+      .mockResolvedValue({authenticated: true, user: OWNER});
+    const store = setup({session});
 
     await store.ensureLoaded();
 
-    expect(store.loaded()).toBe(true);
+    expect(store.loaded()).toBe(false);
     expect(store.isSignedIn()).toBe(false);
+    expect(store.loadFailure()).toBe('no answer from the server');
+
+    await store.ensureLoaded();
+
+    expect(store.loadFailure()).toBeNull();
+    expect(store.user()).toEqual(OWNER);
+  });
+
+  it('names the status of a server error', async () => {
+    const store = setup({session: vi.fn().mockRejectedValue({status: 503})});
+
+    await store.ensureLoaded();
+
+    expect(store.loadFailure()).toBe('the server answered HTTP 503');
   });
 
   it('knows a member is not an owner', async () => {

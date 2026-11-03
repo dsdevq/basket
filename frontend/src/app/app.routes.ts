@@ -14,7 +14,13 @@ export const APP_ROUTES: Routes = [
     path: 'join',
     title: 'Join',
     canActivate: [guestGuard],
+    data: {tolerateOffline: true},
     loadComponent: () => import('./features/join/join.page').then(m => m.JoinPage),
+  },
+  {
+    path: 'unreachable',
+    title: 'Cannot reach basket',
+    loadComponent: () => import('./core/auth/unreachable.page').then(m => m.UnreachablePage),
   },
   {
     path: '',

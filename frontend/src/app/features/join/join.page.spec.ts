@@ -41,17 +41,62 @@ describe('JoinPage', () => {
     expect(host.textContent).toContain('Create passkey');
   });
 
-  it('says the link is no use when there is no token or the server refuses it', async () => {
-    const none = setup('', {checkInvite: vi.fn()});
-    await none.fixture.whenStable();
-    none.fixture.detectChanges();
-    expect(none.host.textContent).toContain('not valid any more');
-    TestBed.resetTestingModule();
+  it('says the link is incomplete when the part after the # sign is missing', async () => {
+    const api = {checkInvite: vi.fn()};
+    const {fixture, host} = setup('', api);
+    await fixture.whenStable();
+    fixture.detectChanges();
 
-    const refused = setup('#dead', {checkInvite: vi.fn().mockRejectedValue({status: 404})});
-    await refused.fixture.whenStable();
-    refused.fixture.detectChanges();
-    expect(refused.host.textContent).toContain('not valid any more');
+    expect(host.textContent).toContain('This link is incomplete');
+    expect(host.textContent).toContain('after the # sign');
+    expect(api.checkInvite).not.toHaveBeenCalled();
+  });
+
+  it('says the link was used or expired when the server does not know the token', async () => {
+    const {fixture, host} = setup('#dead', {checkInvite: vi.fn().mockRejectedValue({status: 404})});
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(host.textContent).toContain('used or has expired');
+    expect(host.textContent).not.toContain('Cannot reach basket');
+  });
+
+  it.each([
+    [{status: 0}, 'no answer from the server'],
+    [{status: 502}, 'HTTP 502'],
+    [{status: 429}, 'HTTP 429'],
+  ])('says basket cannot be reached when the check fails with %o', async (error, detail) => {
+    const {fixture, host} = setup('#tok', {checkInvite: vi.fn().mockRejectedValue(error)});
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(host.textContent).toContain('Cannot reach basket');
+    expect(host.textContent).toContain(detail);
+    expect(host.textContent).toContain('Try again');
+    expect(host.textContent).not.toContain('used or has expired');
+    expect(host.textContent).not.toContain('tok');
+  });
+
+  it('checks the same link again on Try again, without the address bar', async () => {
+    const checkInvite = vi
+      .fn()
+      .mockRejectedValueOnce({status: 0})
+      .mockResolvedValue({role: 'member', label: null});
+    const {fixture, host} = setup('#tok', {checkInvite});
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const retry = [...host.querySelectorAll('button')].find(b =>
+      b.textContent?.includes('Try again')
+    );
+    retry?.click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(checkInvite).toHaveBeenCalledTimes(2);
+    expect(checkInvite).toHaveBeenLastCalledWith('tok');
+    expect(window.location.hash).toBe('');
+    expect(host.textContent).toContain('Create passkey');
   });
 
   it('makes the passkey with the name given and opens the list', async () => {
@@ -111,6 +156,6 @@ describe('JoinPage', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    expect(host.textContent).toContain('not valid any more');
+    expect(host.textContent).toContain('used or has expired');
   });
 });

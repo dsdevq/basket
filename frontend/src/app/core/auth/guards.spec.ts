@@ -6,17 +6,38 @@ import {AuthApi} from './auth.api';
 import {authGuard, guestGuard, ownerGuard} from './guards';
 import type {SessionUser} from './session.model';
 
+class HttpError extends Error {
+  constructor(public readonly status: number) {
+    super('http');
+  }
+}
+
 const route: ActivatedRouteSnapshot = new ActivatedRouteSnapshot();
+route.data = {};
 const state: RouterStateSnapshot = {url: '/', root: route};
 
-async function run(guard: typeof authGuard, user: SessionUser | null): Promise<unknown> {
+async function run(
+  guard: typeof authGuard,
+  user: SessionUser | null,
+  guarded: ActivatedRouteSnapshot = route
+): Promise<unknown> {
   TestBed.configureTestingModule({
     providers: [
       provideRouter([]),
       {provide: AuthApi, useValue: {session: () => Promise.resolve({authenticated: !!user, user})}},
     ],
   });
-  return TestBed.runInInjectionContext(() => guard(route, state));
+  return TestBed.runInInjectionContext(() => guard(guarded, state));
+}
+
+async function runOffline(guard: typeof authGuard, guarded = route): Promise<unknown> {
+  TestBed.configureTestingModule({
+    providers: [
+      provideRouter([]),
+      {provide: AuthApi, useValue: {session: () => Promise.reject(new HttpError(0))}},
+    ],
+  });
+  return TestBed.runInInjectionContext(() => guard(guarded, state));
 }
 
 describe('route guards', () => {
@@ -47,5 +68,19 @@ describe('route guards', () => {
     );
     TestBed.resetTestingModule();
     expect(await run(ownerGuard, {id: '2', displayName: 'B', role: 'owner'})).toBe(true);
+  });
+
+  it('sends everyone to the unreachable page when the server cannot be asked', async () => {
+    for (const guard of [authGuard, guestGuard, ownerGuard]) {
+      TestBed.resetTestingModule();
+      expect(String(await runOffline(guard))).toBe('/unreachable');
+    }
+  });
+
+  it('lets the invite page through when the server cannot be asked, so its #token survives', async () => {
+    const join = new ActivatedRouteSnapshot();
+    join.data = {tolerateOffline: true};
+
+    expect(await runOffline(guestGuard, join)).toBe(true);
   });
 });
