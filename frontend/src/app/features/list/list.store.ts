@@ -35,6 +35,7 @@ export const ListStore = signalStore(
       toast = inject(ToastService),
       session = inject(SessionStore)
     ) => {
+      // Counts local writes to `items`; a refresh that started before a write is stale and must not overwrite it.
       let changes = 0;
       const setItems = (items: readonly ListItem[]): void => {
         changes++;

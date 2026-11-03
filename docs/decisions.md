@@ -42,8 +42,9 @@ planning record so this repo carries its own reasons; the M1 section holds the c
   (`Auth__Origins`); the cookie is SameSite=Strict as the second layer.
 - **No user enumeration.** An unknown, used, expired or revoked invite all answer the same `404 invite_invalid`; a
   failed passkey sign-in answers the same `401 sign_in_failed` whatever the reason.
-- **Rate limits** (per client address, built-in limiter): sign-in/register endpoints 20 per minute, invite creation 10
-  per hour. The client address comes from `X-Forwarded-For` only when the peer is on a private network.
+- **Rate limits** (built-in limiter): sign-in/register endpoints 20 per minute per client address, invite creation 10
+  per hour per signed-in user. The client address comes from `X-Forwarded-For` only when the peer is on a private
+  network.
 - **Security headers** on every response, with a strict CSP; the one inline script (the pre-paint theme script from
   `lifekit-theme-sync`) is allowed by its pinned SHA-256, kept in step by `npm run lint`.
 - **Cookies are per host, not per port.** Other services on `lifekit-vps.tail1cb676.ts.net` (other ports) receive
