@@ -108,5 +108,10 @@ database volume.
   for that person. If the owner loses theirs with no synced passkey, the last resort is a reset that also clears the list:
   `docker exec -it basket-db psql -U basket basket -c 'TRUNCATE users, list_item, invite CASCADE;'`, then restart the app
   (a fresh owner invite opens from `BOOTSTRAP_TOKEN`) and register again. Take a `pg_dump` first.
+- **A join link that does nothing.** Every request log line carries `ua=`, `ch-ua=` and `lang=` (the browser's
+  User-Agent, client hint and language). Static files in the log but no `/api/session` from that `ua=` means the app
+  never started in that browser; the page then shows "Something went wrong" with an error name and a Reload button
+  (after 15 s if the script never ran), or "Cannot reach basket" with Try again when the API could not be reached.
+  The invite token is in the URL fragment and is never logged.
 - **Memory.** The app container is capped at 256 MB and Postgres at 192 MB; the box has little headroom, so do not
   raise them without checking `free -m` first.

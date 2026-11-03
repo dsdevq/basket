@@ -67,12 +67,16 @@ if (builder.Configuration.GetValue("Hangfire:Enabled", true))
 var app = builder.Build();
 
 app.UseForwardedHeaders();
-app.UseSerilogRequestLogging(options => options.GetLevel = (context, _, ex) =>
-    ex is not null || context.Response.StatusCode >= 500
-        ? Serilog.Events.LogEventLevel.Error
-        : context.Request.Path.StartsWithSegments("/api/health")
-            ? Serilog.Events.LogEventLevel.Verbose
-            : Serilog.Events.LogEventLevel.Information);
+app.UseSerilogRequestLogging(options =>
+{
+    RequestLogging.Configure(options);
+    options.GetLevel = (context, _, ex) =>
+        ex is not null || context.Response.StatusCode >= 500
+            ? Serilog.Events.LogEventLevel.Error
+            : context.Request.Path.StartsWithSegments("/api/health")
+                ? Serilog.Events.LogEventLevel.Verbose
+                : Serilog.Events.LogEventLevel.Information;
+});
 app.UseMiddleware<SecurityHeadersMiddleware>();
 app.UseHsts();
 app.UseMiddleware<OriginCheckMiddleware>();
