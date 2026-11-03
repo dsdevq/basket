@@ -35,14 +35,21 @@ export const ListStore = signalStore(
       toast = inject(ToastService),
       session = inject(SessionStore)
     ) => {
+      let changes = 0;
+      const setItems = (items: readonly ListItem[]): void => {
+        changes++;
+        patchState(store, {items});
+      };
       const replace = (next: ListItem): void =>
-        patchState(store, {items: store.items().map(item => (item.id === next.id ? next : item))});
+        setItems(store.items().map(item => (item.id === next.id ? next : item)));
 
       return {
         /** Fetches the list. `quiet` keeps what is on screen if the call fails (the background refresh). */
         async load(quiet = false): Promise<void> {
+          const seen = changes;
           try {
-            patchState(store, {items: await api.items(), status: 'ready'});
+            const items = await api.items();
+            patchState(store, changes === seen ? {items, status: 'ready'} : {status: 'ready'});
           } catch {
             if (!quiet) {
               patchState(store, {status: store.items().length ? 'ready' : 'error'});
@@ -55,9 +62,7 @@ export const ListStore = signalStore(
           patchState(store, {adding: true});
           try {
             const created = await api.add(text);
-            patchState(store, {
-              items: [...store.items().filter(item => item.id !== created.id), created],
-            });
+            setItems([...store.items().filter(item => item.id !== created.id), created]);
             return true;
           } catch {
             toast.error(MESSAGES.add);
@@ -86,12 +91,12 @@ export const ListStore = signalStore(
 
         async remove(item: ListItem): Promise<void> {
           const before = store.items();
-          patchState(store, {items: before.filter(candidate => candidate.id !== item.id)});
+          setItems(before.filter(candidate => candidate.id !== item.id));
           try {
             await api.remove(item.id);
           } catch (error) {
             if (statusOf(error) !== HttpStatus.notFound) {
-              patchState(store, {items: before});
+              setItems(before);
               toast.error(MESSAGES.remove);
             }
           }

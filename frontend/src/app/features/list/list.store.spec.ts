@@ -106,6 +106,26 @@ describe('ListStore', () => {
     expect(store.items()[0]?.checkedAt).toBe('2026-11-03T10:05:00Z');
   });
 
+  it('ignores a refresh that was read before a tick landed', async () => {
+    const original = item('a');
+    const ticked = {...original, checked: true, checkedAt: '2026-11-03T10:05:00Z', checkedBy: ME};
+    let answerPoll!: (value: ListItem[]) => void;
+    const items = vi
+      .fn()
+      .mockResolvedValueOnce([original])
+      .mockReturnValueOnce(new Promise<ListItem[]>(r => (answerPoll = r)));
+    const {store} = setup({items, setChecked: vi.fn().mockResolvedValue(ticked)});
+    await store.load();
+
+    const poll = store.load(true);
+    await store.toggle(original, true);
+    answerPoll([original]);
+    await poll;
+
+    expect(store.items()).toEqual([ticked]);
+    expect(store.status()).toBe('ready');
+  });
+
   it('puts an item back when the tick is refused', async () => {
     const original = item('a');
     const {store, toast} = setup({
