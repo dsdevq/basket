@@ -14,9 +14,10 @@
   var done = false;
   var ownPanel = null;
 
+  // Set by the bundle once the first routed page has rendered (crash-screen.ts, MOUNTED_ATTRIBUTE). An empty
+  // <router-outlet> in <bk-root> is not enough: a blocked lazy chunk leaves exactly that.
   function mounted() {
-    var root = document.querySelector('bk-root');
-    return !!root && root.childNodes.length > 0;
+    return document.documentElement.hasAttribute('data-bk-mounted');
   }
 
   function show(name, hint) {

@@ -1,8 +1,17 @@
+import {Location} from '@angular/common';
+import {ChangeDetectionStrategy, Component, ErrorHandler, inject} from '@angular/core';
+import {TestBed} from '@angular/core/testing';
+import {provideRouter, Router, type Routes} from '@angular/router';
+
+import {AppComponent} from '../../app.component';
 import {
   CRASH_ELEMENT_ID,
   CrashErrorHandler,
   errorNameOf,
   installCrashFallback,
+  isAppMounted,
+  MOUNTED_ATTRIBUTE,
+  provideMountMarker,
   showCrashScreen,
 } from './crash-screen';
 
@@ -11,7 +20,6 @@ const panel = () => document.getElementById(CRASH_ELEMENT_ID);
 describe('crash screen', () => {
   afterEach(() => {
     panel()?.remove();
-    document.querySelector('bk-root')?.remove();
     vi.restoreAllMocks();
   });
 
@@ -76,46 +84,117 @@ describe('crash screen', () => {
     expect(panel()?.textContent).toContain('Something went wrong');
   });
 
-  describe('once the app has mounted', () => {
+  describe('with the real shell and routing', () => {
+    @Component({template: 'a routed page', changeDetection: ChangeDetectionStrategy.OnPush})
+    class PageComponent {}
+
+    const throwingGuard = () => {
+      throw new TypeError('guard broke');
+    };
+
+    async function boot(initialUrl: string, routes: Routes): Promise<void> {
+      TestBed.configureTestingModule({
+        rethrowApplicationErrors: false,
+        providers: [
+          provideRouter(routes),
+          provideMountMarker(),
+          {provide: ErrorHandler, useClass: CrashErrorHandler},
+        ],
+      });
+      const fixture = TestBed.createComponent(AppComponent);
+      TestBed.inject(Location).go(initialUrl);
+      TestBed.inject(Router).initialNavigation();
+      await fixture.whenStable();
+    }
+
+    const rejection = (reason: unknown) => {
+      const event = new Event('unhandledrejection') as Event & {reason: unknown};
+      event.reason = reason;
+      window.dispatchEvent(event);
+    };
+
     beforeEach(() => {
-      const root = document.createElement('bk-root');
-      root.append(document.createElement('div'));
-      document.body.append(root);
+      vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      installCrashFallback(window);
     });
 
-    it('only logs uncaught errors and unhandled rejections', () => {
-      const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-      installCrashFallback(window);
+    afterEach(() => document.documentElement.removeAttribute(MOUNTED_ATTRIBUTE));
+
+    it('is not mounted while <router-outlet> is up but no routed page has rendered', () => {
+      TestBed.configureTestingModule({providers: [provideRouter([]), provideMountMarker()]});
+      const fixture = TestBed.createComponent(AppComponent);
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.querySelector('router-outlet')).not.toBeNull();
+      expect(isAppMounted(document)).toBe(false);
+
+      new CrashErrorHandler().handleError(new Error('boom'));
+      expect(panel()?.textContent).toContain('Something went wrong');
+    });
+
+    it('explains a lazy chunk that fails to load', async () => {
+      await boot('/broken', [
+        {
+          path: 'broken',
+          loadComponent: () =>
+            Promise.reject(new TypeError('Failed to fetch dynamically imported module')),
+        },
+      ]);
+
+      expect(isAppMounted(document)).toBe(false);
+      expect(panel()?.textContent).toContain('Error: TypeError');
+    });
+
+    it('explains a guard that throws', async () => {
+      await boot('/guarded', [
+        {path: 'guarded', canActivate: [throwingGuard], component: PageComponent},
+      ]);
+
+      expect(isAppMounted(document)).toBe(false);
+      expect(panel()?.textContent).toContain('Error: TypeError');
+    });
+
+    it('explains an uncaught error that happens before the first page renders', () => {
+      TestBed.configureTestingModule({providers: [provideRouter([]), provideMountMarker()]});
+      TestBed.createComponent(AppComponent).detectChanges();
+
+      window.dispatchEvent(
+        new ErrorEvent('error', {error: new SyntaxError('bad'), message: 'bad'})
+      );
+
+      expect(panel()?.textContent).toContain('Error: SyntaxError');
+    });
+
+    it('only logs stray errors once the first routed page has rendered', async () => {
+      await boot('/page', [{path: 'page', component: PageComponent}]);
+      expect(isAppMounted(document)).toBe(true);
+      const log = vi.mocked(console.error);
+      log.mockClear();
       const error = new SyntaxError('bad');
+      const stray = new RangeError('stray');
+      const fromAngular = new Error('boom');
 
       window.dispatchEvent(new ErrorEvent('error', {error, message: 'bad'}));
-      const rejection = new Event('unhandledrejection') as Event & {reason: unknown};
-      rejection.reason = new RangeError('stray');
-      window.dispatchEvent(rejection);
+      rejection(stray);
+      TestBed.inject(ErrorHandler).handleError(fromAngular);
 
       expect(panel()).toBeNull();
       expect(log).toHaveBeenCalledWith(error);
-      expect(log).toHaveBeenCalledWith(rejection.reason);
+      expect(log).toHaveBeenCalledWith(stray);
+      expect(log).toHaveBeenCalledWith(fromAngular);
     });
 
-    it('only logs what Angular’s error handler receives', () => {
-      const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-      const error = new Error('boom');
+    it('counts the page a guard redirects to', async () => {
+      await boot('/old', [
+        {
+          path: 'old',
+          canActivate: [() => inject(Router).parseUrl('/page')],
+          component: PageComponent,
+        },
+        {path: 'page', component: PageComponent},
+      ]);
 
-      new CrashErrorHandler().handleError(error);
-
-      expect(panel()).toBeNull();
-      expect(log).toHaveBeenCalledWith(error);
+      expect(isAppMounted(document)).toBe(true);
     });
-  });
-
-  it('shows the screen while <bk-root> is still empty', () => {
-    const root = document.createElement('bk-root');
-    document.body.append(root);
-    installCrashFallback(window);
-
-    window.dispatchEvent(new ErrorEvent('error', {error: new TypeError('early'), message: 'early'}));
-
-    expect(panel()?.textContent).toContain('Error: TypeError');
   });
 });

@@ -5,7 +5,7 @@ import {provideToastPreferenceErrors} from '@lifekit-hq/ui';
 
 import {APP_ROUTES} from './app.routes';
 import {sessionInterceptor} from './core/auth/session.interceptor';
-import {CrashErrorHandler} from './core/diagnostics/crash-screen';
+import {CrashErrorHandler, provideMountMarker} from './core/diagnostics/crash-screen';
 import {BasketTitleStrategy} from './core/title.strategy';
 
 export const appConfig: ApplicationConfig = {
@@ -14,6 +14,7 @@ export const appConfig: ApplicationConfig = {
     provideHttpClient(withInterceptors([sessionInterceptor])),
     provideToastPreferenceErrors(),
     {provide: ErrorHandler, useClass: CrashErrorHandler},
+    provideMountMarker(),
     {provide: TitleStrategy, useClass: BasketTitleStrategy},
   ],
 };

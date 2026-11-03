@@ -1,7 +1,17 @@
-import {type ErrorHandler} from '@angular/core';
+import {
+  type EnvironmentProviders,
+  type ErrorHandler,
+  inject,
+  provideEnvironmentInitializer,
+} from '@angular/core';
+import {NavigationEnd, Router} from '@angular/router';
+import {filter, take} from 'rxjs';
 
 /** The id of the fallback panel; `public/boot-guard.js` draws the same one when the bundle never starts. */
 export const CRASH_ELEMENT_ID = 'bk-crash';
+
+/** Set on `<html>` once the first routed page has rendered; `public/boot-guard.js` reads the same attribute. */
+export const MOUNTED_ATTRIBUTE = 'data-bk-mounted';
 
 const MAX_NAME_LENGTH = 60;
 
@@ -23,9 +33,25 @@ function isHttpFailure(error: unknown): boolean {
   return typeof (error as {status?: unknown} | null)?.status === 'number';
 }
 
-/** True once Angular has rendered something into `<bk-root>`; from then on a stray error is not a crash. */
+/**
+ * True once the first routed page has rendered; from then on a stray error is not a crash. An empty
+ * `<router-outlet>` in `<bk-root>` does not count: a blocked lazy chunk or a failing guard leaves exactly that.
+ */
 export function isAppMounted(doc: Document): boolean {
-  return (doc.querySelector('bk-root')?.childNodes.length ?? 0) > 0;
+  return doc.documentElement.hasAttribute(MOUNTED_ATTRIBUTE);
+}
+
+/** Marks the app mounted after the first successful navigation. */
+export function provideMountMarker(): EnvironmentProviders {
+  return provideEnvironmentInitializer(() => {
+    const doc = document;
+    inject(Router)
+      .events.pipe(
+        filter(event => event instanceof NavigationEnd),
+        take(1)
+      )
+      .subscribe(() => doc.documentElement.setAttribute(MOUNTED_ATTRIBUTE, ''));
+  });
 }
 
 /** Draws "Something went wrong" over the page. Plain DOM, so it works even when Angular itself is broken. */
@@ -71,7 +97,7 @@ function reportCrash(doc: Document, error: unknown): void {
 /**
  * Catches what Angular does not: errors thrown outside a component and promises nobody awaited. An error event
  * without an error object (ResizeObserver noise, cross-origin "Script error.") says nothing and is ignored.
- * Once the app has mounted, such errors are only logged.
+ * Once a routed page has rendered, such errors are only logged.
  */
 export function installCrashFallback(win: Window): void {
   win.addEventListener('error', event => {
