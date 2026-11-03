@@ -1,0 +1,22 @@
+/* Pipeline concerns: the published @lifekit-hq/tokens theme.css is pure custom properties; the
+   tailwind directives and the cdk overlay stylesheet live here. */
+@import '@angular/cdk/overlay-prebuilt.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  color: var(--color-text-primary);
+  background: var(--color-surface-bg);
+}
+
+/* The root stays at the browser's 16px, which the token rem scale assumes; unstyled text reads at
+   the ramp's body size (text-cmn-sm). */
+body {
+  font-size: 0.875rem;
+}

@@ -1,0 +1,23 @@
+# build output
+bin/
+obj/
+dist/
+.angular/
+node_modules/
+TestResults/
+*.log
+
+# local secrets and state - never committed
+.env
+.env.*
+!.env.example
+docker/.env
+docker/.env.*
+!docker/.env.example
+*.agekey
+
+# editors
+.idea/
+.vs/
+*.user
+coverage/

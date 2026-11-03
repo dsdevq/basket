@@ -1,0 +1,18 @@
+# Local development database only: the API and the Angular dev server run on the host.
+#   docker compose -f docker/docker-compose.dev.yml up -d      (Postgres on 127.0.0.1:55432)
+name: basket-dev
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: basket
+      POSTGRES_USER: basket
+      POSTGRES_PASSWORD: basket-dev
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - pgdata-dev:/var/lib/postgresql/data
+
+volumes:
+  pgdata-dev:

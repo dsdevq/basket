@@ -1,0 +1,53 @@
+# Per-repo no-mistakes overrides: pin the gate's Lint and Test steps so validation is declared here,
+# not decided per run. Sources of truth (keep in step; the workflow wins on divergence):
+#   .github/workflows/ci.yml   jobs `frontend`, `backend`
+#
+# Lint = the frontend job's lint + format steps. C# style is enforced at build time
+# (TreatWarningsAsErrors in backend/Directory.Build.props), so the backend builds under `test`.
+#
+# Test = a pre-check scoped to what the branch changed (merge-base with origin/main): the backend half when
+# `backend/` or `global.json` changed, the frontend half when `frontend/` changed; any other path runs both.
+# The backend tests need Postgres: scripts/test-backend.sh starts a throwaway container and removes it.
+# `@lifekit-hq/*` resolves from GitHub Packages, so NODE_AUTH_TOKEN (read:packages) must be in the environment.
+# The .NET 10 SDK or Docker is a host prerequisite; with only Docker, scripts/test-backend.sh runs the SDK image.
+commands:
+  lint: >-
+    cd frontend
+    && npm ci
+    && npm run lint
+    && npm run format:check
+  test: |-
+    set -e
+    be=0
+    fe=0
+    if base=$(git merge-base HEAD origin/main 2>/dev/null) && files=$(git diff --name-only "$base" 2>/dev/null) && [ -n "$files" ]; then
+      set -f
+      for f in $files; do
+        case "$f" in
+          backend/*|global.json) be=1 ;;
+          frontend/*) fe=1 ;;
+          *) be=1; fe=1 ;;
+        esac
+      done
+      set +f
+    else
+      be=1
+      fe=1
+    fi
+    if [ "$be" = 1 ]; then
+      sh scripts/test-backend.sh
+    fi
+    if [ "$fe" = 1 ]; then
+      (cd frontend && npm ci && npm run build && npm run test:ci)
+    fi
+
+# Corrections only: AGENTS.md, CLAUDE.md and docs/claude/* are extended by deliberate human edits, never by the gate.
+document:
+  instructions: |
+    Edit AGENTS.md, CLAUDE.md and docs/claude/* only to correct text that is factually wrong, including text this change made wrong. Do not add knowledge because it is missing; report it as a finding and leave the file unchanged.
+
+test:
+  instructions: |
+    Scale evidence to what the change touches; the pre-check command already builds and runs the unit and integration tests.
+    Run scenarios only against a locally started stack with a throwaway database (docker/docker-compose.dev.yml publishes Postgres on 127.0.0.1:55432); never against production or the deployed app, and never touch other containers on the box.
+    Changes that touch neither backend/ nor frontend/ (docs, workflows, tooling) need no scenario run.

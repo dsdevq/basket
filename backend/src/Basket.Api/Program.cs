@@ -1,0 +1,111 @@
+using Basket.Api.Auth;
+using Basket.Api.Data;
+using Basket.Api.Infrastructure;
+using Basket.Api.Lists;
+using Hangfire;
+using Hangfire.PostgreSql;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.EntityFrameworkCore;
+using Serilog;
+
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Host.UseSerilog((context, services, logger) => logger
+    .ReadFrom.Configuration(context.Configuration)
+    .ReadFrom.Services(services)
+    .Enrich.FromLogContext()
+    .WriteTo.Console());
+
+var connectionString = builder.Configuration.GetConnectionString("Default")
+    ?? throw new InvalidOperationException("ConnectionStrings:Default is not set");
+
+builder.Services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connectionString));
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddScoped<InviteService>();
+builder.Services.AddScoped<InviteCleanupJob>();
+builder.Services.AddBasketAuth(builder.Configuration);
+builder.Services.Configure<SecurityOptions>(builder.Configuration.GetSection(SecurityOptions.Section));
+builder.Services.AddHostedService<OwnerBootstrap>();
+
+// The cookie and the passkey ceremony state are protected with these keys; they live on a volume so a
+// restart or a redeploy does not sign everyone out.
+var keyDirectory = builder.Configuration["DataProtection:KeyDirectory"];
+if (!string.IsNullOrEmpty(keyDirectory))
+{
+    builder.Services.AddDataProtection()
+        .SetApplicationName("basket")
+        .PersistKeysToFileSystem(new DirectoryInfo(keyDirectory));
+}
+
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    // Tailscale Funnel reaches the container through the host's loopback and the Docker bridge, so only
+    // private-network peers may tell us the client address.
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.ForwardLimit = 1;
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+    foreach (var network in new[] { "127.0.0.0/8", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "::1/128", "fc00::/7" })
+    {
+        options.KnownIPNetworks.Add(System.Net.IPNetwork.Parse(network));
+    }
+});
+
+builder.Services.AddHealthChecks().AddNpgSql(connectionString, name: "postgres", tags: ["ready"]);
+
+if (builder.Configuration.GetValue("Hangfire:Enabled", true))
+{
+    builder.Services.AddHangfire(config => config
+        .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+        .UseSimpleAssemblyNameTypeSerializer()
+        .UseRecommendedSerializerSettings()
+        .UsePostgreSqlStorage(storage => storage.UseNpgsqlConnection(connectionString)));
+    builder.Services.AddHangfireServer(options => options.WorkerCount = 2);
+}
+
+var app = builder.Build();
+
+app.UseForwardedHeaders();
+app.UseSerilogRequestLogging(options => options.GetLevel = (context, _, ex) =>
+    ex is not null || context.Response.StatusCode >= 500
+        ? Serilog.Events.LogEventLevel.Error
+        : context.Request.Path.StartsWithSegments("/api/health")
+            ? Serilog.Events.LogEventLevel.Verbose
+            : Serilog.Events.LogEventLevel.Information);
+app.UseMiddleware<SecurityHeadersMiddleware>();
+app.UseHsts();
+app.UseMiddleware<OriginCheckMiddleware>();
+
+app.UseDefaultFiles();
+app.UseStaticFiles(new StaticFileOptions
+{
+    OnPrepareResponse = context =>
+    {
+        // Hashed bundles never change; the shell and the service worker must be re-checked every time.
+        var hashed = System.Text.RegularExpressions.Regex.IsMatch(context.File.Name, @"-[A-Z0-9]{8}\.(js|css|woff2)$");
+        context.Context.Response.Headers.CacheControl = hashed ? "public, max-age=31536000, immutable" : "no-cache";
+    },
+});
+
+app.UseAuthentication();
+app.UseAuthorization();
+app.UseRateLimiter();
+
+var api = app.MapGroup("/api").RequireAuthorization();
+api.MapGet("/health", () => Results.Ok(new { status = "ok" })).AllowAnonymous();
+api.MapHealthChecks("/health/ready", new() { Predicate = check => check.Tags.Contains("ready") }).AllowAnonymous();
+api.MapAuthEndpoints();
+api.MapListEndpoints();
+api.MapFallback(() => Results.NotFound()).AllowAnonymous();
+
+app.MapFallbackToFile("index.html");
+
+if (builder.Configuration.GetValue("Hangfire:Enabled", true))
+{
+    InviteCleanupJob.Schedule(app.Services.GetRequiredService<IRecurringJobManager>());
+}
+
+app.Run();
+
+public partial class Program;
