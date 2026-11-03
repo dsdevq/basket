@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  backend:
+    name: backend build + test
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: basket
+          POSTGRES_PASSWORD: basket-ci
+          POSTGRES_DB: postgres
+        options: >-
+          --health-cmd "pg_isready -U basket"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 5432:5432
+    env:
+      # The integration tests create and drop one throwaway database each on this server.
+      BASKET_TEST_POSTGRES: Host=localhost;Port=5432;Username=basket;Password=basket-ci;Database=postgres
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - run: dotnet restore backend/Basket.sln
+      - run: dotnet build backend/Basket.sln --configuration Release --no-restore
+      - run: dotnet test backend/Basket.sln --configuration Release --no-build --verbosity normal
+
+  frontend:
+    name: frontend lint + build + test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.x
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      # @lifekit-hq/* come from GitHub Packages; the repo must be allowed to read them.
+      - run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run build:prod
+      - run: npm run test:ci
+
+  image:
+    name: image builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # BuildKit is the default builder on the runner image; the npm token goes in as a build secret.
+      - run: docker build -f docker/Dockerfile --secret id=npm_token,env=NODE_AUTH_TOKEN -t basket-ci .
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,92 @@
+# basket - production stack on the VPS. Project name `basket`: always run it with `-p basket` (the name below
+# also pins it), so it never collides with another stack on the box.
+#
+#   docker compose -f docker/docker-compose.prod.yml --env-file ~/.config/basket/env up -d --build
+#
+# The env file holds the secrets and is NOT in git (~/.config/basket/env; see docs/vps-setup.md and
+# docker/.env.example). docker/deploy.sh wraps the command above.
+# The app listens on 127.0.0.1:3310 only; Tailscale Funnel (port 10000) is the one public way in.
+name: basket
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      secrets:
+        - npm_token
+    image: basket-app:${IMAGE_TAG:-local}
+    container_name: basket-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:3310:3310"
+    environment:
+      ConnectionStrings__Default: "Host=db;Port=5432;Database=basket;Username=basket;Password=${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in the env file};GSS Encryption Mode=Disable"
+      Auth__Origins__0: "${PUBLIC_ORIGIN:?set PUBLIC_ORIGIN in the env file}"
+      Auth__BootstrapToken: "${BOOTSTRAP_TOKEN:?set BOOTSTRAP_TOKEN in the env file}"
+      TZ: Europe/Dublin
+    volumes:
+      - keys:/keys
+    tmpfs:
+      - /tmp:size=16m
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+    memswap_limit: 256m
+    pids_limit: 256
+    logging:
+      driver: json-file
+      options: {max-size: 5m, max-file: "3"}
+
+  db:
+    image: postgres:17-alpine
+    container_name: basket-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: basket
+      POSTGRES_USER: basket
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in the env file}"
+    # Small box, small database: a handful of connections and a modest buffer pool keep it inside 192 MB.
+    command:
+      - postgres
+      - -c
+      - shared_buffers=48MB
+      - -c
+      - max_connections=30
+      - -c
+      - work_mem=2MB
+      - -c
+      - maintenance_work_mem=32MB
+      - -c
+      - effective_cache_size=96MB
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U basket -d basket"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    mem_limit: 192m
+    memswap_limit: 192m
+    pids_limit: 128
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options: {max-size: 5m, max-file: "3"}
+
+secrets:
+  # The npm registry token for the image build only (@lifekit-hq/* on GitHub Packages): export NODE_AUTH_TOKEN.
+  npm_token:
+    environment: NODE_AUTH_TOKEN
+
+volumes:
+  pgdata:
+  keys:

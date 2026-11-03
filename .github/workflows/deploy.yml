@@ -1,0 +1,32 @@
+name: Deploy to VPS
+
+# Builds the image on the box from the pushed commit and restarts the basket stack. The runner is
+# self-hosted on the VPS (labels below); until one is registered for this repo the job just queues.
+# The secrets live in ~/.config/basket/env on the box, never in GitHub (see docs/vps-setup.md).
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: [self-hosted, lifekit-vps, basket]
+    timeout-minutes: 25
+    # One stack: deploys queue, never overlap.
+    concurrency:
+      group: deploy
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - run: docker/deploy.sh
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

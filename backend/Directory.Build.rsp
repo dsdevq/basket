@@ -1,0 +1,4 @@
+# Read automatically by `dotnet build|test|restore` for anything under backend/.
+# One build node and no resident compiler server: the box runs validation under a 2 GB cap.
+-maxcpucount:1
+-p:UseSharedCompilation=false
