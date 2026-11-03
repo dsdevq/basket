@@ -11,6 +11,7 @@ const panel = () => document.getElementById(CRASH_ELEMENT_ID);
 describe('crash screen', () => {
   afterEach(() => {
     panel()?.remove();
+    document.querySelector('bk-root')?.remove();
     vi.restoreAllMocks();
   });
 
@@ -73,5 +74,48 @@ describe('crash screen', () => {
 
     handler.handleError(new Error('boom'));
     expect(panel()?.textContent).toContain('Something went wrong');
+  });
+
+  describe('once the app has mounted', () => {
+    beforeEach(() => {
+      const root = document.createElement('bk-root');
+      root.append(document.createElement('div'));
+      document.body.append(root);
+    });
+
+    it('only logs uncaught errors and unhandled rejections', () => {
+      const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      installCrashFallback(window);
+      const error = new SyntaxError('bad');
+
+      window.dispatchEvent(new ErrorEvent('error', {error, message: 'bad'}));
+      const rejection = new Event('unhandledrejection') as Event & {reason: unknown};
+      rejection.reason = new RangeError('stray');
+      window.dispatchEvent(rejection);
+
+      expect(panel()).toBeNull();
+      expect(log).toHaveBeenCalledWith(error);
+      expect(log).toHaveBeenCalledWith(rejection.reason);
+    });
+
+    it('only logs what Angular’s error handler receives', () => {
+      const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const error = new Error('boom');
+
+      new CrashErrorHandler().handleError(error);
+
+      expect(panel()).toBeNull();
+      expect(log).toHaveBeenCalledWith(error);
+    });
+  });
+
+  it('shows the screen while <bk-root> is still empty', () => {
+    const root = document.createElement('bk-root');
+    document.body.append(root);
+    installCrashFallback(window);
+
+    window.dispatchEvent(new ErrorEvent('error', {error: new TypeError('early'), message: 'early'}));
+
+    expect(panel()?.textContent).toContain('Error: TypeError');
   });
 });

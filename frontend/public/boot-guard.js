@@ -12,6 +12,7 @@
   var ID = 'bk-crash';
   var WAIT_MS = 15000;
   var done = false;
+  var ownPanel = null;
 
   function mounted() {
     var root = document.querySelector('bk-root');
@@ -21,6 +22,7 @@
   function show(name, hint) {
     if (done || mounted() || document.getElementById(ID) || !document.body) return;
     var panel = document.createElement('div');
+    ownPanel = panel;
     panel.id = ID;
     panel.setAttribute('role', 'alert');
     panel.style.cssText =
@@ -80,8 +82,7 @@
     if (mounted()) {
       clearInterval(timer);
       done = true;
-      var panel = document.getElementById(ID);
-      if (panel && panel.parentNode) panel.parentNode.removeChild(panel);
+      if (ownPanel && ownPanel.parentNode) ownPanel.parentNode.removeChild(ownPanel);
     } else if (waited >= WAIT_MS) {
       show('NotStarted', HINT_BROKEN);
     }

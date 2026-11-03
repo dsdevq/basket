@@ -23,6 +23,11 @@ function isHttpFailure(error: unknown): boolean {
   return typeof (error as {status?: unknown} | null)?.status === 'number';
 }
 
+/** True once Angular has rendered something into `<bk-root>`; from then on a stray error is not a crash. */
+export function isAppMounted(doc: Document): boolean {
+  return (doc.querySelector('bk-root')?.childNodes.length ?? 0) > 0;
+}
+
 /** Draws "Something went wrong" over the page. Plain DOM, so it works even when Angular itself is broken. */
 export function showCrashScreen(doc: Document, error: unknown): void {
   if (doc.getElementById(CRASH_ELEMENT_ID)) {
@@ -55,19 +60,28 @@ export function showCrashScreen(doc: Document, error: unknown): void {
   doc.body.append(panel);
 }
 
+function reportCrash(doc: Document, error: unknown): void {
+  if (isAppMounted(doc)) {
+    console.error(error);
+  } else {
+    showCrashScreen(doc, error);
+  }
+}
+
 /**
  * Catches what Angular does not: errors thrown outside a component and promises nobody awaited. An error event
  * without an error object (ResizeObserver noise, cross-origin "Script error.") says nothing and is ignored.
+ * Once the app has mounted, such errors are only logged.
  */
 export function installCrashFallback(win: Window): void {
   win.addEventListener('error', event => {
     if (event.error) {
-      showCrashScreen(win.document, event.error);
+      reportCrash(win.document, event.error);
     }
   });
   win.addEventListener('unhandledrejection', event => {
     if (!isHttpFailure(event.reason)) {
-      showCrashScreen(win.document, event.reason);
+      reportCrash(win.document, event.reason);
     }
   });
 }
@@ -76,7 +90,7 @@ export function installCrashFallback(win: Window): void {
 export class CrashErrorHandler implements ErrorHandler {
   public handleError(error: unknown): void {
     console.error(error);
-    if (!isHttpFailure(error)) {
+    if (!isHttpFailure(error) && !isAppMounted(document)) {
       showCrashScreen(document, error);
     }
   }
