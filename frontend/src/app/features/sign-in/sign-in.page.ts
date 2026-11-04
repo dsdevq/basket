@@ -38,19 +38,10 @@ function describe(error: unknown): string {
       @if (problem()) {
         <cmn-alert [title]="problem()" variant="error" />
       }
-      <cmn-button
-        [loading]="busy()"
-        (clicked)="signIn()"
-        class="block [&_button]:w-full"
-        variant="primary"
-        size="lg"
-        icon="KeyRound"
-      >
+      <cmn-button [loading]="busy()" (clicked)="signIn()" variant="primary" icon="KeyRound">
         Sign in with a passkey
       </cmn-button>
-      <p class="text-center text-cmn-xs text-text-secondary">
-        New here? Open the invite link you were sent.
-      </p>
+      <p class="text-cmn-xs text-text-secondary">New here? Open the invite link you were sent.</p>
     </bk-auth-card>
   `,
 })

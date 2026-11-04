@@ -15,20 +15,13 @@ import {SessionStore} from './session.store';
       heading="Cannot reach basket"
       lead="Your browser could not get an answer from the server."
     >
-      <p class="text-center text-cmn-sm text-text-secondary">
+      <p class="text-cmn-sm text-text-secondary">
         Check your connection. A content blocker or a private-relay setting can also stop it.
       </p>
       @if (session.loadFailure(); as failure) {
-        <p class="text-center text-cmn-xs text-text-secondary">Detail: {{ failure }}</p>
+        <p class="text-cmn-xs text-text-secondary">Detail: {{ failure }}</p>
       }
-      <cmn-button
-        [loading]="busy()"
-        (clicked)="retry()"
-        class="block [&_button]:w-full"
-        variant="primary"
-        size="lg"
-        icon="RefreshCw"
-      >
+      <cmn-button [loading]="busy()" (clicked)="retry()" variant="primary" icon="RefreshCw">
         Try again
       </cmn-button>
     </bk-auth-card>

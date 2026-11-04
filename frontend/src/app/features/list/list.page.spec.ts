@@ -133,7 +133,7 @@ describe('ListPage', () => {
     const {fixture, api, drawer, host} = await render([item('1', 'Spinach')]);
     drawer.open.mockReturnValue({afterClosed: () => of('delete')});
     const more = Array.from(host.querySelectorAll('button')).find(b =>
-      b.textContent?.includes('More')
+      b.getAttribute('aria-label')?.startsWith('More for')
     );
 
     more?.click();
@@ -149,7 +149,7 @@ describe('ListPage', () => {
     const {fixture, api, drawer, host} = await render([item('1', 'Spinach')]);
     drawer.open.mockReturnValue({afterClosed: () => of(undefined)});
     const more = Array.from(host.querySelectorAll('button')).find(b =>
-      b.textContent?.includes('More')
+      b.getAttribute('aria-label')?.startsWith('More for')
     );
 
     more?.click();
