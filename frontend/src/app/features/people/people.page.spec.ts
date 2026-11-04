@@ -59,7 +59,7 @@ describe('PeoplePage', () => {
     };
     const {fixture, host} = await render(api);
     const cancel = Array.from(host.querySelectorAll('button')).find(b =>
-      b.textContent?.includes('Cancel link')
+      b.getAttribute('aria-label')?.startsWith('Cancel link')
     );
 
     cancel?.click();

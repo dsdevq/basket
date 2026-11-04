@@ -58,7 +58,7 @@ type Step = 'checking' | 'ready' | 'missing' | 'used' | 'unreachable';
           heading="This link is incomplete"
           lead="The part after the # sign did not arrive."
         >
-          <p class="text-center text-cmn-sm text-text-secondary">
+          <p class="text-cmn-sm text-text-secondary">
             Open the whole link again from the message you were sent. Some apps cut the end off a
             link: copy all of it and paste it into Safari or Chrome.
           </p>
@@ -69,7 +69,7 @@ type Step = 'checking' | 'ready' | 'missing' | 'used' | 'unreachable';
           heading="This link was used or has expired"
           lead="Invite links work once and last 24 hours."
         >
-          <p class="text-center text-cmn-sm text-text-secondary">Ask for a new one.</p>
+          <p class="text-cmn-sm text-text-secondary">Ask for a new one.</p>
         </bk-auth-card>
       }
       @case ('unreachable') {
@@ -77,18 +77,12 @@ type Step = 'checking' | 'ready' | 'missing' | 'used' | 'unreachable';
           heading="Cannot reach basket"
           lead="Your browser could not get an answer from the server."
         >
-          <p class="text-center text-cmn-sm text-text-secondary">
+          <p class="text-cmn-sm text-text-secondary">
             Your link is fine and has not been used. Check your connection. A content blocker can
             also stop it.
           </p>
-          <p class="text-center text-cmn-xs text-text-secondary">Detail: {{ failure() }}</p>
-          <cmn-button
-            (clicked)="check()"
-            class="block [&_button]:w-full"
-            variant="primary"
-            size="lg"
-            icon="RefreshCw"
-          >
+          <p class="text-cmn-xs text-text-secondary">Detail: {{ failure() }}</p>
+          <cmn-button (clicked)="check()" variant="primary" icon="RefreshCw">
             Try again
           </cmn-button>
         </bk-auth-card>
@@ -98,7 +92,7 @@ type Step = 'checking' | 'ready' | 'missing' | 'used' | 'unreachable';
           @if (problem()) {
             <cmn-alert [title]="problem()" variant="error" />
           }
-          <form [formGroup]="form" (ngSubmit)="register()" class="flex flex-col gap-cmn-4">
+          <form [formGroup]="form" (ngSubmit)="register()" class="flex flex-col gap-cmn-group-gap">
             <cmn-form-field
               [control]="name"
               label="Your name"
@@ -111,14 +105,7 @@ type Step = 'checking' | 'ready' | 'missing' | 'used' | 'unreachable';
                 placeholder="e.g. Anna"
               />
             </cmn-form-field>
-            <cmn-button
-              [loading]="busy()"
-              class="block [&_button]:w-full"
-              type="submit"
-              variant="primary"
-              size="lg"
-              icon="KeyRound"
-            >
+            <cmn-button [loading]="busy()" type="submit" variant="primary" icon="KeyRound">
               Create passkey
             </cmn-button>
           </form>

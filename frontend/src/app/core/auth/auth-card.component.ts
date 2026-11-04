@@ -1,22 +1,20 @@
-import {NgOptimizedImage} from '@angular/common';
 import {ChangeDetectionStrategy, Component, input} from '@angular/core';
+import {PageComponent} from '@lifekit-hq/ui';
 
-/** The frame of the pages shown before sign-in: the mark, a heading, and the content under it. */
+/** The frame of the pages shown before sign-in: a `cmn-page` titled with the heading, the lead, then the content. */
 @Component({
   selector: 'bk-auth-card',
-  imports: [NgOptimizedImage],
+  imports: [PageComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {class: 'block min-h-dvh bg-surface-bg'},
   template: `
-    <main class="mx-auto flex min-h-dvh max-w-sm flex-col justify-center gap-cmn-6 p-cmn-6">
-      <header class="flex flex-col items-center gap-cmn-2 text-center">
-        <img ngSrc="/favicon.svg" alt="" width="56" height="56" priority />
-        <h1 class="text-cmn-xl font-semibold text-text-primary">{{ heading() }}</h1>
+    <main>
+      <cmn-page [title]="heading()" kind="list">
         @if (lead()) {
           <p class="text-cmn-sm text-text-secondary">{{ lead() }}</p>
         }
-      </header>
-      <ng-content />
+        <ng-content />
+      </cmn-page>
     </main>
   `,
 })

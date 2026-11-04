@@ -6,6 +6,7 @@ import {
   EmptyStateComponent,
   ListItemRowComponent,
   ListSectionComponent,
+  PageComponent,
   SkeletonComponent,
   ToastService,
 } from '@lifekit-hq/ui';
@@ -24,62 +25,56 @@ import {InviteSheetComponent} from './invite.sheet';
     EmptyStateComponent,
     ListItemRowComponent,
     ListSectionComponent,
+    PageComponent,
     SkeletonComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: {class: 'block px-cmn-4 pb-cmn-4'},
   template: `
-    <cmn-button
-      (clicked)="invite()"
-      variant="primary"
-      size="lg"
-      icon="UserPlus"
-      class="mb-cmn-4 block [&_button]:w-full"
-    >
-      Invite someone
-    </cmn-button>
+    <cmn-page kind="list">
+      <cmn-button (clicked)="invite()" variant="primary" icon="UserPlus">
+        Invite someone
+      </cmn-button>
 
-    @if (loading()) {
-      <cmn-skeleton shape="section" />
-    } @else if (failed()) {
-      <cmn-empty-state
-        (action)="load()"
-        kind="error"
-        message="Could not load people"
-        subMessage="Check your connection."
-        actionLabel="Try again"
-      />
-    } @else {
-      <cmn-list-section heading="In basket" card class="mb-cmn-4 block [&_button]:w-full">
-        @for (member of members(); track member.id) {
-          <cmn-list-item-row
-            [label]="member.displayName"
-            [sublabel]="member.role === 'owner' ? 'Owner' : 'Member'"
-          />
-        }
-      </cmn-list-section>
-
-      @if (invites().length) {
-        <cmn-list-section heading="Open invite links" card class="block">
-          @for (pending of invites(); track pending.id) {
+      @if (loading()) {
+        <cmn-skeleton shape="section" />
+      } @else if (failed()) {
+        <cmn-empty-state
+          (action)="load()"
+          kind="error"
+          message="Could not load people"
+          subMessage="Check your connection."
+          actionLabel="Try again"
+        />
+      } @else {
+        <cmn-list-section heading="In basket" card>
+          @for (member of members(); track member.id) {
             <cmn-list-item-row
-              [label]="pending.label || 'Invite link'"
-              [sublabel]="'Stops ' + (pending.expiresAt | date: 'EEE d MMM, HH:mm')"
-            >
-              <cmn-button
-                (clicked)="revoke(pending)"
-                actions
-                variant="secondary"
-                size="sm"
-                icon="X"
-              >
-                Cancel link
-              </cmn-button>
-            </cmn-list-item-row>
+              [label]="member.displayName"
+              [sublabel]="member.role === 'owner' ? 'Owner' : 'Member'"
+            />
           }
         </cmn-list-section>
+
+        @if (invites().length) {
+          <cmn-list-section heading="Open invite links" card>
+            @for (pending of invites(); track pending.id) {
+              <cmn-list-item-row
+                [label]="pending.label || 'Invite link'"
+                [sublabel]="'Stops ' + (pending.expiresAt | date: 'EEE d MMM, HH:mm')"
+              >
+                <cmn-button
+                  [aria-label]="'Cancel link ' + (pending.label || 'Invite link')"
+                  (clicked)="revoke(pending)"
+                  actions
+                  variant="secondary"
+                  icon="X"
+                />
+              </cmn-list-item-row>
+            }
+          </cmn-list-section>
+        }
       }
-    }
+    </cmn-page>
   `,
 })
 export class PeoplePage implements OnInit {

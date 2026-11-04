@@ -10,6 +10,7 @@ import {
   InputComponent,
   ListItemRowComponent,
   ListSectionComponent,
+  PageComponent,
   SkeletonComponent,
 } from '@lifekit-hq/ui';
 import {firstValueFrom, fromEvent, interval} from 'rxjs';
@@ -32,72 +33,70 @@ const REFRESH_MS = 15_000;
     InputComponent,
     ListItemRowComponent,
     ListSectionComponent,
+    PageComponent,
     SkeletonComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: {class: 'block px-cmn-4 pb-cmn-4'},
   template: `
-    <form [formGroup]="form" (ngSubmit)="add()" class="mb-cmn-4 flex items-center gap-cmn-2">
-      <cmn-input
-        formControlName="text"
-        class="min-w-0 flex-1"
-        aria-label="Add an item"
-        placeholder="Add an item"
-        enterkeyhint="done"
-        autocomplete="off"
-      />
-      <cmn-button [loading]="store.adding()" type="submit" variant="primary" icon="Plus"
-        >Add</cmn-button
-      >
-    </form>
-
-    @switch (store.status()) {
-      @case ('loading') {
-        <cmn-skeleton shape="section" />
-      }
-      @case ('error') {
-        <cmn-empty-state
-          (action)="store.load()"
-          kind="error"
-          message="The list did not load"
-          subMessage="Check your connection."
-          actionLabel="Try again"
+    <cmn-page kind="list">
+      <form [formGroup]="form" (ngSubmit)="add()" class="flex items-center gap-cmn-2">
+        <cmn-input
+          formControlName="text"
+          class="min-w-0 flex-1"
+          aria-label="Add an item"
+          placeholder="Add an item"
+          enterkeyhint="done"
+          autocomplete="off"
         />
-      }
-      @default {
-        @if (!store.items().length) {
+        <cmn-button [loading]="store.adding()" type="submit" variant="primary" icon="Plus"
+          >Add</cmn-button
+        >
+      </form>
+
+      @switch (store.status()) {
+        @case ('loading') {
+          <cmn-skeleton shape="section" />
+        }
+        @case ('error') {
           <cmn-empty-state
-            icon="ShoppingBasket"
-            message="Nothing on the list"
-            subMessage="Add the first thing you need. Everyone on the list sees it."
+            (action)="store.load()"
+            kind="error"
+            message="The list did not load"
+            subMessage="Check your connection."
+            actionLabel="Try again"
           />
         }
-        @if (store.toBuy().length) {
-          <cmn-list-section
-            [heading]="'To buy · ' + store.toBuy().length"
-            card
-            class="mb-cmn-4 block"
-          >
-            @for (item of store.toBuy(); track item.id) {
-              <ng-container
-                [ngTemplateOutlet]="row"
-                [ngTemplateOutletContext]="{$implicit: item}"
-              />
-            }
-          </cmn-list-section>
-        }
-        @if (store.done().length) {
-          <cmn-list-section [heading]="'Ticked · ' + store.done().length" card class="block">
-            @for (item of store.done(); track item.id) {
-              <ng-container
-                [ngTemplateOutlet]="row"
-                [ngTemplateOutletContext]="{$implicit: item}"
-              />
-            }
-          </cmn-list-section>
+        @default {
+          @if (!store.items().length) {
+            <cmn-empty-state
+              icon="ShoppingBasket"
+              message="Nothing on the list"
+              subMessage="Add the first thing you need. Everyone on the list sees it."
+            />
+          }
+          @if (store.toBuy().length) {
+            <cmn-list-section [heading]="'To buy · ' + store.toBuy().length" card>
+              @for (item of store.toBuy(); track item.id) {
+                <ng-container
+                  [ngTemplateOutlet]="row"
+                  [ngTemplateOutletContext]="{$implicit: item}"
+                />
+              }
+            </cmn-list-section>
+          }
+          @if (store.done().length) {
+            <cmn-list-section [heading]="'Ticked · ' + store.done().length" card>
+              @for (item of store.done(); track item.id) {
+                <ng-container
+                  [ngTemplateOutlet]="row"
+                  [ngTemplateOutletContext]="{$implicit: item}"
+                />
+              }
+            </cmn-list-section>
+          }
         }
       }
-    }
+    </cmn-page>
 
     <ng-template #row let-item>
       <cmn-list-item-row
@@ -112,9 +111,13 @@ const REFRESH_MS = 15_000;
           (changed)="toggle(item, $event)"
           avatar
         />
-        <cmn-button (clicked)="more(item)" actions variant="secondary" size="sm" icon="Ellipsis">
-          More
-        </cmn-button>
+        <cmn-button
+          [aria-label]="'More for ' + item.text"
+          (clicked)="more(item)"
+          actions
+          variant="secondary"
+          icon="Ellipsis"
+        />
       </cmn-list-item-row>
     </ng-template>
   `,
