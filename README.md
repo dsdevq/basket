@@ -35,7 +35,7 @@ invite; open `http://localhost:4200/join#<that token>` to register. Passkeys wor
 BASKET_TEST_POSTGRES="Host=localhost;Port=55432;Username=basket;Password=basket-dev;Database=postgres" \
   dotnet test backend/Basket.sln                                # each test class gets a throwaway database
 ( cd frontend && npm run lint && npm run format:check && npm run test:ci )
-( cd frontend && npm run build:prod && npx playwright install chromium && npm run e2e )   # phone-layout specs on the prod build
+( cd frontend && npm run build:prod && npx playwright install chromium && npm run e2e )   # phone-layout and screen-composition (C0-C10) specs on the prod build
 ```
 
 `scripts/test-backend.sh` does the backend run against a throwaway Postgres container and cleans it up.
