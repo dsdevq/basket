@@ -78,10 +78,11 @@ public sealed class PriceIngest(AppDbContext db, PriceRecorder recorder, TimePro
 
         var urls = candidates.Select(c => c.Url).Distinct().ToList();
         var listings = (await db.StoreListings.Where(l => urls.Contains(l.Url)).ToListAsync(ct))
-            .ToDictionary(l => (l.Store, l.Url));
+            .GroupBy(l => (l.Store, l.Url))
+            .ToDictionary(g => g.Key, g => g.ToList());
 
         var now = clock.GetUtcNow();
-        var recorded = new HashSet<Guid>();
+        var recorded = new HashSet<(Store, string)>();
         var perStore = new Dictionary<Store, StoreTally>();
         foreach (var candidate in candidates)
         {
@@ -91,17 +92,20 @@ public sealed class PriceIngest(AppDbContext db, PriceRecorder recorder, TimePro
             }
 
             string? reason = null;
-            if (!listings.TryGetValue((candidate.Store, candidate.Url), out var listing))
+            if (!listings.TryGetValue((candidate.Store, candidate.Url), out var matching))
             {
                 reason = Reasons.UnknownListing;
             }
-            else if (!recorded.Add(listing.Id))
+            else if (!recorded.Add((candidate.Store, candidate.Url)))
             {
                 reason = Reasons.Duplicate;
             }
             else
             {
-                await recorder.RecordAsync(listing, candidate.Quote, now, ct);
+                foreach (var listing in matching)
+                {
+                    await recorder.RecordAsync(listing, candidate.Quote, now, ct);
+                }
             }
 
             results[candidate.Index] = new IngestItemResult(candidate.Index, reason is null, reason);

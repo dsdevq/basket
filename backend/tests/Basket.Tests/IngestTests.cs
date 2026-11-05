@@ -227,6 +227,36 @@ public sealed class IngestTests : IClassFixture<BasketFactory>
     }
 
     [Fact]
+    public async Task Two_products_linked_to_the_same_page_both_get_the_reading_and_it_counts_as_accepted_once()
+    {
+        var owner = await SeedAsync();
+        await _factory.WithDb(async db =>
+        {
+            var second = new Product { Id = Guid.NewGuid(), Name = "Semi-skimmed milk", AddedAt = DateTimeOffset.UtcNow, AddedByUserId = await db.Users.Select(u => u.Id).FirstAsync() };
+            db.Products.Add(second);
+            db.StoreListings.Add(new StoreListing { Id = Guid.NewGuid(), ProductId = second.Id, Store = Store.Tesco, Url = TescoUrl, AddedAt = DateTimeOffset.UtcNow });
+            await db.SaveChangesAsync();
+            return 0;
+        });
+        var (_, token) = await MintAsync(owner);
+
+        var response = await PostAsync(Relay(token), Tesco(2.15m), Tesco(1.99m));
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        body.GetProperty("accepted").GetInt32().Should().Be(1);
+        body.GetProperty("rejected").GetInt32().Should().Be(1);
+        Reasons(body).Should().Equal("ok", "duplicate");
+        await _factory.WithDb(async db =>
+        {
+            var tesco = await db.PriceObservations.Join(db.StoreListings, o => o.ListingId, l => l.Id, (o, l) => new { o, l.Store }).Where(x => x.Store == Store.Tesco).ToListAsync();
+            tesco.Should().HaveCount(2);
+            tesco.Select(x => x.o.Price).Should().OnlyContain(p => p == 2.15m);
+            return 0;
+        });
+    }
+
+    [Fact]
     public async Task A_loyalty_price_without_a_scheme_takes_the_shops_card_and_a_scheme_without_a_price_is_dropped()
     {
         var owner = await SeedAsync();
