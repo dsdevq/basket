@@ -26,8 +26,8 @@ planning record so this repo carries its own reasons; the M1 section holds the c
   `role_claims`, `user_passkeys`), `list_item` and `invite`. Snake-case names. Nothing for prices yet.
 - **Passkey-only, no recovery in M1.** Identity's built-in passkey support (`MakePasskeyCreationOptionsAsync`,
   `PasskeySignInAsync`) does the WebAuthn work. A lost device is handled by the owner issuing a new invite; there is no
-  "add another passkey" screen yet. Synced passkeys (iCloud Keychain, Google Password Manager) cover the usual case.
-  Revisit in M2.
+  "add another passkey" screen in M1. Synced passkeys (iCloud Keychain, Google Password Manager) cover the usual case.
+  Revisited in M2: see "Several passkeys per person" below.
 - **Owner bootstrap without a secret in git.** On first start, while no user exists, the app turns the env value
   `Auth__BootstrapToken` (32+ characters) into an owner invite valid for 24 hours. The first person to open
   `<origin>/join#<token>` becomes the owner. Once a user exists the value is inert.
@@ -64,3 +64,20 @@ planning record so this repo carries its own reasons; the M1 section holds the c
 - **No service worker in M1.** The list must show the other person's changes, so it polls every 15 seconds while the
   page is visible (two people do not need SignalR); offline support and push belong with a later milestone.
 - **Generic lifekit icons.** The app uses the library's `lk` brand set until basket gets a mark of its own.
+
+## Several passkeys per person
+
+- **Settings > Passkeys** lists the signed-in person's passkeys (name, date added), adds another through the browser's
+  passkey prompt (a new phone, a laptop) and removes one. It uses the existing `user_passkeys` table and Identity's
+  passkey APIs, so there is no migration. Every endpoint (`/api/passkeys`) acts only on the caller's own passkeys;
+  members and the owner are treated alike.
+- **Never the last one.** The server refuses to remove a person's only passkey (`409 last_passkey`); the count and the
+  delete run under a row lock on the user, so two removals sent together cannot empty the account. The screen also
+  hides the remove button while only one is left. Losing every device is still handled by a new owner invite.
+- **Adding needs the existing session, no fresh sign-in.** Someone holding a stolen session cookie could register a
+  passkey of their own. That is the same reach they already have (the 30-day cookie can mint invites if it is the
+  owner's), and the cookie is `__Host-`, HttpOnly and SameSite=Strict; a re-authentication step before adding is the
+  hardening to add if the threat model changes.
+- **A credential belongs to one account.** Identity rejects a credential id that is already registered, and the
+  creation options list the person's existing passkeys as excluded so the same device is not registered twice. At most
+  10 passkeys per person; names are free text, trimmed to 40 characters, "Passkey" when left blank.
