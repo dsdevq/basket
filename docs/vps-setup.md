@@ -104,8 +104,8 @@ database volume.
 - **Cookie scope.** Browsers share cookies between ports of one host. Other services on
   `lifekit-vps.tail1cb676.ts.net` receive basket's cookie; the `__Host-` prefix and the unique name keep them from
   setting or overwriting it. A custom domain later removes the caveat.
-- **No passkey recovery in M1.** If a phone is lost and the passkey is not synced, the owner makes a new invite
-  for that person. If the owner loses theirs with no synced passkey, the last resort is a reset that also clears the list:
+- **No passkey recovery in M1.** A person with a second passkey removes the lost one under Settings > Passkeys. If a
+  phone is lost and it held the only passkey (not synced), the owner makes a new invite for that person. If the owner loses theirs with no synced passkey, the last resort is a reset that also clears the list:
   `docker exec -it basket-db psql -U basket basket -c 'TRUNCATE users, list_item, invite CASCADE;'`, then restart the app
   (a fresh owner invite opens from `BOOTSTRAP_TOKEN`) and register again. Take a `pg_dump` first.
 - **A join link that does nothing.** Every request log line carries `ua=`, `ch-ua=` and `lang=` (the browser's
