@@ -43,6 +43,22 @@ public sealed class PriceParserTests
     }
 
     [Fact]
+    public void Lidl_day_end_stamps_are_calendar_days_in_summer_time_too()
+    {
+        // Oracle: Lidl writes a day boundary as 23:59:59Z (1788220799 is 2026-08-31T23:59:59Z, 1787616000 is 2026-08-25T00:00:00Z).
+        // Dublin is on BST in August, so converting to local time would push the end to 1 Sep and the start to 25 Aug 01:00.
+        var priceWindow = LidlParser.ParseOfferTiles(Tile("""{"erpNumber":"1","price":{"price":1.5},"regionsPrices":{"1":{"currentPrice":{"startDate":"2026-08-25T00:00:00Z","endDate":"2026-08-31T23:59:59Z"}}}}"""))["1"];
+        priceWindow.ValidFrom.Should().Be(new DateOnly(2026, 8, 25));
+        priceWindow.ValidUntil.Should().Be(new DateOnly(2026, 8, 31));
+
+        var tileWindow = LidlParser.ParseOfferTiles(Tile("""{"erpNumber":"2","price":{"price":1.5},"storeStartDate":1787616000,"storeEndDate":1788220799}"""))["2"];
+        tileWindow.ValidFrom.Should().Be(new DateOnly(2026, 8, 25));
+        tileWindow.ValidUntil.Should().Be(new DateOnly(2026, 8, 31));
+    }
+
+    private static string Tile(string json) => $"<div data-grid-data=\"{System.Net.WebUtility.HtmlEncode(json)}\"></div>";
+
+    [Fact]
     public void Lidl_plus_only_offer_has_no_shelf_price_and_keeps_the_old_price()
     {
         var tree = Offers["11101814"];

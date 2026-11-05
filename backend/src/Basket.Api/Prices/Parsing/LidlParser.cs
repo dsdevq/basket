@@ -60,8 +60,8 @@ public static class LidlParser
             loyaltyPrice,
             loyaltyPrice is null ? null : Store.Lidl.LoyaltyScheme(),
             promo,
-            PageData.DublinDate(tile, [.. window, "startDate"]) ?? PageData.DublinDate(tile, "storeStartDate"),
-            PageData.DublinDate(tile, [.. window, "endDate"]) ?? PageData.DublinDate(tile, "storeEndDate"),
+            PageData.CalendarDate(tile, [.. window, "startDate"]) ?? PageData.CalendarDate(tile, "storeStartDate"),
+            PageData.CalendarDate(tile, [.. window, "endDate"]) ?? PageData.CalendarDate(tile, "storeEndDate"),
             InStock: true);
     }
 

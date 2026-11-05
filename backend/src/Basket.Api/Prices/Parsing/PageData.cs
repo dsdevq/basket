@@ -8,8 +8,6 @@ namespace Basket.Api.Prices.Parsing;
 /// <summary>Small readers shared by the shop parsers: JSON-LD blocks, attribute payloads, prices, dates.</summary>
 internal static partial class PageData
 {
-    private static readonly TimeZoneInfo Dublin = TimeZoneInfo.FindSystemTimeZoneById("Europe/Dublin");
-
     /// <summary>The schema.org Product object of a page, if it has one (shops put it in a JSON-LD script).</summary>
     public static JsonElement? ProductJsonLd(string html)
     {
@@ -97,8 +95,11 @@ internal static partial class PageData
         return value is > 0 and < 100_000 ? decimal.Round(value.Value, 2) : null;
     }
 
-    /// <summary>A day in Dublin from either Unix seconds or an ISO-8601 timestamp, both of which Lidl uses.</summary>
-    public static DateOnly? DublinDate(JsonElement parent, params string[] path)
+    /// <summary>
+    /// The calendar day of a Lidl stamp, from Unix seconds or an ISO-8601 timestamp. Lidl writes a day boundary as
+    /// <c>T23:59:59Z</c>, so the date is read in the stamp's own zone (UTC for Unix seconds) and never moved to Dublin time.
+    /// </summary>
+    public static DateOnly? CalendarDate(JsonElement parent, params string[] path)
     {
         var moment = Walk(parent, path) switch
         {
@@ -110,7 +111,7 @@ internal static partial class PageData
             _ => (DateTimeOffset?)null,
         };
 
-        return moment is { } value ? DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(value, Dublin).DateTime) : null;
+        return moment is { } value ? DateOnly.FromDateTime(value.DateTime) : null;
     }
 
     public static string? Clean(string? text)
