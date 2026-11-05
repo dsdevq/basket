@@ -120,13 +120,14 @@ planning record so this repo carries its own reasons; the M1 section holds the c
   (256 KB), each naming `store` (`tesco` or `aldi`), the product page `url` that is already linked to a product, and
   what the page said (`price`, `wasPrice`, `loyaltyPrice`, `loyaltyScheme`, `promoText`, `validFrom`, `validUntil`,
   `inStock`, `title`). Readings go through `PriceRecorder`, so they become the same one-per-listing-per-Dublin-day
-  `price_observation` rows as the nightly Lidl job's, and the Prices page shows them the same way.
+  `price_observation` rows as the nightly Lidl job's, and the Prices page shows them the same way. Two products may link
+  the same page; a reading for that URL is recorded against each of them and counts as one accepted reading.
 - **Dated by the server.** The reader cannot set `observedAt`: the server stamps the moment of the post. A reader that
   was off for days and posts a stale batch therefore cannot overwrite a newer reading of the same day with an older one,
   and a replayed batch just replaces that day's reading with identical values.
 - **Each reading stands alone.** A bad one is refused with a stable reason code (`unknown_store`, `store_not_ingested`
   for Lidl, `url_invalid`, `unknown_listing`, `price_invalid` for zero, negative, over 9999.99 or sub-cent amounts,
-  `no_price`, `dates_invalid`, `duplicate` for a listing already in the same batch) and the rest of the batch is kept.
+  `no_price`, `dates_invalid`, `duplicate` for a URL already in the same batch) and the rest of the batch is kept.
   The answer is 200, or 422 when nothing in the batch was usable. Each shop's part of a batch also becomes a
   `price_pull_run` (`ok`, `partial`, `failed`), so a misconfigured reader shows as a warning on the Prices page. An
   out-of-stock reading with no price is valid; an in-stock one with no price is not.
