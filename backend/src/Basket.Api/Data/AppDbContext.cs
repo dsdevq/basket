@@ -12,6 +12,16 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
     public DbSet<Invite> Invites => Set<Invite>();
 
+    public DbSet<Product> Products => Set<Product>();
+
+    public DbSet<StoreListing> StoreListings => Set<StoreListing>();
+
+    public DbSet<PriceObservation> PriceObservations => Set<PriceObservation>();
+
+    public DbSet<PricePullRun> PricePullRuns => Set<PricePullRun>();
+
+    public DbSet<PaidPrice> PaidPrices => Set<PaidPrice>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
@@ -41,6 +51,59 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             invite.HasIndex(i => i.TokenHash).IsUnique();
             invite.HasOne<AppUser>().WithMany().HasForeignKey(i => i.CreatedByUserId).OnDelete(DeleteBehavior.SetNull);
             invite.HasOne<AppUser>().WithMany().HasForeignKey(i => i.ConsumedByUserId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        builder.Entity<Product>(product =>
+        {
+            product.ToTable("product");
+            product.HasKey(p => p.Id);
+            product.Property(p => p.Name).HasMaxLength(Product.MaxNameLength).IsRequired();
+            product.HasOne<AppUser>().WithMany().HasForeignKey(p => p.AddedByUserId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        builder.Entity<StoreListing>(listing =>
+        {
+            listing.ToTable("store_listing");
+            listing.HasKey(l => l.Id);
+            listing.Property(l => l.Store).HasConversion<string>().HasMaxLength(16);
+            listing.Property(l => l.Url).HasMaxLength(400).IsRequired();
+            listing.Property(l => l.Title).HasMaxLength(300);
+            listing.Property(l => l.LastError).HasMaxLength(500);
+            listing.HasOne<Product>().WithMany().HasForeignKey(l => l.ProductId).OnDelete(DeleteBehavior.Cascade);
+            listing.HasIndex(l => new { l.ProductId, l.Store }).IsUnique();
+        });
+
+        builder.Entity<PriceObservation>(observation =>
+        {
+            observation.ToTable("price_observation");
+            observation.HasKey(o => o.Id);
+            observation.Property(o => o.Price).HasPrecision(10, 2);
+            observation.Property(o => o.WasPrice).HasPrecision(10, 2);
+            observation.Property(o => o.LoyaltyPrice).HasPrecision(10, 2);
+            observation.Property(o => o.LoyaltyScheme).HasMaxLength(32);
+            observation.Property(o => o.PromoText).HasMaxLength(200);
+            observation.HasOne<StoreListing>().WithMany().HasForeignKey(o => o.ListingId).OnDelete(DeleteBehavior.Cascade);
+            observation.HasIndex(o => new { o.ListingId, o.ObservedOn }).IsUnique();
+        });
+
+        builder.Entity<PricePullRun>(run =>
+        {
+            run.ToTable("price_pull_run");
+            run.HasKey(r => r.Id);
+            run.Property(r => r.Store).HasConversion<string>().HasMaxLength(16);
+            run.Property(r => r.Outcome).HasConversion<string>().HasMaxLength(16);
+            run.Property(r => r.Message).HasMaxLength(500);
+            run.HasIndex(r => new { r.Store, r.FinishedAt });
+        });
+
+        builder.Entity<PaidPrice>(paid =>
+        {
+            paid.ToTable("paid_price");
+            paid.HasKey(p => p.Id);
+            paid.Property(p => p.Store).HasConversion<string>().HasMaxLength(16);
+            paid.Property(p => p.Price).HasPrecision(10, 2);
+            paid.HasOne<Product>().WithMany().HasForeignKey(p => p.ProductId).OnDelete(DeleteBehavior.Cascade);
+            paid.HasIndex(p => new { p.ProductId, p.Store, p.PaidOn });
         });
 
         builder.Entity<AppUser>().ToTable("users");

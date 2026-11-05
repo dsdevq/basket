@@ -12,9 +12,10 @@ import {
 import {SessionStore} from '../auth/session.store';
 
 const LIST: NavItem = {label: 'List', icon: 'ShoppingBasket', route: '/list'};
+const PRICES: NavItem = {label: 'Prices', icon: 'Tag', route: '/prices'};
 const PEOPLE: NavItem = {label: 'People', icon: 'Users', route: '/people'};
 
-/** The signed-in frame: the lifekit app layout with List as the tab and People/Settings behind More. */
+/** The signed-in frame: the lifekit app layout with List and Prices as the tabs and People/Settings behind More. */
 @Component({
   selector: 'bk-app-shell',
   imports: [AppLayoutComponent, RouterOutlet],
@@ -37,9 +38,9 @@ export class AppShellComponent {
   private readonly session = inject(SessionStore);
   private readonly router = inject(Router);
 
-  protected readonly tabRoutes = [LIST.route];
+  protected readonly tabRoutes = [LIST.route, PRICES.route];
   protected readonly navItems = computed<NavItem[]>(() =>
-    this.session.isOwner() ? [LIST, PEOPLE] : [LIST]
+    this.session.isOwner() ? [LIST, PRICES, PEOPLE] : [LIST, PRICES]
   );
   protected readonly account = computed<AppLayoutAccount | undefined>(() => {
     const user = this.session.user();

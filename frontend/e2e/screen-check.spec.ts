@@ -19,6 +19,55 @@ const ITEMS = [
   checkedAt: null,
   checkedBy: null,
 }));
+const PRODUCTS = {
+  products: [
+    {
+      id: 'p1',
+      name: 'Whole milk 2L',
+      stores: [
+        {
+          store: 'lidl',
+          name: 'Lidl',
+          readBy: 'nightly',
+          listing: {
+            url: 'https://www.lidl.ie/p/milk/p11000',
+            title: 'Milk',
+            checkedAt: '2026-11-05T03:00:00Z',
+            error: null,
+          },
+          price: {
+            observedOn: '2026-11-05',
+            state: 'current',
+            price: 1.29,
+            wasPrice: 1.49,
+            loyaltyPrice: 0.99,
+            loyaltyScheme: 'Lidl Plus',
+            promoText: 'Lidl Plus deal',
+            validFrom: null,
+            validUntil: '2026-11-11',
+            best: 0.99,
+          },
+          lastPaid: {state: 'not_connected', price: null, paidOn: null},
+        },
+        {store: 'aldi', name: 'Aldi', readBy: 'pc', listing: null, price: null, lastPaid: null},
+        {store: 'tesco', name: 'Tesco', readBy: 'pc', listing: null, price: null, lastPaid: null},
+      ],
+    },
+  ],
+  stores: [
+    {
+      store: 'tesco',
+      name: 'Tesco',
+      lastRun: {
+        finishedAt: '2026-11-05T03:00:00Z',
+        outcome: 'blocked',
+        listings: 1,
+        read: 0,
+        message: 'www.tesco.ie answered HTTP 403.',
+      },
+    },
+  ],
+};
 const MEMBERS = [
   {id: 'u1', displayName: 'Anna', role: 'owner', createdAt: '2026-11-01T09:00:00Z'},
   {id: 'u2', displayName: 'Ben', role: 'member', createdAt: '2026-11-02T09:00:00Z'},
@@ -41,6 +90,7 @@ interface Route {
 async function signedIn(page: Page): Promise<void> {
   await page.route('**/api/session', r => r.fulfill({json: OWNER}));
   await page.route('**/api/list', r => r.fulfill({json: {items: ITEMS}}));
+  await page.route('**/api/products', r => r.fulfill({json: PRODUCTS}));
   await page.route('**/api/members', r => r.fulfill({json: MEMBERS}));
   await page.route('**/api/invites', r => r.fulfill({json: INVITES}));
   await page.route('**/api/passkeys', r => r.fulfill({json: PASSKEYS}));
@@ -53,6 +103,7 @@ async function guest(page: Page): Promise<void> {
 
 const ROUTES: readonly Route[] = [
   {path: '/list', setup: signedIn},
+  {path: '/prices', setup: signedIn},
   {path: '/people', setup: signedIn},
   {path: '/settings', setup: signedIn},
   {path: '/more', setup: signedIn},

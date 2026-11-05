@@ -2,6 +2,9 @@ using Basket.Api.Auth;
 using Basket.Api.Data;
 using Basket.Api.Infrastructure;
 using Basket.Api.Lists;
+using Basket.Api.Prices;
+using Basket.Api.Prices.Fetching;
+using Basket.Api.Prices.Sources;
 using Hangfire;
 using Hangfire.PostgreSql;
 using Microsoft.AspNetCore.DataProtection;
@@ -24,6 +27,27 @@ builder.Services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connect
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<InviteService>();
 builder.Services.AddScoped<InviteCleanupJob>();
+
+builder.Services.Configure<PricesOptions>(builder.Configuration.GetSection(PricesOptions.Section));
+builder.Services.AddSingleton<HostThrottle>();
+builder.Services.AddHttpClient<IPageFetcher, PoliteFetcher>((services, client) =>
+{
+    var options = services.GetRequiredService<Microsoft.Extensions.Options.IOptions<PricesOptions>>().Value;
+    client.Timeout = TimeSpan.FromSeconds(options.RequestTimeoutSeconds);
+    client.MaxResponseContentBufferSize = 4 * 1024 * 1024;
+    // Honest and ordinary: who is asking, why, and how little. Nothing here pretends to be a browser.
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("basket-price-check/1.0 (a household app reading its own products' prices once a night)");
+    client.DefaultRequestHeaders.AcceptLanguage.ParseAdd("en-IE,en;q=0.8");
+    client.DefaultRequestHeaders.Accept.ParseAdd("text/html,application/xhtml+xml;q=0.9,*/*;q=0.5");
+}).ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+{
+    AutomaticDecompression = System.Net.DecompressionMethods.All,
+    MaxAutomaticRedirections = 3,
+    PooledConnectionLifetime = TimeSpan.FromMinutes(5),
+});
+builder.Services.AddScoped<IStorePriceSource, LidlPriceSource>();
+builder.Services.AddScoped<PriceRecorder>();
+builder.Services.AddScoped<PricePullJob>();
 builder.Services.AddBasketAuth(builder.Configuration);
 builder.Services.Configure<SecurityOptions>(builder.Configuration.GetSection(SecurityOptions.Section));
 builder.Services.AddHostedService<OwnerBootstrap>();
@@ -102,6 +126,7 @@ api.MapHealthChecks("/health/ready", new() { Predicate = check => check.Tags.Con
 api.MapAuthEndpoints();
 api.MapPasskeyEndpoints();
 api.MapListEndpoints();
+api.MapProductEndpoints();
 api.MapFallback(() => Results.NotFound()).AllowAnonymous();
 
 app.MapFallbackToFile("index.html");
@@ -109,6 +134,7 @@ app.MapFallbackToFile("index.html");
 if (builder.Configuration.GetValue("Hangfire:Enabled", true))
 {
     InviteCleanupJob.Schedule(app.Services.GetRequiredService<IRecurringJobManager>());
+    PricePullJob.Schedule(app.Services.GetRequiredService<IRecurringJobManager>());
 }
 
 app.Run();

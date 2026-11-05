@@ -2,14 +2,16 @@
 
 Where to buy what I buy: grocery app over Lidl, Aldi and Tesco in Dublin.
 
-For the two of us first: **one shared shopping list** on the phone. Prices, matching, a shop plan and Lidl Plus
-receipts come in later milestones (see [docs/decisions.md](docs/decisions.md)).
+For the two of us first: **one shared shopping list** on the phone, and (M2) **prices** read every night for the products
+we buy. Matching, a shop plan and Lidl Plus receipts come in later milestones (see [docs/decisions.md](docs/decisions.md)).
 
-## What is here (M1)
+## What is here (M1, M2)
 
 - `backend/` - .NET 10 minimal API: ASP.NET Core Identity with passkeys and one-time invite links, the shared list,
   EF Core + Postgres, Hangfire, Serilog. Tests in `backend/tests/Basket.Tests` (real WebAuthn ceremonies against a
   software authenticator).
+- `backend/src/Basket.Api/Prices` - M2: the nightly Hangfire price pull (Lidl), its parsers and polite fetcher, the
+  product and price endpoints. Tests use recorded shop pages in `backend/tests/Basket.Tests/Fixtures`, never the network.
 - `frontend/` - Angular 22 on [lifekit-common](https://github.com/lifekit-hq/lifekit-common) (`@lifekit-hq/ui`,
   `core`, `tokens`), Violet `#7c3aed` seed, phone-first with bottom sheets.
 - `docker/` - one image (the API serves the Angular build), the production compose project `basket`, a dev database.
