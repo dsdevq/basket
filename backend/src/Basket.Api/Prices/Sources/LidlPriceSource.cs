@@ -15,6 +15,7 @@ public sealed class LidlPriceSource(IPageFetcher fetcher, IOptions<PricesOptions
     public async Task<StorePull> PullAsync(IReadOnlyList<ListingToCheck> listings, CancellationToken ct)
     {
         var offers = new Dictionary<string, PriceQuote>(StringComparer.Ordinal);
+        string? offerPageError = null;
         foreach (var page in options.Value.LidlOfferPages)
         {
             var result = await fetcher.GetAsync(new Uri(page), ct);
@@ -32,6 +33,7 @@ public sealed class LidlPriceSource(IPageFetcher fetcher, IOptions<PricesOptions
                 default:
                     // An offer page being down only costs the offers on it; the product pages are still tried.
                     log.LogWarning("Lidl offer page {Page} was not read: {Detail}", page, result.Detail);
+                    offerPageError ??= $"A Lidl offers page was not read ({result.Detail ?? "no detail"}), so a missing price here may be an offer.";
                     break;
             }
         }
@@ -52,7 +54,7 @@ public sealed class LidlPriceSource(IPageFetcher fetcher, IOptions<PricesOptions
                 case FetchStatus.Blocked:
                     return StorePulls.Blocked(listings, page.Detail!);
                 case FetchStatus.Ok:
-                    results[listing.ListingId] = ReadProductPage(page.Body!);
+                    results[listing.ListingId] = ReadProductPage(page.Body!, offerPageError);
                     break;
                 case FetchStatus.NotFound:
                     results[listing.ListingId] = ListingPull.Failed("Lidl no longer has this page (404). Link another product page.");
@@ -67,11 +69,16 @@ public sealed class LidlPriceSource(IPageFetcher fetcher, IOptions<PricesOptions
         return StorePulls.Summarize(listings, results, hint);
     }
 
-    private static ListingPull ReadProductPage(string html)
+    private static ListingPull ReadProductPage(string html, string? offerPageError)
     {
         try
         {
             var quote = LidlParser.ParseProductPage(html);
+            if (quote.Price is null && offerPageError is not null)
+            {
+                return ListingPull.Failed(offerPageError);
+            }
+
             return quote.Price is null
                 ? new ListingPull(quote, null) // on Lidl's site but not priced this week: a reading, "no price"
                 : ListingPull.Priced(quote);
