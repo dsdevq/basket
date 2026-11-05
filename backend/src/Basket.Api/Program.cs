@@ -100,6 +100,7 @@ var api = app.MapGroup("/api").RequireAuthorization();
 api.MapGet("/health", () => Results.Ok(new { status = "ok" })).AllowAnonymous();
 api.MapHealthChecks("/health/ready", new() { Predicate = check => check.Tags.Contains("ready") }).AllowAnonymous();
 api.MapAuthEndpoints();
+api.MapPasskeyEndpoints();
 api.MapListEndpoints();
 api.MapFallback(() => Results.NotFound()).AllowAnonymous();
 

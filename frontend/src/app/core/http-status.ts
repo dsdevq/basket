@@ -1,7 +1,9 @@
 /** The status codes the screens react to. */
 export const HttpStatus = {
+  badRequest: 400,
   unauthorized: 401,
   notFound: 404,
+  conflict: 409,
   tooManyRequests: 429,
 } as const;
 

@@ -2,7 +2,7 @@ import {HttpClient} from '@angular/common/http';
 import {inject, Injectable} from '@angular/core';
 import {firstValueFrom} from 'rxjs';
 
-import type {CreatedInvite, Member, PendingInvite, SessionResponse} from './session.model';
+import type {CreatedInvite, Member, Passkey, PendingInvite, SessionResponse} from './session.model';
 
 /** The sign-in, registration and invite endpoints of the API, one method each. */
 @Injectable({providedIn: 'root'})
@@ -57,5 +57,21 @@ export class AuthApi {
 
   public revokeInvite(id: string): Promise<void> {
     return firstValueFrom(this.http.delete<void>(`/api/invites/${id}`));
+  }
+
+  public passkeys(): Promise<Passkey[]> {
+    return firstValueFrom(this.http.get<Passkey[]>('/api/passkeys'));
+  }
+
+  public passkeyOptions(): Promise<unknown> {
+    return firstValueFrom(this.http.post<unknown>('/api/passkeys/options', {}));
+  }
+
+  public addPasskey(credentialJson: string, name: string): Promise<Passkey> {
+    return firstValueFrom(this.http.post<Passkey>('/api/passkeys', {credentialJson, name}));
+  }
+
+  public removePasskey(id: string): Promise<void> {
+    return firstValueFrom(this.http.delete<void>(`/api/passkeys/${encodeURIComponent(id)}`));
   }
 }

@@ -27,6 +27,11 @@ const INVITES = [
   {id: 'i1', label: 'Chris', createdAt: '2026-11-03T09:00:00Z', expiresAt: '2026-11-04T09:00:00Z'},
 ];
 
+const PASSKEYS = [
+  {id: 'k1', name: 'Phone', createdAt: '2026-11-01T09:00:00Z', backedUp: true},
+  {id: 'k2', name: 'Laptop', createdAt: '2026-11-04T09:00:00Z', backedUp: false},
+];
+
 interface Route {
   readonly path: string;
   /** Mocks the API as the person who reaches this route sees it. */
@@ -38,6 +43,7 @@ async function signedIn(page: Page): Promise<void> {
   await page.route('**/api/list', r => r.fulfill({json: {items: ITEMS}}));
   await page.route('**/api/members', r => r.fulfill({json: MEMBERS}));
   await page.route('**/api/invites', r => r.fulfill({json: INVITES}));
+  await page.route('**/api/passkeys', r => r.fulfill({json: PASSKEYS}));
 }
 
 async function guest(page: Page): Promise<void> {

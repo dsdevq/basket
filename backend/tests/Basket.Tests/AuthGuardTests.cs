@@ -21,6 +21,10 @@ public sealed class AuthGuardTests : IClassFixture<BasketFactory>
     [InlineData("POST", "/api/invites")]
     [InlineData("GET", "/api/members")]
     [InlineData("POST", "/api/auth/sign-out")]
+    [InlineData("GET", "/api/passkeys")]
+    [InlineData("POST", "/api/passkeys/options")]
+    [InlineData("POST", "/api/passkeys")]
+    [InlineData("DELETE", "/api/passkeys/AAAA")]
     public async Task Anonymous_callers_are_refused_with_401_not_a_redirect(string method, string path)
     {
         var client = _factory.NewBrowser();

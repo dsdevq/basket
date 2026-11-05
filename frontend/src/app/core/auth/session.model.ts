@@ -32,3 +32,10 @@ export interface CreatedInvite {
   readonly token: string;
   readonly link: string;
 }
+
+export interface Passkey {
+  readonly id: string;
+  readonly name: string;
+  readonly createdAt: string;
+  readonly backedUp: boolean;
+}
