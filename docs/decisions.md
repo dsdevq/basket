@@ -96,6 +96,8 @@ planning record so this repo carries its own reasons; the M1 section holds the c
   (JSON-LD price and stock). Lidl's offers start and end on dates, so a reading keeps `ValidFrom`/`ValidUntil` (the
   price's own window, the tile's store dates only when the price has none) and the page shows "from 12 Nov" or "ended"
   instead of an out-of-date price.
+  If an offer page could not be read or came back with no priced products, a product page without a price is a failed
+  reading (the last good price stays), not "no price", since the product may be on offer on the missing page.
 - **Products are linked to shop pages by pasted address, not matched.** M2 stores `product` and one `store_listing` per
   shop (address checked against that shop's product-page shape, nothing else is ever fetched). Barcode/search matching
   with his confirmation is M3.
