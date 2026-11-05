@@ -93,9 +93,9 @@ planning record so this repo carries its own reasons; the M1 section holds the c
 - **Lidl's price comes from its offer pages.** lidl.ie shows no everyday prices, only the week's offers. The job reads
   three offer/category pages (`Prices:LidlOfferPages`), whose product tiles carry the price, the Lidl Plus price (no
   login needed), the old price, the promo text and the dates. A linked product on none of them is read from its own page
-  (JSON-LD price and stock). Lidl's offers start and end on dates, so a reading keeps `ValidFrom`/`ValidUntil` (the price's own window, the tile's
-  store dates only when the price has none) and the page
-  shows "from 12 Nov" or "ended" instead of an out-of-date price.
+  (JSON-LD price and stock). Lidl's offers start and end on dates, so a reading keeps `ValidFrom`/`ValidUntil` (the
+  price's own window, the tile's store dates only when the price has none) and the page shows "from 12 Nov" or "ended"
+  instead of an out-of-date price.
 - **Products are linked to shop pages by pasted address, not matched.** M2 stores `product` and one `store_listing` per
   shop (address checked against that shop's product-page shape, nothing else is ever fetched). Barcode/search matching
   with his confirmation is M3.
