@@ -39,3 +39,19 @@ export interface Passkey {
   readonly createdAt: string;
   readonly backedUp: boolean;
 }
+
+/** A credential for the PC-side price reader. The raw token is never listed; only its label and use. */
+export interface IngestToken {
+  readonly id: string;
+  readonly label: string | null;
+  readonly createdAt: string;
+  readonly lastUsedAt: string | null;
+}
+
+/** The one answer that carries the raw token: shown once, then only its hash exists. */
+export interface CreatedIngestToken {
+  readonly id: string;
+  readonly label: string | null;
+  readonly createdAt: string;
+  readonly token: string;
+}

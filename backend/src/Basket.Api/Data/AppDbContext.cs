@@ -12,6 +12,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
     public DbSet<Invite> Invites => Set<Invite>();
 
+    public DbSet<IngestToken> IngestTokens => Set<IngestToken>();
+
     public DbSet<Product> Products => Set<Product>();
 
     public DbSet<StoreListing> StoreListings => Set<StoreListing>();
@@ -51,6 +53,16 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             invite.HasIndex(i => i.TokenHash).IsUnique();
             invite.HasOne<AppUser>().WithMany().HasForeignKey(i => i.CreatedByUserId).OnDelete(DeleteBehavior.SetNull);
             invite.HasOne<AppUser>().WithMany().HasForeignKey(i => i.ConsumedByUserId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        builder.Entity<IngestToken>(token =>
+        {
+            token.ToTable("ingest_token");
+            token.HasKey(t => t.Id);
+            token.Property(t => t.TokenHash).HasMaxLength(64).IsFixedLength().IsRequired();
+            token.Property(t => t.Label).HasMaxLength(UserNames.MaxLength);
+            token.HasIndex(t => t.TokenHash).IsUnique();
+            token.HasOne<AppUser>().WithMany().HasForeignKey(t => t.CreatedByUserId).OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<Product>(product =>

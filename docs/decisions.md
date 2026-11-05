@@ -88,8 +88,8 @@ planning record so this repo carries its own reasons; the M1 section holds the c
   VPS with Akamai's "Access Denied", plain HTTP clients and an ordinary headless browser alike (checked 2026-11-05,
   `robots.txt` included). The owner decided (2026-11-05): they are read through the PC relay queue, an ordinary browser on
   his home connection, when the PC is on; basket builds no VPS-side Tesco/Aldi scraping and does not work round the block.
-  Until a reading arrives their rows say "Waiting for the next PC read". The PC side and a write-only ingest endpoint are a
-  separate task; `PriceRecorder` is the write path both the Lidl job and that endpoint use.
+  Until a reading arrives their rows say "Waiting for the next PC read". The PC side is a separate fleet task; the write-only
+  ingest endpoint is below, and `PriceRecorder` is the write path both the Lidl job and that endpoint use.
 - **Lidl's price comes from its offer pages.** lidl.ie shows no everyday prices, only the week's offers. The job reads
   three offer/category pages (`Prices:LidlOfferPages`), whose product tiles carry the price, the Lidl Plus price (no
   login needed), the old price, the promo text and the dates. A linked product on none of them is read from its own page
@@ -113,3 +113,34 @@ planning record so this repo carries its own reasons; the M1 section holds the c
 - **Last paid price.** The `paid_price` table and the "Last paid" line exist; with no receipts feed they show "not yet
   connected" for Lidl. The feed needs his one-off Lidl Plus login (M4) and is not built. Tesco Clubcard: the Tesco site
   could not be read, so whether Clubcard prices need a login is not known yet.
+
+## Price ingest decisions (the PC relay's door)
+
+- **One write-only endpoint, `POST /api/ingest/prices`.** The PC-side reader posts `{"prices": [...]}`, up to 200 readings
+  (256 KB), each naming `store` (`tesco` or `aldi`), the product page `url` that is already linked to a product, and
+  what the page said (`price`, `wasPrice`, `loyaltyPrice`, `loyaltyScheme`, `promoText`, `validFrom`, `validUntil`,
+  `inStock`, `title`). Readings go through `PriceRecorder`, so they become the same one-per-listing-per-Dublin-day
+  `price_observation` rows as the nightly Lidl job's, and the Prices page shows them the same way.
+- **Dated by the server.** The reader cannot set `observedAt`: the server stamps the moment of the post. A reader that
+  was off for days and posts a stale batch therefore cannot overwrite a newer reading of the same day with an older one,
+  and a replayed batch just replaces that day's reading with identical values.
+- **Each reading stands alone.** A bad one is refused with a stable reason code (`unknown_store`, `store_not_ingested`
+  for Lidl, `url_invalid`, `unknown_listing`, `price_invalid` for zero, negative, over 9999.99 or sub-cent amounts,
+  `no_price`, `dates_invalid`, `duplicate` for a listing already in the same batch) and the rest of the batch is kept.
+  The answer is 200, or 422 when nothing in the batch was usable. Each shop's part of a batch also becomes a
+  `price_pull_run` (`ok`, `partial`, `failed`), so a misconfigured reader shows as a warning on the Prices page. An
+  out-of-stock reading with no price is valid; an in-stock one with no price is not.
+- **Nothing is readable with the token.** The endpoint's answer carries only per-reading accept/refuse codes. Telling the
+  reader which URLs are tracked (its work list) is deliberately not part of this endpoint; the one thing a token holder
+  can learn is whether a URL it posted is linked (`unknown_listing`).
+- **The token.** The owner makes it in Settings > Price reader (owner only; up to 5). 256 random bits behind a `bsk_`
+  prefix, shown once; only its SHA-256 is stored (`ingest_token`, the one migration of this change, additive). It has one
+  scope: it opens this endpoint and nothing else, and every other endpoint ignores it. Revoking deletes the row and takes
+  effect on the next request. `last_used_at` is updated at most every 5 minutes. Requests are rate limited per client
+  address (30 a minute) before the token is even checked.
+- **No cookie, no Origin.** The reader is a program: it sends no `Origin`, so the origin check skips `/api/ingest/...`
+  (and only that). The endpoint never reads the session cookie and answers 401 without a valid token, so a forged
+  cross-site request has nothing to ride on, and a signed-in browser session alone is refused. A token sent to any other
+  endpoint is refused too: nothing else looks at it.
+- **Test data.** Tesco and Aldi block the VPS, so the ingest fixture (`Fixtures/ingest-batch.json`) is a batch written to
+  the contract with realistic prices, not a page recorded from a shop.

@@ -3,6 +3,7 @@ using Basket.Api.Data;
 using Basket.Api.Infrastructure;
 using Basket.Api.Lists;
 using Basket.Api.Prices;
+using Basket.Api.Prices.Ingest;
 using Basket.Api.Prices.Fetching;
 using Basket.Api.Prices.Sources;
 using Hangfire;
@@ -48,6 +49,8 @@ builder.Services.AddHttpClient<IPageFetcher, PoliteFetcher>((services, client) =
 builder.Services.AddScoped<IStorePriceSource, LidlPriceSource>();
 builder.Services.AddScoped<PriceRecorder>();
 builder.Services.AddScoped<PricePullJob>();
+builder.Services.AddScoped<IngestTokenService>();
+builder.Services.AddScoped<PriceIngest>();
 builder.Services.AddBasketAuth(builder.Configuration);
 builder.Services.Configure<SecurityOptions>(builder.Configuration.GetSection(SecurityOptions.Section));
 builder.Services.AddHostedService<OwnerBootstrap>();
@@ -127,6 +130,7 @@ api.MapAuthEndpoints();
 api.MapPasskeyEndpoints();
 api.MapListEndpoints();
 api.MapProductEndpoints();
+api.MapIngestEndpoints();
 api.MapFallback(() => Results.NotFound()).AllowAnonymous();
 
 app.MapFallbackToFile("index.html");

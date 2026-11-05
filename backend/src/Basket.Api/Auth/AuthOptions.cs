@@ -23,6 +23,9 @@ public sealed class AuthOptions
     /// <summary>Requests per minute per client address on the sign-in, invite and registration endpoints.</summary>
     public int AuthRequestsPerMinute { get; set; } = 20;
 
+    /// <summary>Requests per minute per client address on the price ingest endpoint (one batch a night is the norm).</summary>
+    public int IngestRequestsPerMinute { get; set; } = 30;
+
     /// <summary>Invites an owner can mint per hour.</summary>
     public int InvitesPerHour { get; set; } = 10;
 

@@ -4,8 +4,8 @@ using Microsoft.EntityFrameworkCore;
 namespace Basket.Api.Prices;
 
 /// <summary>
-/// The one way a reading enters the history, whoever took it: the nightly Lidl job today, a write-only ingest
-/// endpoint fed by the PC-side reader for Tesco and Aldi later. Applies to the context; the caller saves.
+/// The one way a reading enters the history, whoever took it: the nightly Lidl job, or the write-only ingest
+/// endpoint fed by the PC-side reader for Tesco and Aldi. Applies to the context; the caller saves.
 /// </summary>
 public sealed class PriceRecorder(AppDbContext db)
 {

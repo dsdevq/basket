@@ -154,7 +154,7 @@ public static class ProductEndpoints
         TimeProvider clock,
         CancellationToken ct)
     {
-        if (!TryParseStore(store, out var shop))
+        if (!Stores.TryParse(store, out var shop))
         {
             return Results.NotFound();
         }
@@ -192,7 +192,7 @@ public static class ProductEndpoints
     }
 
     private static async Task<IResult> UnlinkStore(Guid id, string store, AppDbContext db, CancellationToken ct) =>
-        !TryParseStore(store, out var shop) || await db.StoreListings.Where(l => l.ProductId == id && l.Store == shop).ExecuteDeleteAsync(ct) == 0
+        !Stores.TryParse(store, out var shop) || await db.StoreListings.Where(l => l.ProductId == id && l.Store == shop).ExecuteDeleteAsync(ct) == 0
             ? Results.NotFound()
             : Results.NoContent();
 
@@ -227,19 +227,4 @@ public static class ProductEndpoints
         DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(clock.GetUtcNow(), Dublin).DateTime);
 
     private static string Slug(Store store) => store.ToString().ToLowerInvariant();
-
-    private static bool TryParseStore(string value, out Store store)
-    {
-        store = default;
-        foreach (var candidate in Stores.All)
-        {
-            if (string.Equals(candidate.ToString(), value, StringComparison.OrdinalIgnoreCase))
-            {
-                store = candidate;
-                return true;
-            }
-        }
-
-        return false;
-    }
 }

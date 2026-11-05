@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using System.Threading.RateLimiting;
 using Basket.Api.Data;
+using Basket.Api.Prices.Ingest;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
 
@@ -68,6 +69,13 @@ public static class AuthSetup
             limits.AddPolicy(AuthEndpoints.AuthLimiter, context =>
             {
                 var limit = context.RequestServices.GetRequiredService<IOptions<AuthOptions>>().Value.AuthRequestsPerMinute;
+                return RateLimitPartition.GetFixedWindowLimiter(
+                    ClientKey(context),
+                    _ => new FixedWindowRateLimiterOptions { PermitLimit = limit, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 });
+            });
+            limits.AddPolicy(IngestEndpoints.Limiter, context =>
+            {
+                var limit = context.RequestServices.GetRequiredService<IOptions<AuthOptions>>().Value.IngestRequestsPerMinute;
                 return RateLimitPartition.GetFixedWindowLimiter(
                     ClientKey(context),
                     _ => new FixedWindowRateLimiterOptions { PermitLimit = limit, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 });
