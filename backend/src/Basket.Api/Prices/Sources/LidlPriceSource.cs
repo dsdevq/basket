@@ -24,9 +24,15 @@ public sealed class LidlPriceSource(IPageFetcher fetcher, IOptions<PricesOptions
                 case FetchStatus.Blocked:
                     return StorePulls.Blocked(listings, result.Detail!);
                 case FetchStatus.Ok:
-                    foreach (var (id, quote) in LidlParser.ParseOfferTiles(result.Body!))
+                    var tiles = LidlParser.ParseOfferTiles(result.Body!);
+                    foreach (var (id, quote) in tiles)
                     {
                         offers[id] = quote;
+                    }
+
+                    if (tiles.Count == 0)
+                    {
+                        offerPageError ??= "A Lidl offers page had no priced products, the page layout may have changed, so a missing price here may be an offer.";
                     }
 
                     break;

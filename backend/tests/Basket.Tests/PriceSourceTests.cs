@@ -86,6 +86,21 @@ public sealed class PriceSourceTests
     }
 
     [Fact]
+    public async Task Lidl_does_not_record_no_price_for_a_product_when_an_offer_page_came_back_without_products()
+    {
+        var fetcher = new FakeFetcher()
+            .Serve(OffersPage, "<html>redesigned</html>")
+            .Serve(AubergineUrl, Fixtures.Read("lidl-product-page-no-price.html"));
+        var aubergine = Listing(AubergineUrl);
+
+        var pull = await Lidl(fetcher, OffersPage).PullAsync([aubergine], CancellationToken.None);
+
+        pull.Outcome.Should().Be(PullOutcome.Failed);
+        pull.Listings[aubergine.ListingId].Quote.Should().BeNull();
+        pull.Listings[aubergine.ListingId].Error.Should().Contain("page layout");
+    }
+
+    [Fact]
     public async Task Lidl_stops_at_the_first_refusal_and_asks_for_nothing_more()
     {
         var fetcher = new FakeFetcher().Serve(OffersPage, new FetchResult(FetchStatus.Blocked, null, "www.lidl.ie answered HTTP 403"));
