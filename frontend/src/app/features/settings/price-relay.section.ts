@@ -69,10 +69,7 @@ export class PriceRelaySectionComponent implements OnInit {
   }
 
   protected describe(token: IngestToken): string {
-    const made = `Made ${this.date.transform(token.createdAt, 'd MMM y') ?? ''}`;
-    return token.lastUsedAt
-      ? `${made} · used ${this.date.transform(token.lastUsedAt, 'd MMM y, HH:mm') ?? ''}`
-      : `${made} · never used`;
+    return `Made ${this.date.transform(token.createdAt, 'd MMM y') ?? ''}`;
   }
 
   protected async load(): Promise<void> {

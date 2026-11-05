@@ -133,10 +133,10 @@ planning record so this repo carries its own reasons; the M1 section holds the c
 - **Nothing is readable with the token.** The endpoint's answer carries only per-reading accept/refuse codes. Telling the
   reader which URLs are tracked (its work list) is deliberately not part of this endpoint; the one thing a token holder
   can learn is whether a URL it posted is linked (`unknown_listing`).
-- **The token.** The owner makes it in Settings > Price reader (owner only; up to 5). 256 random bits behind a `bsk_`
+- **The token.** The owner makes it in Settings > Price reader (owner only). 256 random bits behind a `bsk_`
   prefix, shown once; only its SHA-256 is stored (`ingest_token`, the one migration of this change, additive). It has one
   scope: it opens this endpoint and nothing else, and every other endpoint ignores it. Revoking deletes the row and takes
-  effect on the next request. `last_used_at` is updated at most every 5 minutes. Requests are rate limited per client
+  effect on the next request. Requests are rate limited per client
   address (30 a minute) before the token is even checked.
 - **No cookie, no Origin.** The reader is a program: it sends no `Origin`, so the origin check skips `/api/ingest/...`
   (and only that). The endpoint never reads the session cookie and answers 401 without a valid token, so a forged

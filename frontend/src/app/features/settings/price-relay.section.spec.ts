@@ -10,13 +10,11 @@ const HOME: IngestToken = {
   id: 't1',
   label: 'Home PC',
   createdAt: '2026-11-05T09:00:00Z',
-  lastUsedAt: '2026-11-06T03:10:00Z',
 };
 const FRESH: IngestToken = {
   id: 't2',
   label: null,
   createdAt: '2026-11-06T09:00:00Z',
-  lastUsedAt: null,
 };
 
 async function render(
@@ -55,15 +53,13 @@ describe('PriceRelaySectionComponent', () => {
     TestBed.resetTestingModule();
   });
 
-  it('lists each token by label with when it was made and last used, never the token itself', async () => {
+  it('lists each token by label with when it was made, never the token itself', async () => {
     const {host} = await render({tokens: vi.fn().mockResolvedValue([HOME, FRESH])});
 
     const text = host.textContent ?? '';
     expect(text).toContain('Home PC');
     expect(text).toContain('Made 5 Nov 2026');
-    expect(text).toContain('used 6 Nov 2026');
     expect(text).toContain('Price reader');
-    expect(text).toContain('never used');
   });
 
   it('explains itself when there are no tokens yet', async () => {

@@ -91,15 +91,6 @@ describe('PriceTokenSheetComponent', () => {
     expect(toast.error).toHaveBeenCalled();
   });
 
-  it('explains the limit when five tokens already exist', async () => {
-    const {host, submit} = await render({createToken: vi.fn().mockRejectedValue({status: 409})});
-
-    await submit('Another');
-
-    expect(host.textContent).toContain('five price tokens at most');
-    expect(host.querySelector('[data-testid="token"]')).toBeNull();
-  });
-
   it('shows a plain message when making the token fails', async () => {
     const {host, submit} = await render({createToken: vi.fn().mockRejectedValue({status: 500})});
 

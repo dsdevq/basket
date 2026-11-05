@@ -164,10 +164,6 @@ namespace Basket.Api.Data.Migrations
                         .HasColumnType("character varying(40)")
                         .HasColumnName("label");
 
-                    b.Property<DateTimeOffset?>("LastUsedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("last_used_at");
-
                     b.Property<string>("TokenHash")
                         .IsRequired()
                         .HasMaxLength(64)

@@ -9,7 +9,7 @@ namespace Basket.Api.Prices.Ingest;
 
 public sealed record CreateIngestTokenRequest(string? Label);
 
-public sealed record IngestTokenResponse(Guid Id, string? Label, DateTimeOffset CreatedAt, DateTimeOffset? LastUsedAt);
+public sealed record IngestTokenResponse(Guid Id, string? Label, DateTimeOffset CreatedAt);
 
 /// <summary>The only time the raw token is ever shown: afterwards basket holds just its hash.</summary>
 public sealed record CreatedIngestTokenResponse(Guid Id, string? Label, DateTimeOffset CreatedAt, string Token);
@@ -38,7 +38,7 @@ public static class IngestEndpoints
     }
 
     private static async Task<IResult> ListTokens(IngestTokenService tokens, CancellationToken ct) =>
-        Results.Ok((await tokens.ListAsync(ct)).Select(t => new IngestTokenResponse(t.Id, t.Label, t.CreatedAt, t.LastUsedAt)));
+        Results.Ok((await tokens.ListAsync(ct)).Select(t => new IngestTokenResponse(t.Id, t.Label, t.CreatedAt)));
 
     private static async Task<IResult> CreateToken(
         CreateIngestTokenRequest request,
@@ -47,15 +47,7 @@ public static class IngestEndpoints
         CancellationToken ct)
     {
         var createdBy = Guid.Parse(principal.FindFirstValue(ClaimTypes.NameIdentifier)!);
-        var created = await tokens.CreateAsync(createdBy, request.Label, ct);
-        if (created is null)
-        {
-            return Results.Json(
-                new { error = "tokens_full", message = $"basket keeps at most {IngestTokenService.MaxTokens} price tokens. Revoke one first." },
-                statusCode: 409);
-        }
-
-        var (token, raw) = created.Value;
+        var (token, raw) = await tokens.CreateAsync(createdBy, request.Label, ct);
         return Results.Created($"/api/ingest-tokens/{token.Id}", new CreatedIngestTokenResponse(token.Id, token.Label, token.CreatedAt, raw));
     }
 

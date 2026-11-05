@@ -18,7 +18,4 @@ public sealed class IngestToken
     public Guid CreatedByUserId { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }
-
-    /// <summary>When a request last authenticated with it (rounded to the minute-ish, not every request).</summary>
-    public DateTimeOffset? LastUsedAt { get; set; }
 }

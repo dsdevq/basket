@@ -82,7 +82,7 @@ const PASSKEYS = [
 ];
 
 const INGEST_TOKENS = [
-  {id: 't1', label: 'Home PC', createdAt: '2026-11-05T09:00:00Z', lastUsedAt: '2026-11-06T03:10:00Z'},
+  {id: 't1', label: 'Home PC', createdAt: '2026-11-05T09:00:00Z'},
 ];
 
 interface Route {

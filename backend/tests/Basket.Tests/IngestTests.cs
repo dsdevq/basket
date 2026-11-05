@@ -107,21 +107,6 @@ public sealed class IngestTests : IClassFixture<BasketFactory>
     }
 
     [Fact]
-    public async Task At_most_five_tokens_are_kept()
-    {
-        var owner = await SeedAsync();
-        for (var i = 0; i < IngestTokenService.MaxTokens; i++)
-        {
-            await MintAsync(owner, $"PC {i}");
-        }
-
-        var sixth = await owner.PostAsJsonAsync("/api/ingest-tokens", new { label = "one too many" });
-
-        sixth.StatusCode.Should().Be(HttpStatusCode.Conflict);
-        (await sixth.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("error").GetString().Should().Be("tokens_full");
-    }
-
-    [Fact]
     public async Task A_token_that_is_missing_wrong_or_not_a_bearer_is_refused_and_asks_for_a_bearer()
     {
         var owner = await SeedAsync();
@@ -408,26 +393,6 @@ public sealed class IngestTests : IClassFixture<BasketFactory>
         var response = await Relay(null).PostAsync("/api/ingest/prices", new StringContent("not json", Encoding.UTF8, "application/json"));
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    [Fact]
-    public async Task Using_a_token_is_remembered_on_its_row_but_not_on_every_request()
-    {
-        var owner = await SeedAsync();
-        var (id, token) = await MintAsync(owner);
-        var relay = Relay(token);
-        var first = _factory.Clock.GetUtcNow();
-
-        (await PostAsync(relay, Tesco())).StatusCode.Should().Be(HttpStatusCode.OK);
-        _factory.Clock.Advance(TimeSpan.FromMinutes(1));
-        (await PostAsync(relay, Tesco())).StatusCode.Should().Be(HttpStatusCode.OK);
-
-        (await _factory.WithDb(db => db.IngestTokens.Where(t => t.Id == id).Select(t => t.LastUsedAt).SingleAsync())).Should().BeCloseTo(first, TimeSpan.FromMilliseconds(1));
-
-        _factory.Clock.Advance(TimeSpan.FromMinutes(10));
-        (await PostAsync(relay, Tesco())).StatusCode.Should().Be(HttpStatusCode.OK);
-
-        (await _factory.WithDb(db => db.IngestTokens.Where(t => t.Id == id).Select(t => t.LastUsedAt).SingleAsync())).Should().BeCloseTo(_factory.Clock.GetUtcNow(), TimeSpan.FromMilliseconds(1));
     }
 
     [Fact]

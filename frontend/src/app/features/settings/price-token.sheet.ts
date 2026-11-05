@@ -11,7 +11,6 @@ import {
 } from '@lifekit-hq/ui';
 
 import type {CreatedIngestToken} from '../../core/auth/session.model';
-import {HttpStatus, statusOf} from '../../core/http-status';
 import {PriceRelayApi} from './price-relay.api';
 
 /** Bottom sheet: name the reader, get a token to paste into it. The token is shown this once. */
@@ -101,12 +100,8 @@ export class PriceTokenSheetComponent {
     this.problem.set('');
     try {
       this.created.set(await this.api.createToken(this.label.value.trim()));
-    } catch (error) {
-      this.problem.set(
-        statusOf(error) === HttpStatus.conflict
-          ? 'basket keeps five price tokens at most. Revoke one first.'
-          : 'Could not make the token. Try again.'
-      );
+    } catch {
+      this.problem.set('Could not make the token. Try again.');
     } finally {
       this.busy.set(false);
     }

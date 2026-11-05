@@ -31,19 +31,9 @@ public static class IngestTokens
 /// <summary>Issue, list, check and revoke the tokens the PC-side price reader signs its posts with.</summary>
 public sealed class IngestTokenService(AppDbContext db, TimeProvider clock)
 {
-    /// <summary>More than a household has readers; a guard against a runaway client.</summary>
-    public const int MaxTokens = 5;
-
-    private static readonly TimeSpan TouchEvery = TimeSpan.FromMinutes(5);
-
-    /// <summary>Mints a token. Null when the owner already holds <see cref="MaxTokens"/>.</summary>
-    public async Task<(IngestToken Token, string Raw)?> CreateAsync(Guid createdBy, string? label, CancellationToken ct)
+    /// <summary>Mints a token. The raw value is returned once; only its hash is stored.</summary>
+    public async Task<(IngestToken Token, string Raw)> CreateAsync(Guid createdBy, string? label, CancellationToken ct)
     {
-        if (await db.IngestTokens.CountAsync(ct) >= MaxTokens)
-        {
-            return null;
-        }
-
         var raw = IngestTokens.Generate();
         var token = new IngestToken
         {
@@ -64,7 +54,7 @@ public sealed class IngestTokenService(AppDbContext db, TimeProvider clock)
     public async Task<bool> RevokeAsync(Guid id, CancellationToken ct) =>
         await db.IngestTokens.Where(t => t.Id == id).ExecuteDeleteAsync(ct) == 1;
 
-    /// <summary>True when <paramref name="raw"/> is a live token. Remembers that it was used.</summary>
+    /// <summary>True when <paramref name="raw"/> is a live token.</summary>
     public async Task<bool> AuthenticateAsync(string? raw, CancellationToken ct)
     {
         if (raw is null)
@@ -73,18 +63,6 @@ public sealed class IngestTokenService(AppDbContext db, TimeProvider clock)
         }
 
         var hash = IngestTokens.Hash(raw);
-        var token = await db.IngestTokens.AsNoTracking().Where(t => t.TokenHash == hash).Select(t => new { t.Id, t.LastUsedAt }).FirstOrDefaultAsync(ct);
-        if (token is null)
-        {
-            return false;
-        }
-
-        var now = clock.GetUtcNow();
-        if (token.LastUsedAt is null || now - token.LastUsedAt >= TouchEvery)
-        {
-            await db.IngestTokens.Where(t => t.Id == token.Id).ExecuteUpdateAsync(s => s.SetProperty(t => t.LastUsedAt, now), ct);
-        }
-
-        return true;
+        return await db.IngestTokens.AsNoTracking().AnyAsync(t => t.TokenHash == hash, ct);
     }
 }
