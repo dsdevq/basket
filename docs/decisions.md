@@ -81,3 +81,35 @@ planning record so this repo carries its own reasons; the M1 section holds the c
 - **A credential belongs to one account.** Identity rejects a credential id that is already registered, and the
   creation options list the person's existing passkeys as excluded so the same device is not registered twice. At most
   10 passkeys per person; names are free text, trimmed to 40 characters, "Passkey" when left blank.
+
+## M2 decisions (nightly prices)
+
+- **Lidl is read by the server, Tesco and Aldi by the owner's PC.** tesco.ie and aldi.ie answer every request from the
+  VPS with Akamai's "Access Denied", plain HTTP clients and an ordinary headless browser alike (checked 2026-11-05,
+  `robots.txt` included). The owner decided (2026-11-05): they are read through the PC relay queue, an ordinary browser on
+  his home connection, when the PC is on; basket builds no VPS-side Tesco/Aldi scraping and does not work round the block.
+  Until a reading arrives their rows say "Waiting for the next PC read". The PC side and a write-only ingest endpoint are a
+  separate task; `PriceRecorder` is the write path both the Lidl job and that endpoint use.
+- **Lidl's price comes from its offer pages.** lidl.ie shows no everyday prices, only the week's offers. The job reads
+  three offer/category pages (`Prices:LidlOfferPages`), whose product tiles carry the price, the Lidl Plus price (no
+  login needed), the old price, the promo text and the dates. A linked product on none of them is read from its own page
+  (JSON-LD price and stock). Lidl's offers start and end on dates, so a reading keeps `ValidFrom`/`ValidUntil` (the
+  price's own window, the tile's store dates only when the price has none) and the page shows "from 12 Nov" or "ended"
+  instead of an out-of-date price.
+  If an offer page could not be read or came back with no priced products, a product page without a price is a failed
+  reading (the last good price stays), not "no price", since the product may be on offer on the missing page.
+- **Products are linked to shop pages by pasted address, not matched.** M2 stores `product` and one `store_listing` per
+  shop (address checked against that shop's product-page shape, nothing else is ever fetched). Barcode/search matching
+  with his confirmation is M3.
+- **History.** `price_observation` holds one row per listing per Dublin day (a second reading the same day replaces it);
+  `price_pull_run` holds how each shop's part of each night went; a listing keeps `last_error` when its latest reading
+  failed while the last good price stays on screen with its date.
+- **A shop never takes the others down.** The job reads and saves each shop in its own scope; a shop that throws, is
+  down, changed its pages or refuses us ends as a `failed`/`blocked` run for that shop only. A refusal (403, 429, an
+  access-denied page) stops that shop's requests at once and is never retried.
+- **Polite requests.** One request at a time per site with at least 5 seconds between them (`Prices:MinRequestIntervalSeconds`),
+  an honest `basket-price-check/1.0` user agent, no retries, no redirects off the site, 4 MB cap. A night is a few dozen
+  requests at most. Shops with nothing linked are not asked at all. Job runs at 03:00 Europe/Dublin.
+- **Last paid price.** The `paid_price` table and the "Last paid" line exist; with no receipts feed they show "not yet
+  connected" for Lidl. The feed needs his one-off Lidl Plus login (M4) and is not built. Tesco Clubcard: the Tesco site
+  could not be read, so whether Clubcard prices need a login is not known yet.
