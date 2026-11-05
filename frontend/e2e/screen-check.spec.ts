@@ -81,6 +81,10 @@ const PASSKEYS = [
   {id: 'k2', name: 'Laptop', createdAt: '2026-11-04T09:00:00Z', backedUp: false},
 ];
 
+const INGEST_TOKENS = [
+  {id: 't1', label: 'Home PC', createdAt: '2026-11-05T09:00:00Z'},
+];
+
 interface Route {
   readonly path: string;
   /** Mocks the API as the person who reaches this route sees it. */
@@ -94,6 +98,7 @@ async function signedIn(page: Page): Promise<void> {
   await page.route('**/api/members', r => r.fulfill({json: MEMBERS}));
   await page.route('**/api/invites', r => r.fulfill({json: INVITES}));
   await page.route('**/api/passkeys', r => r.fulfill({json: PASSKEYS}));
+  await page.route('**/api/ingest-tokens', r => r.fulfill({json: INGEST_TOKENS}));
 }
 
 async function guest(page: Page): Promise<void> {

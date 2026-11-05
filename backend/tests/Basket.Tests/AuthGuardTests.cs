@@ -24,6 +24,10 @@ public sealed class AuthGuardTests : IClassFixture<BasketFactory>
     [InlineData("GET", "/api/invites")]
     [InlineData("POST", "/api/invites")]
     [InlineData("GET", "/api/members")]
+    [InlineData("GET", "/api/ingest-tokens")]
+    [InlineData("POST", "/api/ingest-tokens")]
+    [InlineData("DELETE", "/api/ingest-tokens/00000000-0000-0000-0000-000000000001")]
+    [InlineData("POST", "/api/ingest/prices")]
     [InlineData("POST", "/api/auth/sign-out")]
     [InlineData("GET", "/api/passkeys")]
     [InlineData("POST", "/api/passkeys/options")]
@@ -61,6 +65,8 @@ public sealed class AuthGuardTests : IClassFixture<BasketFactory>
         (await member.GetAsync("/api/invites")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
         (await member.PostAsJsonAsync("/api/invites", new { label = "x" })).StatusCode.Should().Be(HttpStatusCode.Forbidden);
         (await member.GetAsync("/api/members")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await member.GetAsync("/api/ingest-tokens")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await member.PostAsJsonAsync("/api/ingest-tokens", new { label = "x" })).StatusCode.Should().Be(HttpStatusCode.Forbidden);
         (await owner.GetAsync("/api/members")).StatusCode.Should().Be(HttpStatusCode.OK);
     }
 

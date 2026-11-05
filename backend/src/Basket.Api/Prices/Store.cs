@@ -14,6 +14,22 @@ public static partial class Stores
 {
     public static IReadOnlyList<Store> All { get; } = [Store.Lidl, Store.Aldi, Store.Tesco];
 
+    /// <summary>The shop named by <paramref name="value"/> (any case), as it appears in an address or a posted batch.</summary>
+    public static bool TryParse(string? value, out Store store)
+    {
+        store = default;
+        foreach (var candidate in All)
+        {
+            if (string.Equals(candidate.ToString(), value, StringComparison.OrdinalIgnoreCase))
+            {
+                store = candidate;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public static string DisplayName(this Store store) => store switch
     {
         Store.Lidl => "Lidl",
@@ -32,7 +48,7 @@ public static partial class Stores
 
     /// <summary>
     /// Who reads this shop's prices: <c>nightly</c> (the VPS job) or <c>pc</c> (an ordinary browser on the owner's home
-    /// connection, writing through the ingest endpoint of a later task). tesco.ie and aldi.ie answer the VPS with
+    /// connection, writing through the token-signed ingest endpoint, <c>POST /api/ingest/prices</c>). tesco.ie and aldi.ie answer the VPS with
     /// "Access Denied" (checked 2026-11-05) and basket does not try to get round that.
     /// </summary>
     public static string ReadBy(this Store store) => store == Store.Lidl ? "nightly" : "pc";

@@ -11,7 +11,7 @@ we buy. Matching, a shop plan and Lidl Plus receipts come in later milestones (s
   EF Core + Postgres, Hangfire, Serilog. Tests in `backend/tests/Basket.Tests` (real WebAuthn ceremonies against a
   software authenticator).
 - `backend/src/Basket.Api/Prices` - M2: the nightly Hangfire price pull (Lidl), its parsers and polite fetcher, the
-  product and price endpoints. Tests use recorded shop pages in `backend/tests/Basket.Tests/Fixtures`, never the network.
+  product and price endpoints, and `Prices/Ingest`: the token-signed write-only endpoint the owner's PC posts Tesco and Aldi prices to. Tests use recorded shop pages in `backend/tests/Basket.Tests/Fixtures`, never the network.
 - `frontend/` - Angular 22 on [lifekit-common](https://github.com/lifekit-hq/lifekit-common) (`@lifekit-hq/ui`,
   `core`, `tokens`), Violet `#7c3aed` seed, phone-first with bottom sheets.
 - `docker/` - one image (the API serves the Angular build), the production compose project `basket`, a dev database.

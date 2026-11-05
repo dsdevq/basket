@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Basket.Tests;
 
-/// <summary>The shared write path: what any reader (the nightly job, a later PC ingest) does to the history.</summary>
+/// <summary>The shared write path: what any reader (the nightly job, the PC ingest) does to the history.</summary>
 public sealed class PriceRecorderTests : IClassFixture<BasketFactory>
 {
     private readonly BasketFactory _factory;
