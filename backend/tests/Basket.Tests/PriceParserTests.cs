@@ -20,9 +20,26 @@ public sealed class PriceParserTests
         skewers.LoyaltyPrice.Should().Be(2.19m);
         skewers.LoyaltyScheme.Should().Be("Lidl Plus");
         skewers.PromoText.Should().Be("Mix 'n' Match 2 for €4");
-        skewers.ValidFrom.Should().Be(new DateOnly(2026, 11, 12));
-        skewers.ValidUntil.Should().Be(new DateOnly(2027, 1, 1));
+        skewers.ValidFrom.Should().Be(new DateOnly(2026, 8, 26));
+        skewers.ValidUntil.Should().Be(new DateOnly(2026, 11, 11));
         skewers.InStock.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Lidl_offer_window_is_the_prices_own_not_the_tiles_store_dates()
+    {
+        // Oracle: regionsPrices.1 in the recorded tiles. The skewers' 2.19 runs 26 Aug - 11 Nov while the tile's
+        // storeStartDate is 12 Nov, so on 5 Nov it must be active, never "upcoming".
+        var today = new DateOnly(2026, 11, 5);
+        var skewers = Offers["11115738"];
+        (skewers.ValidFrom <= today && today <= skewers.ValidUntil).Should().BeTrue();
+
+        Offers["11272692"].ValidFrom.Should().Be(new DateOnly(2026, 11, 3));
+        Offers["11272692"].ValidUntil.Should().Be(new DateOnly(2026, 12, 31));
+        Offers["11101814"].ValidFrom.Should().Be(new DateOnly(2026, 10, 28));
+        Offers["11101814"].ValidUntil.Should().Be(new DateOnly(2026, 11, 11));
+        Offers["11121624"].ValidFrom.Should().Be(new DateOnly(2026, 11, 3));
+        Offers["11121624"].ValidUntil.Should().Be(new DateOnly(2026, 12, 31));
     }
 
     [Fact]

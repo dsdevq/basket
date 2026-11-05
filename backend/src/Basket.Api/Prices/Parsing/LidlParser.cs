@@ -48,6 +48,9 @@ public static class LidlParser
 
         var was = PageData.Money(tile, "regionsPrices", "1", "currentPrice", "oldPrice")
             ?? PageData.Money(tile, "regionsPrices", "1", "currentLidlPlusPrice", "price", "oldPrice");
+        string[] window = price is not null
+            ? ["regionsPrices", "1", "currentPrice"]
+            : ["regionsPrices", "1", "currentLidlPlusPrice", "price"];
         var title = PageData.Clean(PageData.String(tile, "fullTitle") ?? PageData.String(tile, "title"));
 
         return new PriceQuote(
@@ -57,8 +60,8 @@ public static class LidlParser
             loyaltyPrice,
             loyaltyPrice is null ? null : Store.Lidl.LoyaltyScheme(),
             promo,
-            PageData.DublinDate(tile, "storeStartDate"),
-            PageData.DublinDate(tile, "storeEndDate"),
+            PageData.DublinDate(tile, [.. window, "startDate"]) ?? PageData.DublinDate(tile, "storeStartDate"),
+            PageData.DublinDate(tile, [.. window, "endDate"]) ?? PageData.DublinDate(tile, "storeEndDate"),
             InStock: true);
     }
 

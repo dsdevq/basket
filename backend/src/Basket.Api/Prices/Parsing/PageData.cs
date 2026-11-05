@@ -97,15 +97,20 @@ internal static partial class PageData
         return value is > 0 and < 100_000 ? decimal.Round(value.Value, 2) : null;
     }
 
+    /// <summary>A day in Dublin from either Unix seconds or an ISO-8601 timestamp, both of which Lidl uses.</summary>
     public static DateOnly? DublinDate(JsonElement parent, params string[] path)
     {
-        var node = Walk(parent, path);
-        if (node is not { ValueKind: JsonValueKind.Number } number || !number.TryGetInt64(out var seconds) || seconds <= 0)
+        var moment = Walk(parent, path) switch
         {
-            return null;
-        }
+            { ValueKind: JsonValueKind.Number } number when number.TryGetInt64(out var seconds) && seconds > 0
+                => DateTimeOffset.FromUnixTimeSeconds(seconds),
+            { ValueKind: JsonValueKind.String } text
+                when DateTimeOffset.TryParse(text.GetString(), CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var parsed)
+                => parsed,
+            _ => (DateTimeOffset?)null,
+        };
 
-        return DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(DateTimeOffset.FromUnixTimeSeconds(seconds), Dublin).DateTime);
+        return moment is { } value ? DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(value, Dublin).DateTime) : null;
     }
 
     public static string? Clean(string? text)
