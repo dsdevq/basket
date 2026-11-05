@@ -151,9 +151,6 @@ public sealed class ProductTests : IClassFixture<BasketFactory>
         Entry(product, "aldi").GetProperty("price").GetProperty("best").GetDecimal().Should().Be(1.39m);
         Entry(product, "aldi").GetProperty("price").GetProperty("wasPrice").GetDecimal().Should().Be(1.49m);
         Entry(product, "tesco").GetProperty("price").ValueKind.Should().Be(JsonValueKind.Null);
-
-        var history = await owner.GetFromJsonAsync<JsonElement>($"/api/products/{id}/stores/lidl/history");
-        history.GetProperty("history").EnumerateArray().Select(h => h.GetProperty("price").GetDecimal()).Should().Equal(2.29m, 2.49m);
     }
 
     [Fact]

@@ -110,5 +110,3 @@ planning record so this repo carries its own reasons; the M1 section holds the c
 - **Last paid price.** The `paid_price` table and the "Last paid" line exist; with no receipts feed they show "not yet
   connected" for Lidl. The feed needs his one-off Lidl Plus login (M4) and is not built. Tesco Clubcard: the Tesco site
   could not be read, so whether Clubcard prices need a login is not known yet.
-- **`AldiParser`** reads Aldi product pages (recorded fixtures from a browser) and is unused by the server; it is kept for
-  the ingest task, which may receive page content from the PC.

@@ -59,7 +59,6 @@ public static class ProductEndpoints
         products.MapDelete("/{id:guid}", DeleteProduct);
         products.MapPut("/{id:guid}/stores/{store}", LinkStore);
         products.MapDelete("/{id:guid}/stores/{store}", UnlinkStore);
-        products.MapGet("/{id:guid}/stores/{store}/history", GetHistory);
     }
 
     private static async Task<IResult> GetProducts(AppDbContext db, TimeProvider clock, CancellationToken ct)
@@ -196,28 +195,6 @@ public static class ProductEndpoints
         !TryParseStore(store, out var shop) || await db.StoreListings.Where(l => l.ProductId == id && l.Store == shop).ExecuteDeleteAsync(ct) == 0
             ? Results.NotFound()
             : Results.NoContent();
-
-    private static async Task<IResult> GetHistory(Guid id, string store, AppDbContext db, TimeProvider clock, CancellationToken ct)
-    {
-        if (!TryParseStore(store, out var shop))
-        {
-            return Results.NotFound();
-        }
-
-        var listing = await db.StoreListings.AsNoTracking().SingleOrDefaultAsync(l => l.ProductId == id && l.Store == shop, ct);
-        if (listing is null)
-        {
-            return Results.NotFound();
-        }
-
-        var today = Today(clock);
-        var observations = await db.PriceObservations.AsNoTracking()
-            .Where(o => o.ListingId == listing.Id)
-            .OrderByDescending(o => o.ObservedOn)
-            .Take(120)
-            .ToListAsync(ct);
-        return Results.Ok(new { history = observations.Select(o => ToPrice(o, today)).ToList() });
-    }
 
     private static async Task<Dictionary<Guid, PriceObservation>> LatestObservationsAsync(AppDbContext db, CancellationToken ct) =>
         (await db.PriceObservations.AsNoTracking()

@@ -102,6 +102,6 @@ public sealed class PriceSourceTests
     public void The_recorded_denial_page_is_what_the_fetcher_treats_as_a_block()
     {
         PoliteFetcher.LooksLikeBlockPage(Denied).Should().BeTrue();
-        PoliteFetcher.LooksLikeBlockPage(Fixtures.Read("aldi-product-regular.html")).Should().BeFalse();
+        PoliteFetcher.LooksLikeBlockPage(Fixtures.Read("lidl-product-page.html")).Should().BeFalse();
     }
 }

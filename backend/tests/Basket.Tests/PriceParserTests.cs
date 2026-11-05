@@ -78,38 +78,6 @@ public sealed class PriceParserTests
         act.Should().Throw<ParseException>();
     }
 
-    [Fact]
-    public void Aldi_discounted_product_gives_the_price_charged_the_original_price_and_the_tag()
-    {
-        var quote = AldiParser.ParseProductPage(Fixtures.Read("aldi-product-discounted.html"));
-
-        quote.Title.Should().Be("ACTILEAF UHT Coconut Milk");
-        quote.Price.Should().Be(1.39m);
-        quote.WasPrice.Should().Be(1.49m);
-        quote.PromoText.Should().Be("Save 6%");
-        quote.LoyaltyPrice.Should().BeNull();
-        quote.InStock.Should().BeTrue();
-    }
-
-    [Fact]
-    public void Aldi_regular_product_has_no_reduction()
-    {
-        var quote = AldiParser.ParseProductPage(Fixtures.Read("aldi-product-regular.html"));
-
-        quote.Title.Should().Be("CLONBAWN Protein Milk");
-        quote.Price.Should().Be(1.49m);
-        quote.WasPrice.Should().BeNull();
-        quote.PromoText.Should().BeNull();
-    }
-
-    [Fact]
-    public void Aldi_page_without_product_data_is_a_parse_failure()
-    {
-        var act = () => AldiParser.ParseProductPage(Fixtures.Read("akamai-access-denied.html"));
-
-        act.Should().Throw<ParseException>();
-    }
-
     [Theory]
     [InlineData(Store.Lidl, "https://www.lidl.ie/p/aubergine/p11214436", "https://www.lidl.ie/p/aubergine/p11214436")]
     [InlineData(Store.Lidl, "https://lidl.ie/p/aubergine/p11214436/?utm_source=x#top", "https://www.lidl.ie/p/aubergine/p11214436")]

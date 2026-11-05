@@ -108,22 +108,6 @@ internal static partial class PageData
         return DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(DateTimeOffset.FromUnixTimeSeconds(seconds), Dublin).DateTime);
     }
 
-    /// <summary>The "€1.49" inside an aria-label or element text.</summary>
-    public static decimal? EuroAmount(string? text)
-    {
-        if (text is null)
-        {
-            return null;
-        }
-
-        var match = Euro().Match(text);
-        return match.Success
-            && decimal.TryParse(match.Groups["amount"].Value, NumberStyles.Number, CultureInfo.InvariantCulture, out var amount)
-            && amount > 0
-            ? amount
-            : null;
-    }
-
     public static string? Clean(string? text)
     {
         if (string.IsNullOrWhiteSpace(text))
@@ -154,9 +138,6 @@ internal static partial class PageData
 
     [GeneratedRegex(@"data-grid-data=""(?<data>[^""]*)""")]
     private static partial Regex GridDataAttribute();
-
-    [GeneratedRegex(@"€\s*(?<amount>\d+(?:[.,]\d{1,2})?)")]
-    private static partial Regex Euro();
 
     [GeneratedRegex(@"\s+")]
     private static partial Regex Whitespace();
