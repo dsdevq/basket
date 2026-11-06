@@ -1,6 +1,6 @@
 import {TestBed} from '@angular/core/testing';
 
-import {PasskeyClient, PasskeyUnsupportedError} from './passkey.client';
+import {PasskeyCancelledError, PasskeyClient, PasskeyUnsupportedError} from './passkey.client';
 
 describe('PasskeyClient', () => {
   afterEach(() => {
