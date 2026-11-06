@@ -47,6 +47,7 @@ public static class AuthEndpoints
         auth.MapPost("/invite", CheckInvite);
         auth.MapPost("/register/options", RegisterOptions);
         auth.MapPost("/register", Register);
+        auth.MapPost("/passkey-failure", PasskeyFailureReport.Handle);
         auth.MapPost("/sign-in/options", SignInOptions);
         auth.MapPost("/sign-in", SignIn);
         api.MapPost("/auth/sign-out", SignOut).RequireAuthorization();

@@ -1,12 +1,20 @@
+import {Clipboard} from '@angular/cdk/clipboard';
 import {DOCUMENT} from '@angular/common';
 import {ChangeDetectionStrategy, Component, inject, type OnInit, signal} from '@angular/core';
 import {FormControl, FormGroup, ReactiveFormsModule, Validators} from '@angular/forms';
 import {Router} from '@angular/router';
-import {AlertComponent, ButtonComponent, FormFieldComponent, InputComponent} from '@lifekit-hq/ui';
+import {
+  AlertComponent,
+  ButtonComponent,
+  FormFieldComponent,
+  InputComponent,
+  ToastService,
+} from '@lifekit-hq/ui';
 
-import {AuthApi} from '../../core/auth/auth.api';
+import {AuthApi, type PasskeyFailureReport} from '../../core/auth/auth.api';
 import {AuthCardComponent} from '../../core/auth/auth-card.component';
 import {
+  INSTANT_REFUSAL_MS,
   PasskeyCancelledError,
   PasskeyClient,
   PasskeyUnsupportedError,
@@ -14,12 +22,10 @@ import {
 import {SessionStore} from '../../core/auth/session.store';
 import {describeFailure, HttpStatus, MAX_NAME_LENGTH, statusOf} from '../../core/http-status';
 
+/** The notice for everything except "this browser cannot make passkeys", which has a page of its own. */
 function describe(error: unknown): string {
   if (error instanceof PasskeyCancelledError) {
     return 'The passkey was not created. Try again when you are ready.';
-  }
-  if (error instanceof PasskeyUnsupportedError) {
-    return 'This browser cannot make passkeys. Open the link in Safari or Chrome.';
   }
   if (statusOf(error) === HttpStatus.tooManyRequests) {
     return 'Too many tries. Wait a minute and try again.';
@@ -31,7 +37,43 @@ function describe(error: unknown): string {
  * `missing`: the address has no token (the part after `#` was lost on the way). `used`: the server does not
  * know the token (used, expired or mistyped). `unreachable`: the server could not be asked.
  */
-type Step = 'checking' | 'ready' | 'missing' | 'used' | 'unreachable';
+type Step = 'checking' | 'ready' | 'missing' | 'used' | 'unreachable' | 'unsupported';
+
+/** The failure kind and labels a browser-side error is reported under; see `PasskeyFailureReport` on the server. */
+function labelsOf(
+  error: unknown
+): Pick<
+  PasskeyFailureReport,
+  'kind' | 'errorName' | 'elapsedMs' | 'elapsedBucket' | 'credentialNull'
+> {
+  if (error instanceof PasskeyCancelledError || error instanceof PasskeyUnsupportedError) {
+    const {errorName, elapsedMs, credentialNull} = error.detail;
+    return {
+      kind: error.kind,
+      errorName,
+      elapsedMs,
+      elapsedBucket:
+        elapsedMs === null ? null : elapsedMs < INSTANT_REFUSAL_MS ? 'instant' : 'later',
+      credentialNull: credentialNull === true,
+    };
+  }
+  if (error instanceof DOMException) {
+    return {
+      kind: 'other',
+      errorName: error.name,
+      elapsedMs: null,
+      elapsedBucket: null,
+      credentialNull: false,
+    };
+  }
+  return {
+    kind: statusOf(error) > 0 ? 'http' : 'other',
+    errorName: 'PasskeyClientError',
+    elapsedMs: null,
+    elapsedBucket: null,
+    credentialNull: false,
+  };
+}
 
 /**
  * Where an invite link lands: `/join#<token>`. The token sits in the URL fragment, which the browser never
@@ -87,10 +129,30 @@ type Step = 'checking' | 'ready' | 'missing' | 'used' | 'unreachable';
           </cmn-button>
         </bk-auth-card>
       }
+      @case ('unsupported') {
+        <bk-auth-card
+          heading="Open this link in your browser"
+          lead="This app's built-in browser cannot make a passkey."
+        >
+          <p class="text-cmn-sm text-text-secondary">
+            Your link is fine and has not been used. Copy it, then paste it into Safari or Chrome.
+            Or open this page there from the app's menu, often a compass or "Open in browser".
+          </p>
+          <cmn-button (clicked)="copyLink()" variant="primary" icon="Copy">Copy link</cmn-button>
+        </bk-auth-card>
+      }
       @default {
         <bk-auth-card heading="Join basket" lead="Make a passkey and you are in. No password.">
           @if (problem()) {
             <cmn-alert [title]="problem()" variant="error" />
+          }
+          @if (cancelled()) {
+            <p class="text-cmn-sm text-text-secondary">
+              Still not working? Open this page in Safari or Chrome.
+            </p>
+            <cmn-button (clicked)="copyLink()" variant="secondary" icon="Copy">
+              Copy link
+            </cmn-button>
           }
           <form [formGroup]="form" (ngSubmit)="register()" class="flex flex-col gap-cmn-group-gap">
             <cmn-form-field
@@ -120,12 +182,15 @@ export class JoinPage implements OnInit {
   private readonly passkeys = inject(PasskeyClient);
   private readonly session = inject(SessionStore);
   private readonly router = inject(Router);
+  private readonly clipboard = inject(Clipboard);
+  private readonly toast = inject(ToastService);
 
   private token = '';
 
   protected readonly step = signal<Step>('checking');
   protected readonly busy = signal(false);
   protected readonly problem = signal('');
+  protected readonly cancelled = signal(false);
   protected readonly failure = signal('');
   protected readonly name = new FormControl('', {
     nonNullable: true,
@@ -153,7 +218,14 @@ export class JoinPage implements OnInit {
     this.step.set('checking');
     try {
       await this.api.checkInvite(this.token);
-      this.step.set('ready');
+      // Before the button: a browser that has no passkeys at all gets the instruction, not a button that cannot work.
+      const reason = this.passkeys.unsupportedReason();
+      if (reason) {
+        this.report('page', new PasskeyUnsupportedError(reason));
+        this.step.set('unsupported');
+      } else {
+        this.step.set('ready');
+      }
     } catch (error) {
       if (statusOf(error) === HttpStatus.notFound) {
         this.step.set('used');
@@ -173,9 +245,13 @@ export class JoinPage implements OnInit {
     }
     this.busy.set(true);
     this.problem.set('');
+    this.cancelled.set(false);
+    let stage: PasskeyFailureReport['stage'] = 'options';
     try {
       const options = await this.api.registerOptions(this.token, displayName);
-      const credential = await this.passkeys.create(options);
+      stage = 'create';
+      const credential = await this.passkeys.create(options, {classifyInstantRefusal: true});
+      stage = 'register';
       const session = await this.api.register(this.token, credential);
       this.session.setUser(session.user);
       await this.router.navigateByUrl('/list');
@@ -183,10 +259,42 @@ export class JoinPage implements OnInit {
       if (statusOf(error) === HttpStatus.notFound) {
         this.step.set('used');
       } else {
-        this.problem.set(describe(error));
+        this.report(stage, error);
+        if (error instanceof PasskeyUnsupportedError) {
+          this.step.set('unsupported');
+        } else {
+          this.problem.set(describe(error));
+          this.cancelled.set(error instanceof PasskeyCancelledError);
+        }
       }
     } finally {
       this.busy.set(false);
     }
+  }
+
+  /** The link as it was sent: the address bar was wiped, so it is put back together from the token held here. */
+  protected copyLink(): void {
+    const {location} = this.document;
+    if (this.clipboard.copy(`${location.origin}/join#${this.token}`)) {
+      this.toast.success('Link copied');
+    } else {
+      this.toast.error('Could not copy. Open the message with the link in Safari or Chrome.');
+    }
+  }
+
+  /** Writes the failure to the server's log; never blocks the screen and never throws. */
+  private report(stage: PasskeyFailureReport['stage'], error: unknown): void {
+    void (async () => {
+      try {
+        await this.api.reportPasskeyFailure({
+          ...labelsOf(error),
+          stage,
+          httpStatus: statusOf(error) || null,
+          platformAuthenticator: await this.passkeys.platformAuthenticatorAvailable(),
+        });
+      } catch {
+        /* the report is best effort */
+      }
+    })();
   }
 }
