@@ -113,5 +113,13 @@ database volume.
   never started in that browser; the page then shows "Something went wrong" with an error name and a Reload button
   (after 15 s if the script never ran), or "Cannot reach basket" with Try again when the API could not be reached.
   The invite token is in the URL fragment and is never logged.
+- **A passkey that will not create on the join page.** When the browser refuses, the page posts a fixed-label report
+  to `POST /api/auth/passkey-failure` and the app logs one `Join passkey failed:` warning (the `ua=` request line sits
+  beside it). Its `kind=` says what happened: `no-api`, `insecure-context`, `not-supported`, `security` and `blocked`
+  (the browser refused at once, typical of an in-app browser such as Telegram's) all show "Open this link in your
+  browser" with a Copy link button; `cancelled` is a dismissal or a slower refusal and shows the try-again notice with
+  the same open-in-Safari-or-Chrome hint and Copy link button. `elapsedBucket=` (`instant` or `later`) and
+  `credentialNull=` tell a real dismissal from a slow in-app refusal. The usual fix is to send the link again and ask
+  her to open it in Safari or Chrome.
 - **Memory.** The app container is capped at 256 MB and Postgres at 192 MB; the box has little headroom, so do not
   raise them without checking `free -m` first.
