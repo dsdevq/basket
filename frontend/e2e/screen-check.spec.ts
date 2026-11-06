@@ -87,6 +87,8 @@ const INGEST_TOKENS = [
 
 interface Route {
   readonly path: string;
+  /** What the test is called, when the path alone does not tell this screen apart. */
+  readonly name?: string;
   /** Mocks the API as the person who reaches this route sees it. */
   readonly setup: (page: Page) => Promise<void>;
 }
@@ -115,6 +117,15 @@ const ROUTES: readonly Route[] = [
   {path: '/sign-in', setup: guest},
   {path: '/join#invite-token', setup: guest},
   {
+    // The same link in a browser that cannot make passkeys: the open-in-browser notice.
+    path: '/join#invite-token',
+    name: '/join (browser without passkeys)',
+    setup: async page => {
+      await guest(page);
+      await page.addInitScript(() => Reflect.deleteProperty(window, 'PublicKeyCredential'));
+    },
+  },
+  {
     path: '/unreachable',
     setup: page => page.route('**/api/session', r => r.abort('failed')),
   },
@@ -125,7 +136,7 @@ for (const [size, use] of Object.entries(SCREEN_VIEWPORTS)) {
     test.use(use);
 
     for (const route of ROUTES) {
-      test(`${route.path} is composed on its page template`, async ({page}) => {
+      test(`${route.name ?? route.path} is composed on its page template`, async ({page}) => {
         await route.setup(page);
         await page.goto(route.path);
         await page.locator('cmn-page').first().waitFor();

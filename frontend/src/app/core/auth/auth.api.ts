@@ -4,6 +4,16 @@ import {firstValueFrom} from 'rxjs';
 
 import type {CreatedInvite, Member, Passkey, PendingInvite, SessionResponse} from './session.model';
 
+/** The fixed-vocabulary labels the server accepts; anything else it logs as "other". Never a token, name or credential. */
+export interface PasskeyFailureReport {
+  readonly kind: string;
+  readonly errorName: string;
+  readonly stage: 'page' | 'options' | 'create' | 'register';
+  readonly elapsedMs: number | null;
+  readonly httpStatus: number | null;
+  readonly platformAuthenticator: boolean | null;
+}
+
 /** The sign-in, registration and invite endpoints of the API, one method each. */
 @Injectable({providedIn: 'root'})
 export class AuthApi {
@@ -29,6 +39,11 @@ export class AuthApi {
     return firstValueFrom(
       this.http.post<SessionResponse>('/api/auth/register', {token, credentialJson})
     );
+  }
+
+  /** Tells the server's log how a passkey attempt on the join page failed; labels only, see {@link PasskeyFailureReport}. */
+  public reportPasskeyFailure(report: PasskeyFailureReport): Promise<void> {
+    return firstValueFrom(this.http.post<void>('/api/auth/passkey-failure', report));
   }
 
   public signInOptions(): Promise<unknown> {
