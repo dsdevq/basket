@@ -71,12 +71,18 @@ export class PasskeyClient {
   }
 
   /** Makes a passkey from the server's creation options; returns the credential as JSON. */
-  public async create(optionsJson: unknown): Promise<string> {
+  public async create(
+    optionsJson: unknown,
+    options: {readonly classifyInstantRefusal?: boolean} = {}
+  ): Promise<string> {
     this.assertSupported();
     const publicKey = PublicKeyCredential.parseCreationOptionsFromJSON(
       optionsJson as PublicKeyCredentialCreationOptionsJSON
     );
-    const credential = await this.run(() => navigator.credentials.create({publicKey}));
+    const credential = await this.run(
+      () => navigator.credentials.create({publicKey}),
+      options.classifyInstantRefusal === true
+    );
     return JSON.stringify((credential as PublicKeyCredential).toJSON());
   }
 
@@ -123,7 +129,10 @@ export class PasskeyClient {
     }
   }
 
-  private async run(action: () => Promise<Credential | null>): Promise<Credential> {
+  private async run(
+    action: () => Promise<Credential | null>,
+    classifyInstantRefusal = false
+  ): Promise<Credential> {
     const started = Date.now();
     try {
       const credential = await action();
@@ -140,7 +149,11 @@ export class PasskeyClient {
         throw error;
       }
       const detail = {errorName: error.name, elapsedMs: Date.now() - started};
-      if (error.name === 'NotAllowedError' && detail.elapsedMs < INSTANT_REFUSAL_MS) {
+      if (
+        classifyInstantRefusal &&
+        error.name === 'NotAllowedError' &&
+        detail.elapsedMs < INSTANT_REFUSAL_MS
+      ) {
         throw new PasskeyUnsupportedError('blocked', detail);
       }
       if (error.name === 'NotAllowedError' || error.name === 'AbortError') {

@@ -86,15 +86,37 @@ describe('PasskeyClient', () => {
     expect(error).toMatchObject({detail: {errorName: 'PasskeyClientError', credentialNull: true}});
   });
 
-  it('calls a refusal that comes at once a blocked browser, not a cancellation', async () => {
+  it('calls a refusal that comes at once a blocked browser when the caller asks for that', async () => {
+    stubWebAuthn({create: vi.fn().mockRejectedValue(new DOMException('no', 'NotAllowedError'))});
+
+    const error = await TestBed.inject(PasskeyClient)
+      .create({}, {classifyInstantRefusal: true})
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(PasskeyUnsupportedError);
+    expect(error).toMatchObject({reason: 'blocked', detail: {errorName: 'NotAllowedError'}});
+  });
+
+  it('keeps an instant refusal a cancellation on create() without the opt-in', async () => {
     stubWebAuthn({create: vi.fn().mockRejectedValue(new DOMException('no', 'NotAllowedError'))});
 
     const error = await TestBed.inject(PasskeyClient)
       .create({})
       .catch((e: unknown) => e);
 
-    expect(error).toBeInstanceOf(PasskeyUnsupportedError);
-    expect(error).toMatchObject({reason: 'blocked', detail: {errorName: 'NotAllowedError'}});
+    expect(error).toBeInstanceOf(PasskeyCancelledError);
+    expect(error).toMatchObject({detail: {errorName: 'NotAllowedError'}});
+  });
+
+  it('keeps an instant refusal a cancellation on get()', async () => {
+    stubWebAuthn({get: vi.fn().mockRejectedValue(new DOMException('no', 'NotAllowedError'))});
+
+    const error = await TestBed.inject(PasskeyClient)
+      .get({})
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(PasskeyCancelledError);
+    expect(error).toMatchObject({detail: {errorName: 'NotAllowedError'}});
   });
 
   it.each([

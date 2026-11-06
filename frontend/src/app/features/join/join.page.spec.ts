@@ -134,7 +134,7 @@ describe('JoinPage', () => {
     await fixture.whenStable();
 
     expect(api.registerOptions).toHaveBeenCalledWith('tok', 'Anna');
-    expect(passkeys.create).toHaveBeenCalledWith({challenge: 'c'});
+    expect(passkeys.create).toHaveBeenCalledWith({challenge: 'c'}, {classifyInstantRefusal: true});
     expect(api.register).toHaveBeenCalledWith('tok', '{"id":"p"}');
     expect(setUser).toHaveBeenCalledWith(USER);
     expect(navigate).toHaveBeenCalledWith('/list');

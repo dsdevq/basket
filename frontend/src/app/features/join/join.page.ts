@@ -250,7 +250,7 @@ export class JoinPage implements OnInit {
     try {
       const options = await this.api.registerOptions(this.token, displayName);
       stage = 'create';
-      const credential = await this.passkeys.create(options);
+      const credential = await this.passkeys.create(options, {classifyInstantRefusal: true});
       stage = 'register';
       const session = await this.api.register(this.token, credential);
       this.session.setUser(session.user);
