@@ -207,14 +207,55 @@ describe('JoinPage', () => {
 
       expect(host.textContent).toContain('The passkey was not created. Try again');
       expect(host.textContent).toContain('Create passkey');
+      expect(host.textContent).toContain('Open this page in Safari or Chrome');
       expect(api.reportPasskeyFailure).toHaveBeenCalledWith({
         kind: 'cancelled',
         errorName: 'NotAllowedError',
         elapsedMs: 3000,
+        elapsedBucket: 'later',
+        credentialNull: false,
         stage: 'create',
         httpStatus: null,
         platformAuthenticator: true,
       });
+    });
+
+    it('gives a dismissed attempt the same copy-link control as the unsupported page', async () => {
+      const {host, copy} = await submitWith(() =>
+        Promise.reject(new PasskeyCancelledError({errorName: 'NotAllowedError', elapsedMs: 3000}))
+      );
+
+      const button = [...host.querySelectorAll('button')].find(b =>
+        b.textContent?.includes('Copy link')
+      );
+      button?.click();
+      expect(copy).toHaveBeenCalledWith(`${window.location.origin}/join#tok`);
+    });
+
+    it('reports a webview that resolves create() with nothing as a null credential', async () => {
+      const {host, api} = await submitWith(() =>
+        Promise.reject(
+          new PasskeyCancelledError({
+            errorName: 'PasskeyClientError',
+            elapsedMs: 900,
+            credentialNull: true,
+          })
+        )
+      );
+
+      expect(host.textContent).toContain('Open this page in Safari or Chrome');
+      expect(api.reportPasskeyFailure).toHaveBeenCalledWith(
+        expect.objectContaining({kind: 'cancelled', elapsedBucket: 'later', credentialNull: true})
+      );
+    });
+
+    it('does not show the open-in-browser hint for a server fault', async () => {
+      const {host} = await submitWith(() => Promise.resolve('{}'), {
+        register: vi.fn().mockRejectedValue({status: 400}),
+      });
+
+      expect(host.textContent).not.toContain('Open this page in Safari or Chrome');
+      expect(host.textContent).not.toContain('Copy link');
     });
 
     it('sends a browser that refuses at once to the phone browser, with a copy-link control', async () => {
@@ -229,7 +270,13 @@ describe('JoinPage', () => {
       expect(host.textContent).not.toContain('The passkey was not created');
       expect(host.textContent).not.toContain('Create passkey');
       expect(api.reportPasskeyFailure).toHaveBeenCalledWith(
-        expect.objectContaining({kind: 'blocked', errorName: 'NotAllowedError', stage: 'create'})
+        expect.objectContaining({
+          kind: 'blocked',
+          errorName: 'NotAllowedError',
+          stage: 'create',
+          elapsedBucket: 'instant',
+          credentialNull: false,
+        })
       );
 
       const button = [...host.querySelectorAll('button')].find(b =>

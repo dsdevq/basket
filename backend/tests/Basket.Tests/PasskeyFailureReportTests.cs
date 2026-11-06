@@ -22,6 +22,8 @@ public sealed class PasskeyFailureReportTests : IClassFixture<BasketFactory>
             stage = "create",
             elapsedMs = 42,
             platformAuthenticator = false,
+            elapsedBucket = "instant",
+            credentialNull = false,
         });
 
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
@@ -38,9 +40,9 @@ public sealed class PasskeyFailureReportTests : IClassFixture<BasketFactory>
     [Fact]
     public void Known_labels_pass_through_unchanged()
     {
-        var clean = PasskeyFailureReport.Clean(new("blocked", "NotAllowedError", "create", 42, 200, false));
+        var clean = PasskeyFailureReport.Clean(new("blocked", "NotAllowedError", "create", 42, 200, false, "later", true));
 
-        clean.Should().Be(("blocked", "NotAllowedError", "create", (int?)42, (int?)200, (bool?)false));
+        clean.Should().Be(("blocked", "NotAllowedError", "create", (int?)42, (int?)200, (bool?)false, "later", (bool?)true));
     }
 
     [Theory]
@@ -50,9 +52,9 @@ public sealed class PasskeyFailureReportTests : IClassFixture<BasketFactory>
     [InlineData(null)]
     public void Anything_outside_the_fixed_lists_is_logged_as_other(string? text)
     {
-        var clean = PasskeyFailureReport.Clean(new(text, text, text, null, null, null));
+        var clean = PasskeyFailureReport.Clean(new(text, text, text, null, null, null, text));
 
-        clean.Should().Be(("other", "other", "other", (int?)null, (int?)null, (bool?)null));
+        clean.Should().Be(("other", "other", "other", (int?)null, (int?)null, (bool?)null, (string?)null, (bool?)null));
     }
 
     [Theory]

@@ -12,6 +12,10 @@ export interface PasskeyFailureReport {
   readonly elapsedMs: number | null;
   readonly httpStatus: number | null;
   readonly platformAuthenticator: boolean | null;
+  /** `instant` when the browser refused in under 400 ms, `later` otherwise; null when it was never asked. */
+  readonly elapsedBucket: 'instant' | 'later' | null;
+  /** The browser answered the create call with nothing at all (no credential, no error). */
+  readonly credentialNull: boolean;
 }
 
 /** The sign-in, registration and invite endpoints of the API, one method each. */

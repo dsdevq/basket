@@ -6,6 +6,8 @@ export interface PasskeyErrorDetail {
   readonly errorName: string;
   /** How long the browser took to refuse, in ms; null when it was refused before it was asked. */
   readonly elapsedMs: number | null;
+  /** The browser resolved the call with no credential instead of rejecting it. */
+  readonly credentialNull?: boolean;
 }
 
 /** The person dismissed the browser's passkey prompt, or it timed out. Not a fault. */
@@ -129,6 +131,7 @@ export class PasskeyClient {
         throw new PasskeyCancelledError({
           errorName: 'PasskeyClientError',
           elapsedMs: Date.now() - started,
+          credentialNull: true,
         });
       }
       return credential;

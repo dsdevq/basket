@@ -89,6 +89,8 @@ test.describe('join from a browser that cannot make passkeys', () => {
       errorName: 'NotAllowedError',
       stage: 'create',
       platformAuthenticator: false,
+      elapsedBucket: 'instant',
+      credentialNull: false,
     });
     expect(JSON.stringify(reports)).not.toContain(TOKEN);
   });
@@ -120,7 +122,14 @@ test.describe('join from a browser that cannot make passkeys', () => {
       0
     );
     await expect(page.getByRole('button', {name: 'Create passkey'})).toBeVisible();
+    await expect(page.getByText('Open this page in Safari or Chrome')).toBeVisible();
+    await expect(page.getByRole('button', {name: 'Copy link'})).toBeVisible();
     await expect.poll(() => reports.length).toBe(1);
-    expect(reports[0]).toMatchObject({kind: 'cancelled', errorName: 'NotAllowedError'});
+    expect(reports[0]).toMatchObject({
+      kind: 'cancelled',
+      errorName: 'NotAllowedError',
+      elapsedBucket: 'later',
+      credentialNull: false,
+    });
   });
 });

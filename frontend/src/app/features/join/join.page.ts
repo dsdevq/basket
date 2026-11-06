@@ -14,6 +14,7 @@ import {
 import {AuthApi, type PasskeyFailureReport} from '../../core/auth/auth.api';
 import {AuthCardComponent} from '../../core/auth/auth-card.component';
 import {
+  INSTANT_REFUSAL_MS,
   PasskeyCancelledError,
   PasskeyClient,
   PasskeyUnsupportedError,
@@ -39,17 +40,38 @@ function describe(error: unknown): string {
 type Step = 'checking' | 'ready' | 'missing' | 'used' | 'unreachable' | 'unsupported';
 
 /** The failure kind and labels a browser-side error is reported under; see `PasskeyFailureReport` on the server. */
-function labelsOf(error: unknown): Pick<PasskeyFailureReport, 'kind' | 'errorName' | 'elapsedMs'> {
+function labelsOf(
+  error: unknown
+): Pick<
+  PasskeyFailureReport,
+  'kind' | 'errorName' | 'elapsedMs' | 'elapsedBucket' | 'credentialNull'
+> {
   if (error instanceof PasskeyCancelledError || error instanceof PasskeyUnsupportedError) {
-    return {kind: error.kind, ...error.detail};
+    const {errorName, elapsedMs, credentialNull} = error.detail;
+    return {
+      kind: error.kind,
+      errorName,
+      elapsedMs,
+      elapsedBucket:
+        elapsedMs === null ? null : elapsedMs < INSTANT_REFUSAL_MS ? 'instant' : 'later',
+      credentialNull: credentialNull === true,
+    };
   }
   if (error instanceof DOMException) {
-    return {kind: 'other', errorName: error.name, elapsedMs: null};
+    return {
+      kind: 'other',
+      errorName: error.name,
+      elapsedMs: null,
+      elapsedBucket: null,
+      credentialNull: false,
+    };
   }
   return {
     kind: statusOf(error) > 0 ? 'http' : 'other',
     errorName: 'PasskeyClientError',
     elapsedMs: null,
+    elapsedBucket: null,
+    credentialNull: false,
   };
 }
 
@@ -124,6 +146,14 @@ function labelsOf(error: unknown): Pick<PasskeyFailureReport, 'kind' | 'errorNam
           @if (problem()) {
             <cmn-alert [title]="problem()" variant="error" />
           }
+          @if (cancelled()) {
+            <p class="text-cmn-sm text-text-secondary">
+              Still not working? Open this page in Safari or Chrome.
+            </p>
+            <cmn-button (clicked)="copyLink()" variant="secondary" icon="Copy">
+              Copy link
+            </cmn-button>
+          }
           <form [formGroup]="form" (ngSubmit)="register()" class="flex flex-col gap-cmn-group-gap">
             <cmn-form-field
               [control]="name"
@@ -160,6 +190,7 @@ export class JoinPage implements OnInit {
   protected readonly step = signal<Step>('checking');
   protected readonly busy = signal(false);
   protected readonly problem = signal('');
+  protected readonly cancelled = signal(false);
   protected readonly failure = signal('');
   protected readonly name = new FormControl('', {
     nonNullable: true,
@@ -214,6 +245,7 @@ export class JoinPage implements OnInit {
     }
     this.busy.set(true);
     this.problem.set('');
+    this.cancelled.set(false);
     let stage: PasskeyFailureReport['stage'] = 'options';
     try {
       const options = await this.api.registerOptions(this.token, displayName);
@@ -232,6 +264,7 @@ export class JoinPage implements OnInit {
           this.step.set('unsupported');
         } else {
           this.problem.set(describe(error));
+          this.cancelled.set(error instanceof PasskeyCancelledError);
         }
       }
     } finally {

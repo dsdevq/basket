@@ -4,7 +4,7 @@ namespace Basket.Api.Auth;
 /// What the join page says about a passkey attempt that failed in the browser. Every field is a short label
 /// from a fixed list: no token, no name, no credential, no free text. Anything else is logged as "other".
 /// </summary>
-public sealed record PasskeyFailureRequest(string? Kind, string? ErrorName, string? Stage, int? ElapsedMs, int? HttpStatus, bool? PlatformAuthenticator);
+public sealed record PasskeyFailureRequest(string? Kind, string? ErrorName, string? Stage, int? ElapsedMs, int? HttpStatus, bool? PlatformAuthenticator, string? ElapsedBucket = null, bool? CredentialNull = null);
 
 /// <summary>
 /// A failure that happens inside the browser never reaches the server by itself, so the join page reports it
@@ -22,6 +22,8 @@ public static class PasskeyFailureReport
 
     internal static readonly HashSet<string> Stages = ["page", "options", "create", "register"];
 
+    internal static readonly HashSet<string> ElapsedBuckets = ["instant", "later"];
+
     /// <summary>Longer than any real prompt (the options time out at 5 minutes), so a wild number is clamped rather than trusted.</summary>
     public const int MaxElapsedMs = 600_000;
 
@@ -29,18 +31,21 @@ public static class PasskeyFailureReport
     {
         var report = Clean(request);
         log.LogWarning(
-            "Join passkey failed: kind={Kind} error={ErrorName} stage={Stage} elapsedMs={ElapsedMs} http={HttpStatus} platformAuthenticator={PlatformAuthenticator}",
-            report.Kind, report.ErrorName, report.Stage, report.ElapsedMs, report.HttpStatus, report.PlatformAuthenticator);
+            "Join passkey failed: kind={Kind} error={ErrorName} stage={Stage} elapsedMs={ElapsedMs} http={HttpStatus} platformAuthenticator={PlatformAuthenticator} elapsedBucket={ElapsedBucket} credentialNull={CredentialNull}",
+            report.Kind, report.ErrorName, report.Stage, report.ElapsedMs, report.HttpStatus, report.PlatformAuthenticator,
+            report.ElapsedBucket, report.CredentialNull);
         return Results.NoContent();
     }
 
-    public static (string Kind, string ErrorName, string Stage, int? ElapsedMs, int? HttpStatus, bool? PlatformAuthenticator) Clean(PasskeyFailureRequest request) => (
+    public static (string Kind, string ErrorName, string Stage, int? ElapsedMs, int? HttpStatus, bool? PlatformAuthenticator, string? ElapsedBucket, bool? CredentialNull) Clean(PasskeyFailureRequest request) => (
         Pick(request.Kind, Kinds),
         Pick(request.ErrorName, ErrorNames),
         Pick(request.Stage, Stages),
         request.ElapsedMs is { } ms ? Math.Clamp(ms, 0, MaxElapsedMs) : null,
         request.HttpStatus is { } status and >= 100 and <= 599 ? status : null,
-        request.PlatformAuthenticator);
+        request.PlatformAuthenticator,
+        request.ElapsedBucket is not null && ElapsedBuckets.Contains(request.ElapsedBucket) ? request.ElapsedBucket : null,
+        request.CredentialNull);
 
     private static string Pick(string? value, HashSet<string> allowed) =>
         value is not null && allowed.Contains(value) ? value : "other";

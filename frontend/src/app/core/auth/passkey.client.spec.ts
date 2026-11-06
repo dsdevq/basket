@@ -75,6 +75,17 @@ describe('PasskeyClient', () => {
     }
   });
 
+  it('says so when the browser answers create() with no credential at all', async () => {
+    stubWebAuthn({create: vi.fn().mockResolvedValue(null)});
+
+    const error = await TestBed.inject(PasskeyClient)
+      .create({})
+      .catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(PasskeyCancelledError);
+    expect(error).toMatchObject({detail: {errorName: 'PasskeyClientError', credentialNull: true}});
+  });
+
   it('calls a refusal that comes at once a blocked browser, not a cancellation', async () => {
     stubWebAuthn({create: vi.fn().mockRejectedValue(new DOMException('no', 'NotAllowedError'))});
 
