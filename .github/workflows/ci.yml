@@ -74,7 +74,7 @@ jobs:
           key: impeccable-${{ hashFiles('frontend/package-lock.json') }}
       # The page specs, the screen check, the route scan (design judge + axe) and the screen baselines
       # (the Linux images in e2e/screens.spec.ts-snapshots, rewritten only by the "Update screen baselines" workflow;
-      # the baseline screens are registered only once the first images are committed).
+      # a screen with no image fails, so an empty directory fails the run).
       - run: npm run e2e
       - name: Upload the screen diff images
         if: failure()
