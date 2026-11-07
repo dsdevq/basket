@@ -84,6 +84,26 @@ test('block: an ordinary product page is not mistaken for a challenge', () => {
   assert.equal(detectBlock({ status: 200, html: `<title>Milk</title>${'x'.repeat(30_000)}captcha` }), null);
 });
 
+test('tesco: offers in a related-products carousel or the footer are not read as this product\'s', () => {
+  const r = reading(readPage('tesco', TESCO, { status: 200, html: fixture('tesco-product-page-carousel.html') }));
+  assert.deepEqual(r, { store: 'tesco', url: TESCO, title: 'Tesco Brown Bread 800G', price: 1.65, inStock: true });
+});
+
+test('tesco: a label must be a whole word, so a price followed by "Washing" is not a was price', () => {
+  const html = fixture('tesco-product-page-plain.html').replace('<div>€1.65</div>', '<div>€1.65</div><div>€2.00 Washing powder</div>');
+  const r = reading(readPage('tesco', TESCO, { status: 200, html }));
+  assert.equal(r.wasPrice, undefined);
+});
+
+test('tesco: with no single product heading the optional offer fields stay unset', () => {
+  const html = fixture('tesco-product-page.html').replace('</main>', '<h1>Another</h1></main>');
+  const r = reading(readPage('tesco', TESCO, { status: 200, html }));
+  assert.equal(r.price, 2.15);
+  assert.equal(r.loyaltyPrice, undefined);
+  assert.equal(r.wasPrice, undefined);
+  assert.equal(r.validUntil, undefined);
+});
+
 test('tesco: an impossible offer date is dropped rather than posted', () => {
   const html = fixture('tesco-product-page.html').replace('02/11/2026 until 15/11/2026', '31/02/2026 until 15/11/2026');
   const r = reading(readPage('tesco', TESCO, { status: 200, html }));

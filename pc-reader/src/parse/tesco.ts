@@ -8,6 +8,8 @@ const MONEY = String.raw`€\s?(\d{1,4}(?:\.\d{2})?)`;
  * A tesco.ie product page. The price, stock and name come from the page's schema.org JSON-LD. The Clubcard price, the
  * old price and the offer dates are read from the visible text next to their labels ("Clubcard Price", "Was",
  * "from ... until ..."), because Tesco's class names are generated and change; a label that is not there adds nothing.
+ * They are read only from the block around the page's single <h1> (the product's own title), never from the whole page,
+ * so a related-products carousel or a footer cannot lend its offer to this product; with no single <h1> they stay unset.
  *
  * Not yet checked against a live page: tesco.ie refused the author's PC with Akamai's "Access Denied" (2026-11-07),
  * so these rules follow the schema.org markup and Tesco's wording and are tested on a hand-written fixture only.
@@ -22,10 +24,12 @@ export function parseTesco(html: string, url: string): ParseResult {
   for (const junk of root.querySelectorAll('script, style, noscript')) {
     junk.remove();
   }
-  const text = root.text.replace(/\s+/g, ' ');
+  const headings = root.querySelectorAll('h1');
+  const block = headings.length === 1 ? headings[0]?.parentNode : undefined;
+  const text = (block?.text ?? '').replace(/\s+/g, ' ');
 
   const reading: Reading = { store: 'tesco', url };
-  const title = root.querySelector('h1')?.text.trim() || ld?.name;
+  const title = headings[0]?.text.trim() || ld?.name;
   if (title) {
     reading.title = title;
   }
@@ -59,8 +63,8 @@ export function parseTesco(html: string, url: string): ParseResult {
 
 /** The euro amount written right before or right after <label>, or undefined. */
 function labelledMoney(text: string, label: string): number | undefined {
-  const after = new RegExp(`${label}:?\\s*${MONEY}`, 'i').exec(text);
-  const before = new RegExp(`${MONEY}\\s*${label}`, 'i').exec(text);
+  const after = new RegExp(`\\b${label}\\b:?\\s*${MONEY}`, 'i').exec(text);
+  const before = new RegExp(`${MONEY}\\s*\\b${label}\\b`, 'i').exec(text);
   return toMoney(after?.[1] ?? before?.[1]);
 }
 

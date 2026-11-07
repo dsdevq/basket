@@ -99,6 +99,20 @@ test('batches are cut at 200 readings and a refusing server ends that store with
   assert.match(report?.posted.error ?? '', /HTTP 401 unauthorized/);
 });
 
+test('a post that throws is reported against its store and does not stop the other stores', async () => {
+  const { deps, loads } = harness(
+    (url) => (url.includes('aldi') ? aldiPage : tescoPage),
+    () => {
+      throw new Error('fetch failed');
+    },
+  );
+  const reports = await run([aldi(1), tesco(5555)], deps, 0);
+  assert.deepEqual(reports.map((r) => r.store), ['aldi', 'tesco']);
+  assert.equal(loads.length, 2);
+  assert.deepEqual(reports.map((r) => r.read), [1, 1]);
+  assert.ok(reports.every((r) => /fetch failed/.test(r.posted.error ?? '')));
+});
+
 test('per-reading refusals are reported against their URL', async () => {
   const { deps } = harness(() => aldiPage, (readings) => ({ status: 200, accepted: readings.length - 1, rejected: [{ index: 1, accepted: false, reason: 'unknown_listing' }] }));
   const [report] = await run([aldi(1), aldi(2)], deps);

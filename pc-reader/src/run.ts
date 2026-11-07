@@ -82,7 +82,14 @@ async function runStore(store: StoreId, items: WorkItem[], deps: Deps, minGapMs:
 
   for (let start = 0; start < readings.length; start += MAX_BATCH) {
     const batch = readings.slice(start, start + MAX_BATCH);
-    const outcome = await deps.post(batch);
+    let outcome: PostOutcome;
+    try {
+      outcome = await deps.post(batch);
+    } catch (error) {
+      report.posted.error = `did not post: ${error instanceof Error ? error.message : String(error)}`;
+      deps.log(`${store}: ${report.posted.error}`);
+      break;
+    }
     report.posted.batches++;
     report.posted.accepted += outcome.accepted;
     for (const refused of outcome.rejected) {
