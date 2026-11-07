@@ -55,8 +55,8 @@ browser opens, naming the entry. Query strings and fragments are dropped.
 - It is an ordinary browser on your connection and does nothing to look like anything else: no stealth plugin, no
   fingerprint or user-agent changes, no proxy, no CAPTCHA solving. It is driven by Playwright, and a shop may notice and
   refuse; that is accepted (below).
-- Each page's price, was price, Clubcard/loyalty price, promo text, offer dates and stock are posted as read; basket dates
-  the reading itself. A page it cannot read (shop changed its markup, 404) is reported and nothing is posted for it.
+- Each page's price and stock are posted as read, with the was price, promo text and offer dates where the shop's markup
+  gives them (Aldi); basket dates the reading itself. A page it cannot read (shop changed its markup, 404) is reported and nothing is posted for it.
 - Dunnes is not read yet.
 
 ## A blocked run
@@ -78,8 +78,9 @@ was blocked or a page was unreadable or refused (`unknown_listing` etc.), `1` co
 ## Tesco: not yet checked against a live page
 
 On 2026-11-07 tesco.ie answered this PC (a clean Chrome profile, home connection) with the same Akamai "Access Denied" as
-the VPS, so the Tesco parser follows the page's schema.org markup and Tesco's wording ("Clubcard Price", "Was", "from ...
-until ...") and is tested on a hand-written fixture only. The Aldi parser is tested on trimmed copies of live pages. If
+the VPS, so the Tesco parser follows the page's schema.org markup and is tested on hand-written fixtures only. It reads
+the price, name and stock from the JSON-LD offer and nothing from the visible text, so Tesco's was price, Clubcard price
+and offer dates are not posted until a live page shows where they can be read safely. The Aldi parser is tested on trimmed copies of live pages. If
 Tesco also refuses your PC the reader stops that shop, as above; it does not try again or work round it.
 
 ## Develop

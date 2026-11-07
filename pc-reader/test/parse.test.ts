@@ -36,24 +36,12 @@ test('aldi: a sold-out product without a price is a valid out-of-stock reading',
   assert.equal(r.inStock, false);
 });
 
-test('tesco: price, Clubcard price, was price and the offer window', () => {
+test('tesco: the price, title and stock come from the JSON-LD offer, and offer wording in the text is not read', () => {
   const r = reading(readPage('tesco', TESCO, { status: 200, html: fixture('tesco-product-page.html') }));
-  assert.deepEqual(r, {
-    store: 'tesco',
-    url: TESCO,
-    title: 'Tesco Fresh Whole Milk 2 Litre',
-    price: 2.15,
-    wasPrice: 2.35,
-    loyaltyPrice: 1.89,
-    loyaltyScheme: 'Clubcard',
-    promoText: 'Clubcard Price',
-    validFrom: '2026-11-02',
-    validUntil: '2026-11-15',
-    inStock: true,
-  });
+  assert.deepEqual(r, { store: 'tesco', url: TESCO, title: 'Tesco Fresh Whole Milk 2 Litre', price: 2.15, inStock: true });
 });
 
-test('tesco: a plain product has only its price, and script text is not read as a label', () => {
+test('tesco: a plain product has only its price', () => {
   const r = reading(readPage('tesco', TESCO, { status: 200, html: fixture('tesco-product-page-plain.html') }));
   assert.deepEqual(r, { store: 'tesco', url: TESCO, title: 'Tesco Brown Bread 800G', price: 1.65, inStock: true });
 });
@@ -84,48 +72,7 @@ test('block: an ordinary product page is not mistaken for a challenge', () => {
   assert.equal(detectBlock({ status: 200, html: `<title>Milk</title>${'x'.repeat(30_000)}captcha` }), null);
 });
 
-test('tesco: offers in a related-products carousel or the footer are not read as this product\'s', () => {
+test('tesco: offers in a div and list carousel or the footer do not leak into this product', () => {
   const r = reading(readPage('tesco', TESCO, { status: 200, html: fixture('tesco-product-page-carousel.html') }));
   assert.deepEqual(r, { store: 'tesco', url: TESCO, title: 'Tesco Brown Bread 800G', price: 1.65, inStock: true });
-});
-
-test('tesco: a carousel in the same container as the heading is not read as this product\'s offer', () => {
-  const html = fixture('tesco-product-page-plain.html').replace(
-    '<div>€1.65</div>',
-    '<div>€1.65</div><section><span>€0.99</span> <span>Clubcard Price</span> <span>until 30/11/2026</span></section>',
-  );
-  const r = reading(readPage('tesco', TESCO, { status: 200, html }));
-  assert.deepEqual(r, { store: 'tesco', url: TESCO, title: 'Tesco Brown Bread 800G', price: 1.65, inStock: true });
-});
-
-test('tesco: two different offers of one kind in the product block leave that offer unset', () => {
-  const html = fixture('tesco-product-page.html').replace('</main>', '<div>Was €2.50 €1.10 Clubcard Price until 20/11/2026</div></main>');
-  const r = reading(readPage('tesco', TESCO, { status: 200, html }));
-  assert.equal(r.price, 2.15);
-  assert.equal(r.loyaltyPrice, undefined);
-  assert.equal(r.wasPrice, undefined);
-  assert.equal(r.validUntil, undefined);
-  assert.equal(r.validFrom, undefined);
-});
-
-test('tesco: a label must be a whole word, so a price followed by "Washing" is not a was price', () => {
-  const html = fixture('tesco-product-page-plain.html').replace('<div>€1.65</div>', '<div>€1.65</div><div>€2.00 Washing powder</div>');
-  const r = reading(readPage('tesco', TESCO, { status: 200, html }));
-  assert.equal(r.wasPrice, undefined);
-});
-
-test('tesco: with no single product heading the optional offer fields stay unset', () => {
-  const html = fixture('tesco-product-page.html').replace('</main>', '<h1>Another</h1></main>');
-  const r = reading(readPage('tesco', TESCO, { status: 200, html }));
-  assert.equal(r.price, 2.15);
-  assert.equal(r.loyaltyPrice, undefined);
-  assert.equal(r.wasPrice, undefined);
-  assert.equal(r.validUntil, undefined);
-});
-
-test('tesco: an impossible offer date is dropped rather than posted', () => {
-  const html = fixture('tesco-product-page.html').replace('02/11/2026 until 15/11/2026', '31/02/2026 until 15/11/2026');
-  const r = reading(readPage('tesco', TESCO, { status: 200, html }));
-  assert.equal(r.validFrom, undefined);
-  assert.equal(r.validUntil, '2026-11-15');
 });

@@ -169,6 +169,6 @@ planning record so this repo carries its own reasons; the M1 section holds the c
 - **Checked live on 2026-11-07.** aldi.ie served a clean Chrome profile on this PC (and the reader itself, run headless); its product pages carry the price,
   stock and name as schema.org JSON-LD and the was price and discount badge in the `base-price` block (parsers built on
   two recorded pages, one on offer). tesco.ie answered the same clean Chrome with Akamai's "Access Denied", so the Tesco
-  parser (JSON-LD plus the "Clubcard Price", "Was" and "from ... until ..." wording) is unverified against a live page
-  and was not retried. Whether Tesco serves the owner's own PC with an ordinary visible window is not known until he runs it.
+  parser (JSON-LD price, name and stock only; no was price, Clubcard price or offer dates, since text on a page that
+  cannot be checked may belong to a carousel or footer) is unverified against a live page and was not retried. Whether Tesco serves the owner's own PC with an ordinary visible window is not known until he runs it.
 - **Not scheduled.** Nothing is installed to run the reader; the README notes what a systemd user timer would need.
