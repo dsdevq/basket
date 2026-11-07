@@ -72,7 +72,8 @@ public static partial class Stores
 
     /// <summary>
     /// Accepts only an https product page on the shop's own host and returns it without query or fragment. The
-    /// fetchers only ever call addresses that passed here, so a pasted link cannot aim them elsewhere.
+    /// fetchers only ever call addresses that passed here, so a pasted link cannot aim them elsewhere. Tesco's /shop
+    /// and /groceries forms both come back as the /groceries form.
     /// </summary>
     public static bool TryNormalizeProductUrl(Store store, string? raw, out Uri url)
     {
