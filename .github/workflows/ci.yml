@@ -67,7 +67,22 @@ jobs:
       - run: npm run build:prod
       - run: npm run test:ci
       - run: npx playwright install --with-deps chromium
+      # The route scan's design judge is a release asset, downloaded once and then cached.
+      - uses: actions/cache@v6
+        with:
+          path: ~/.impeccable
+          key: impeccable-${{ hashFiles('frontend/package-lock.json') }}
+      # The page specs, the screen check, the route scan (design judge + axe) and the screen baselines
+      # (the Linux images in e2e/screens.spec.ts-snapshots, rewritten only by the "Update screen baselines" workflow;
+      # the baseline screens are registered only once the first images are committed).
       - run: npm run e2e
+      - name: Upload the screen diff images
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: screen-baseline-diff
+          path: frontend/test-results
+          if-no-files-found: ignore
 
   image:
     name: image builds

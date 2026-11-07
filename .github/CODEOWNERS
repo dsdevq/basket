@@ -1,0 +1,3 @@
+# The look of a screen is the owner's call: a new or changed screen baseline asks for their review.
+# Enforced when branch protection requires review from code owners.
+/frontend/e2e/screens.spec.ts-snapshots/*-linux.png @dsdevq

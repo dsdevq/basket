@@ -64,12 +64,12 @@ export function showCrashScreen(doc: Document, error: unknown): void {
   panel.setAttribute('role', 'alert');
   panel.style.cssText =
     'position:fixed;inset:0;z-index:2147483647;display:flex;flex-direction:column;align-items:center;' +
-    'justify-content:center;gap:12px;padding:24px;text-align:center;font:16px/1.4 system-ui,sans-serif;' +
+    'justify-content:center;gap:12px;padding:24px;text-align:center;font:16px/1.4 var(--font-sans,system-ui,sans-serif);' +
     'background:Canvas;color:CanvasText';
 
   const heading = doc.createElement('h1');
   heading.textContent = 'Something went wrong';
-  heading.style.cssText = 'margin:0;font-size:22px';
+  heading.style.cssText = 'margin:0;font-size:24px';
   const detail = doc.createElement('p');
   detail.textContent = `Error: ${errorNameOf(error)}`;
   detail.style.margin = '0';
@@ -79,7 +79,7 @@ export function showCrashScreen(doc: Document, error: unknown): void {
   const reload = doc.createElement('button');
   reload.type = 'button';
   reload.textContent = 'Reload';
-  reload.style.cssText = 'font:inherit;padding:10px 24px;border-radius:8px';
+  reload.style.cssText = 'font:inherit;padding:12px 24px;border-radius:8px';
   reload.addEventListener('click', () => doc.defaultView?.location.reload());
 
   panel.append(heading, detail, hint, reload);

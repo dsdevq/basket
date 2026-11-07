@@ -1,9 +1,11 @@
+import {screenBaselineConfig} from '@lifekit-hq/tokens/screen';
 import {defineConfig} from '@playwright/test';
 
 // Not 4200 (ng serve) and not 3310 (the API): the box also runs other apps' e2e servers.
 const port = Number(process.env['E2E_PORT'] ?? 4301);
 
 export default defineConfig({
+  ...screenBaselineConfig(), // updateSnapshots 'none', animations off, exact comparison
   testDir: './e2e',
   reporter: process.env['CI'] ? 'github' : 'list',
   use: {

@@ -1,0 +1,53 @@
+name: Update screen baselines
+
+# The one step that rewrites the screen baselines (frontend/e2e/screens.spec.ts-snapshots). Run it from the
+# Actions tab on a branch whose screens changed on purpose: it renders them on the CI runner, the machine
+# every later comparison runs on, commits the changed images to that branch and starts CI on it (a push made
+# with the workflow token does not start the pull request run, so this does it itself). It never runs on its
+# own and never on main. Review the images in the commit before merging: an update says the screen should
+# look like this from now on.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+  packages: read
+
+jobs:
+  update:
+    if: github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.x
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build:prod
+      - name: Render the baselines
+        run: npm run e2e:screens:update
+      - name: Commit the changed baselines
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          git add -A -- 'e2e/screens.spec.ts-snapshots/*-linux.png'
+          if git diff --cached --quiet; then
+            echo "No baseline changed." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "test(frontend): update screen baselines"
+          git push origin "HEAD:$BRANCH"
+          gh workflow run ci.yml --ref "$BRANCH"

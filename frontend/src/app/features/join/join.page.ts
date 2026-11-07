@@ -1,6 +1,13 @@
 import {Clipboard} from '@angular/cdk/clipboard';
 import {DOCUMENT} from '@angular/common';
-import {ChangeDetectionStrategy, Component, inject, type OnInit, signal} from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  type OnInit,
+  signal,
+} from '@angular/core';
 import {FormControl, FormGroup, ReactiveFormsModule, Validators} from '@angular/forms';
 import {Router} from '@angular/router';
 import {
@@ -8,11 +15,12 @@ import {
   ButtonComponent,
   FormFieldComponent,
   InputComponent,
+  PageComponent,
   ToastService,
 } from '@lifekit-hq/ui';
 
 import {AuthApi, type PasskeyFailureReport} from '../../core/auth/auth.api';
-import {AuthCardComponent} from '../../core/auth/auth-card.component';
+import {AUTH_PAGE_HOST, AuthIntroComponent} from '../../core/auth/auth-intro.component';
 import {
   INSTANT_REFUSAL_MS,
   PasskeyCancelledError,
@@ -38,6 +46,25 @@ function describe(error: unknown): string {
  * know the token (used, expired or mistyped). `unreachable`: the server could not be asked.
  */
 type Step = 'checking' | 'ready' | 'missing' | 'used' | 'unreachable' | 'unsupported';
+
+/** What a step puts above its content: the page title and the lead under the mark. */
+const INTROS: Readonly<Record<Step, {readonly heading: string; readonly lead: string}>> = {
+  checking: {heading: 'Checking your invite', lead: ''},
+  missing: {heading: 'This link is incomplete', lead: 'The part after the # sign did not arrive.'},
+  used: {
+    heading: 'This link was used or has expired',
+    lead: 'Invite links work once and last 24 hours.',
+  },
+  unreachable: {
+    heading: 'Cannot reach basket',
+    lead: 'Your browser could not get an answer from the server.',
+  },
+  unsupported: {
+    heading: 'Open this link in your browser',
+    lead: "This app's built-in browser cannot make a passkey.",
+  },
+  ready: {heading: 'Join basket', lead: 'Make a passkey and you are in. No password.'},
+};
 
 /** The failure kind and labels a browser-side error is reported under; see `PasskeyFailureReport` on the server. */
 function labelsOf(
@@ -83,42 +110,30 @@ function labelsOf(
   selector: 'bk-join-page',
   imports: [
     ReactiveFormsModule,
-    AuthCardComponent,
+    AuthIntroComponent,
+    PageComponent,
     AlertComponent,
     ButtonComponent,
     FormFieldComponent,
     InputComponent,
   ],
+  host: AUTH_PAGE_HOST,
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    @switch (step()) {
-      @case ('checking') {
-        <bk-auth-card heading="Checking your invite" />
-      }
-      @case ('missing') {
-        <bk-auth-card
-          heading="This link is incomplete"
-          lead="The part after the # sign did not arrive."
-        >
+    <cmn-page [title]="intro().heading" kind="list">
+      <bk-auth-intro [lead]="intro().lead" />
+      @switch (step()) {
+        @case ('checking') {}
+        @case ('missing') {
           <p class="text-cmn-sm text-text-secondary">
             Open the whole link again from the message you were sent. Some apps cut the end off a
             link: copy all of it and paste it into Safari or Chrome.
           </p>
-        </bk-auth-card>
-      }
-      @case ('used') {
-        <bk-auth-card
-          heading="This link was used or has expired"
-          lead="Invite links work once and last 24 hours."
-        >
+        }
+        @case ('used') {
           <p class="text-cmn-sm text-text-secondary">Ask for a new one.</p>
-        </bk-auth-card>
-      }
-      @case ('unreachable') {
-        <bk-auth-card
-          heading="Cannot reach basket"
-          lead="Your browser could not get an answer from the server."
-        >
+        }
+        @case ('unreachable') {
           <p class="text-cmn-sm text-text-secondary">
             Your link is fine and has not been used. Check your connection. A content blocker can
             also stop it.
@@ -127,22 +142,15 @@ function labelsOf(
           <cmn-button (clicked)="check()" variant="primary" icon="RefreshCw">
             Try again
           </cmn-button>
-        </bk-auth-card>
-      }
-      @case ('unsupported') {
-        <bk-auth-card
-          heading="Open this link in your browser"
-          lead="This app's built-in browser cannot make a passkey."
-        >
+        }
+        @case ('unsupported') {
           <p class="text-cmn-sm text-text-secondary">
             Your link is fine and has not been used. Copy it, then paste it into Safari or Chrome.
             Or open this page there from the app's menu, often a compass or "Open in browser".
           </p>
           <cmn-button (clicked)="copyLink()" variant="primary" icon="Copy">Copy link</cmn-button>
-        </bk-auth-card>
-      }
-      @default {
-        <bk-auth-card heading="Join basket" lead="Make a passkey and you are in. No password.">
+        }
+        @default {
           @if (problem()) {
             <cmn-alert [title]="problem()" variant="error" />
           }
@@ -171,9 +179,9 @@ function labelsOf(
               Create passkey
             </cmn-button>
           </form>
-        </bk-auth-card>
+        }
       }
-    }
+    </cmn-page>
   `,
 })
 export class JoinPage implements OnInit {
@@ -188,6 +196,7 @@ export class JoinPage implements OnInit {
   private token = '';
 
   protected readonly step = signal<Step>('checking');
+  protected readonly intro = computed(() => INTROS[this.step()]);
   protected readonly busy = signal(false);
   protected readonly problem = signal('');
   protected readonly cancelled = signal(false);

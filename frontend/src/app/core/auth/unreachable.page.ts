@@ -1,20 +1,19 @@
 import {ChangeDetectionStrategy, Component, inject, signal} from '@angular/core';
 import {Router} from '@angular/router';
-import {ButtonComponent} from '@lifekit-hq/ui';
+import {ButtonComponent, PageComponent} from '@lifekit-hq/ui';
 
-import {AuthCardComponent} from './auth-card.component';
+import {AUTH_PAGE_HOST, AuthIntroComponent} from './auth-intro.component';
 import {SessionStore} from './session.store';
 
 /** Shown instead of a blank screen when the first `/api/session` call does not get an answer. */
 @Component({
   selector: 'bk-unreachable-page',
-  imports: [AuthCardComponent, ButtonComponent],
+  imports: [AuthIntroComponent, ButtonComponent, PageComponent],
+  host: AUTH_PAGE_HOST,
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <bk-auth-card
-      heading="Cannot reach basket"
-      lead="Your browser could not get an answer from the server."
-    >
+    <cmn-page title="Cannot reach basket" kind="list">
+      <bk-auth-intro lead="Your browser could not get an answer from the server." />
       <p class="text-cmn-sm text-text-secondary">
         Check your connection. A content blocker or a private-relay setting can also stop it.
       </p>
@@ -24,7 +23,7 @@ import {SessionStore} from './session.store';
       <cmn-button [loading]="busy()" (clicked)="retry()" variant="primary" icon="RefreshCw">
         Try again
       </cmn-button>
-    </bk-auth-card>
+    </cmn-page>
   `,
 })
 export class UnreachablePage {
