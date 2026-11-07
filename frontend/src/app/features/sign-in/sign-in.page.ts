@@ -1,9 +1,9 @@
 import {ChangeDetectionStrategy, Component, inject, signal} from '@angular/core';
 import {Router} from '@angular/router';
-import {AlertComponent, ButtonComponent} from '@lifekit-hq/ui';
+import {AlertComponent, ButtonComponent, PageComponent} from '@lifekit-hq/ui';
 
 import {AuthApi} from '../../core/auth/auth.api';
-import {AuthCardComponent} from '../../core/auth/auth-card.component';
+import {AUTH_PAGE_HOST, AuthIntroComponent} from '../../core/auth/auth-intro.component';
 import {
   PasskeyCancelledError,
   PasskeyClient,
@@ -31,10 +31,12 @@ function describe(error: unknown): string {
 
 @Component({
   selector: 'bk-sign-in-page',
-  imports: [AuthCardComponent, AlertComponent, ButtonComponent],
+  imports: [AuthIntroComponent, AlertComponent, ButtonComponent, PageComponent],
+  host: AUTH_PAGE_HOST,
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <bk-auth-card heading="basket" lead="The shopping list for the two of you.">
+    <cmn-page title="basket" kind="list">
+      <bk-auth-intro lead="The shopping list for the two of you." />
       @if (problem()) {
         <cmn-alert [title]="problem()" variant="error" />
       }
@@ -42,7 +44,7 @@ function describe(error: unknown): string {
         Sign in with a passkey
       </cmn-button>
       <p class="text-cmn-xs text-text-secondary">New here? Open the invite link you were sent.</p>
-    </bk-auth-card>
+    </cmn-page>
   `,
 })
 export class SignInPage {

@@ -37,8 +37,13 @@ invite; open `http://localhost:4200/join#<that token>` to register. Passkeys wor
 BASKET_TEST_POSTGRES="Host=localhost;Port=55432;Username=basket;Password=basket-dev;Database=postgres" \
   dotnet test backend/Basket.sln                                # each test class gets a throwaway database
 ( cd frontend && npm run lint && npm run format:check && npm run test:ci )
-( cd frontend && npm run build:prod && npx playwright install chromium && npm run e2e )   # phone-layout and screen-composition (C0-C10) specs on the prod build
+( cd frontend && npm run build:prod && npx playwright install chromium && npm run e2e )   # phone-layout, screen-composition (C0-C10), route-scan (design judge + axe) and screen-baseline specs on the prod build
 ```
+
+`npm run lint` also runs `npm run drift` (`lifekit-chrome-check drift`: source that bypasses the design tokens). The route scan and the
+baselines cover every routed page at 390 and 1280 wide, light and dark; the list of pages is `frontend/e2e/support/screens.ts`.
+A finding in a library component, token or page template is fixed in lifekit-common, never excepted here. The baselines are Linux
+images (`frontend/e2e/screens.spec.ts-snapshots`) that only the **Update screen baselines** workflow rewrites, on the branch that changes a screen. Until the first images are committed the baseline comparison is deferred (`npm run e2e` logs a notice and skips it); the pull request that commits them makes it unconditional.
 
 `scripts/test-backend.sh` does the backend run against a throwaway Postgres container and cleans it up.
 
