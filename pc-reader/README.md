@@ -72,7 +72,7 @@ refusal, and carries on with the other shop. The summary then says so:
 ```
 
 Progress goes to stderr, the JSON summary to stdout. Exit code: `0` every page read and accepted, `2` finished but a shop
-was blocked or a page was unreadable or refused (`unknown_listing` etc.), `1` could not start or basket refused a batch
+was blocked or a page was unreadable or refused (`unknown_listing` etc.), `1` could not start, basket could not be reached, or basket refused a batch
 (bad token, rate limit).
 
 ## Tesco: not yet checked against a live page
