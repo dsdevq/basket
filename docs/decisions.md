@@ -166,7 +166,7 @@ planning record so this repo carries its own reasons; the M1 section holds the c
   the reader reads `{store, url}` entries from `pc-reader/urls.local.json` (ignored by git), checked against the same
   product-page shape the server accepts. A page not linked in basket comes back `unknown_listing`. A server-provided work
   list (a token-scoped read endpoint) would widen what the token can learn and is the owner's separate decision.
-- **Ordinary browser, nothing hidden.** Installed Chrome with a clean profile of its own (never the owner's), visible by
+- **Ordinary browser, nothing hidden.** Installed Chrome with a profile of its own (never the owner's everyday one), visible by
   default, no stealth plugin, fingerprint or user-agent change, proxy or CAPTCHA solving. Playwright's automation is not
   concealed; a shop may refuse it.
 - **One request at a time per shop, at least 5 seconds apart, no retries**, shops one after the other: the same politeness
