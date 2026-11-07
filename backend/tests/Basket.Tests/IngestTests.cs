@@ -227,6 +227,24 @@ public sealed class IngestTests : IClassFixture<BasketFactory>
     }
 
     [Fact]
+    public async Task A_reading_in_the_shop_address_form_matches_the_listing_stored_in_the_groceries_form()
+    {
+        var owner = await SeedAsync();
+        var (_, token) = await MintAsync(owner);
+
+        var response = await PostAsync(Relay(token), Tesco(1.99m, "https://www.tesco.ie/shop/en-IE/products/254317390?x=1"));
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        Reasons(await response.Content.ReadFromJsonAsync<JsonElement>()).Should().Equal("ok");
+        await _factory.WithDb(async db =>
+        {
+            (await db.PriceObservations.SingleAsync()).Price.Should().Be(1.99m);
+            (await db.StoreListings.Where(l => l.Store == Store.Tesco).SingleAsync()).Url.Should().Be(TescoUrl);
+            return 0;
+        });
+    }
+
+    [Fact]
     public async Task Two_products_linked_to_the_same_page_both_get_the_reading_and_it_counts_as_accepted_once()
     {
         var owner = await SeedAsync();

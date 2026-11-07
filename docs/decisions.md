@@ -193,3 +193,12 @@ planning record so this repo carries its own reasons; the M1 section holds the c
   (`Stores.TryNormalizeProductUrl`), so a `/shop/` address is refused as `url_invalid` by both the reader and the server.
   Widening the server's shape is a backend change outside the reader's scope and is left for the owner.
 
+## Tesco product addresses: /shop and /groceries are one key (2026-11-07)
+
+- **Both path forms are accepted, normalised to the stored `/groceries` form.** tesco.ie's canonical product address is
+  now `https://www.tesco.ie/shop/en-IE/products/<id>`; the older `/groceries/en-IE/products/<id>` redirects to it.
+  `Stores.TryNormalizeProductUrl` takes either for Tesco and returns the `/groceries` form, so a pasted or ingested
+  `/shop` address matches the `store_listing` row that already exists and no stored row moves.
+- **Moving stored rows to the `/shop` form would be a migration** (listings, and any reader holding the old form) and
+  is a separate owner decision, not part of this change.
+
