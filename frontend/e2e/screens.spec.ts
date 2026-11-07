@@ -11,15 +11,19 @@ import {FROZEN_NOW, ROUTES} from './support/screens';
 // workflow; a plain run compares and never rewrites. No screen is loosened.
 //
 // The fixture fails a screen that has no baseline, so until the first Linux baselines are committed the
-// screens are not registered (the directory holds no `*-linux.png`). The update workflow sets
-// SCREEN_BASELINES=update to register them and write the first images; once they are committed every run
-// compares. Delete a baseline and its screen fails; delete all of them and the gate silently switches off,
-// which CODEOWNERS on `*-linux.png` makes a reviewed change.
+// comparison is deferred (the directory holds no `*-linux.png`) and a notice says so in the CI output.
+// The update workflow sets SCREEN_BASELINES=update to register the screens and write the first images.
+// The follow-up pull request that commits those first baselines removes this condition and makes the
+// gate unconditional: an empty or missing baseline directory then fails CI.
 const snapshots = join(__dirname, 'screens.spec.ts-snapshots');
 const hasBaselines =
   existsSync(snapshots) && readdirSync(snapshots).some(file => file.endsWith('-linux.png'));
 
-if (hasBaselines || process.env['SCREEN_BASELINES'] === 'update') {
+if (!hasBaselines && process.env['SCREEN_BASELINES'] !== 'update') {
+  console.warn(
+    'screen baselines: comparison deferred until the first Linux baselines (*-linux.png) are committed to e2e/screens.spec.ts-snapshots'
+  );
+} else {
   defineScreenBaselines(
     {test, expect},
     {
