@@ -116,6 +116,11 @@ public sealed class PriceParserTests
     [InlineData(Store.Lidl, "https://lidl.ie/p/aubergine/p11214436/?utm_source=x#top", "https://www.lidl.ie/p/aubergine/p11214436")]
     [InlineData(Store.Aldi, " https://www.aldi.ie/product/clonbawn-protein-milk-000000000000422541 ", "https://www.aldi.ie/product/clonbawn-protein-milk-000000000000422541")]
     [InlineData(Store.Tesco, "https://www.tesco.ie/groceries/en-IE/products/254317390", "https://www.tesco.ie/groceries/en-IE/products/254317390")]
+    [InlineData(Store.Tesco, "https://www.tesco.ie/shop/en-IE/products/254317390", "https://www.tesco.ie/groceries/en-IE/products/254317390")]
+    [InlineData(Store.Tesco, "https://www.tesco.ie/shop/en-IE/products/254317390/", "https://www.tesco.ie/groceries/en-IE/products/254317390")]
+    [InlineData(Store.Tesco, "https://www.tesco.ie/groceries/en-IE/products/254317390/", "https://www.tesco.ie/groceries/en-IE/products/254317390")]
+    [InlineData(Store.Tesco, "https://www.tesco.ie/shop/en-IE/products/254317390?utm_source=x#top", "https://www.tesco.ie/groceries/en-IE/products/254317390")]
+    [InlineData(Store.Tesco, "https://www.tesco.ie/groceries/en-IE/products/254317390?x=1#top", "https://www.tesco.ie/groceries/en-IE/products/254317390")]
     public void Product_addresses_on_the_shops_own_site_are_accepted_and_tidied(Store store, string raw, string expected)
     {
         Stores.TryNormalizeProductUrl(store, raw, out var url).Should().BeTrue();
@@ -132,6 +137,11 @@ public sealed class PriceParserTests
     [InlineData(Store.Lidl, "https://www.aldi.ie/product/clonbawn-protein-milk-000000000000422541")]
     [InlineData(Store.Aldi, "https://www.aldi.ie/results?q=milk")]
     [InlineData(Store.Tesco, "https://www.tesco.ie/groceries/en-IE/search?query=milk")]
+    [InlineData(Store.Tesco, "https://www.tesco.ie/shop/en-IE/search?query=milk")]
+    [InlineData(Store.Tesco, "https://www.tesco.ie/shop/en-IE/products/abc")]
+    [InlineData(Store.Tesco, "https://www.tesco.ie/other/en-IE/products/254317390")]
+    [InlineData(Store.Tesco, "https://www.tesco.com/shop/en-IE/products/254317390")]
+    [InlineData(Store.Tesco, "https://evil.example/shop/en-IE/products/254317390")]
     [InlineData(Store.Tesco, "not a url")]
     [InlineData(Store.Tesco, "")]
     public void Anything_else_is_refused(Store store, string raw)

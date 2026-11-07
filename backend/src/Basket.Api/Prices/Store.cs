@@ -72,7 +72,8 @@ public static partial class Stores
 
     /// <summary>
     /// Accepts only an https product page on the shop's own host and returns it without query or fragment. The
-    /// fetchers only ever call addresses that passed here, so a pasted link cannot aim them elsewhere.
+    /// fetchers only ever call addresses that passed here, so a pasted link cannot aim them elsewhere. Tesco's /shop
+    /// and /groceries forms both come back as the /groceries form.
     /// </summary>
     public static bool TryNormalizeProductUrl(Store store, string? raw, out Uri url)
     {
@@ -101,6 +102,13 @@ public static partial class Stores
             return false;
         }
 
+        if (store == Store.Tesco)
+        {
+            // tesco.ie's canonical address is /shop/..., the older /groceries/... redirects to it. Both are one key, the
+            // /groceries form the stored listings already use, so a /shop address finds an existing listing.
+            path = "/groceries/en-IE/products/" + TescoPath().Match(path).Groups["id"].Value;
+        }
+
         url = new Uri($"https://{host}{path}");
         return true;
     }
@@ -118,6 +126,6 @@ public static partial class Stores
     [GeneratedRegex(@"^/product/[a-z0-9-]+-\d{6,}$", RegexOptions.IgnoreCase)]
     private static partial Regex AldiPath();
 
-    [GeneratedRegex(@"^/groceries/en-IE/products/\d{4,12}$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^/(?:groceries|shop)/en-IE/products/(?<id>\d{4,12})$", RegexOptions.IgnoreCase)]
     private static partial Regex TescoPath();
 }
