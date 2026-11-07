@@ -3,13 +3,16 @@ import type { ParseResult, Reading } from '../types.ts';
 import { readJsonLdProduct, toMoney } from './jsonld.ts';
 
 const MONEY = String.raw`€\s?(\d{1,4}(?:\.\d{2})?)`;
+const OTHER_REGIONS = 'section, aside, article, nav, footer, h2, h3';
 
 /**
  * A tesco.ie product page. The price, stock and name come from the page's schema.org JSON-LD. The Clubcard price, the
  * old price and the offer dates are read from the visible text next to their labels ("Clubcard Price", "Was",
  * "from ... until ..."), because Tesco's class names are generated and change; a label that is not there adds nothing.
  * They are read only from the block around the page's single <h1> (the product's own title), never from the whole page,
- * so a related-products carousel or a footer cannot lend its offer to this product; with no single <h1> they stay unset.
+ * so a related-products carousel or a footer cannot lend its offer to this product. When the block cannot be told apart
+ * from the rest of the page (no single <h1>, other page regions inside it, or two different offers of one kind in it)
+ * they stay unset: a missing optional field is safe, an offer recorded against the wrong product is not.
  *
  * Not yet checked against a live page: tesco.ie refused the author's PC with Akamai's "Access Denied" (2026-11-07),
  * so these rules follow the schema.org markup and Tesco's wording and are tested on a hand-written fixture only.
@@ -26,7 +29,7 @@ export function parseTesco(html: string, url: string): ParseResult {
   }
   const headings = root.querySelectorAll('h1');
   const block = headings.length === 1 ? headings[0]?.parentNode : undefined;
-  const text = (block?.text ?? '').replace(/\s+/g, ' ');
+  const text = block && !block.querySelector(OTHER_REGIONS) ? block.text.replace(/\s+/g, ' ') : '';
 
   const reading: Reading = { store: 'tesco', url };
   const title = headings[0]?.text.trim() || ld?.name;
@@ -50,8 +53,9 @@ export function parseTesco(html: string, url: string): ParseResult {
   if (was !== undefined && reading.price !== undefined && was > reading.price) {
     reading.wasPrice = was;
   }
-  const window = /from\s+(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(?:until|to)\s+(\d{1,2})\/(\d{1,2})\/(\d{4})/i.exec(text);
-  const until = window ? undefined : /until\s+(\d{1,2})\/(\d{1,2})\/(\d{4})/i.exec(text);
+  const untilDates = new Set([...text.matchAll(/until\s+(\d{1,2}\/\d{1,2}\/\d{4})/gi)].map((m) => m[1]));
+  const window = untilDates.size > 1 ? null : /from\s+(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(?:until|to)\s+(\d{1,2})\/(\d{1,2})\/(\d{4})/i.exec(text);
+  const until = window || untilDates.size > 1 ? undefined : /until\s+(\d{1,2})\/(\d{1,2})\/(\d{4})/i.exec(text);
   if (window) {
     reading.validFrom = isoDate(window[3], window[2], window[1]);
     reading.validUntil = isoDate(window[6], window[5], window[4]);
@@ -61,11 +65,15 @@ export function parseTesco(html: string, url: string): ParseResult {
   return { kind: 'reading', reading };
 }
 
-/** The euro amount written right before or right after <label>, or undefined. */
+/** The one euro amount written right after <label> (else right before it), or undefined when there is none or several. */
 function labelledMoney(text: string, label: string): number | undefined {
-  const after = new RegExp(`\\b${label}\\b:?\\s*${MONEY}`, 'i').exec(text);
-  const before = new RegExp(`${MONEY}\\s*\\b${label}\\b`, 'i').exec(text);
-  return toMoney(after?.[1] ?? before?.[1]);
+  const after = amounts(text, new RegExp(`\\b${label}\\b:?\\s*${MONEY}`, 'gi'));
+  const found = after.size > 0 ? after : amounts(text, new RegExp(`${MONEY}\\s*\\b${label}\\b`, 'gi'));
+  return found.size === 1 ? toMoney([...found][0]) : undefined;
+}
+
+function amounts(text: string, pattern: RegExp): Set<string | undefined> {
+  return new Set([...text.matchAll(pattern)].map((m) => m[1]));
 }
 
 /** A real calendar date as yyyy-mm-dd, or undefined: the server rejects the whole batch on a date it cannot read. */

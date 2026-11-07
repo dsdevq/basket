@@ -89,6 +89,25 @@ test('tesco: offers in a related-products carousel or the footer are not read as
   assert.deepEqual(r, { store: 'tesco', url: TESCO, title: 'Tesco Brown Bread 800G', price: 1.65, inStock: true });
 });
 
+test('tesco: a carousel in the same container as the heading is not read as this product\'s offer', () => {
+  const html = fixture('tesco-product-page-plain.html').replace(
+    '<div>€1.65</div>',
+    '<div>€1.65</div><section><span>€0.99</span> <span>Clubcard Price</span> <span>until 30/11/2026</span></section>',
+  );
+  const r = reading(readPage('tesco', TESCO, { status: 200, html }));
+  assert.deepEqual(r, { store: 'tesco', url: TESCO, title: 'Tesco Brown Bread 800G', price: 1.65, inStock: true });
+});
+
+test('tesco: two different offers of one kind in the product block leave that offer unset', () => {
+  const html = fixture('tesco-product-page.html').replace('</main>', '<div>Was €2.50 €1.10 Clubcard Price until 20/11/2026</div></main>');
+  const r = reading(readPage('tesco', TESCO, { status: 200, html }));
+  assert.equal(r.price, 2.15);
+  assert.equal(r.loyaltyPrice, undefined);
+  assert.equal(r.wasPrice, undefined);
+  assert.equal(r.validUntil, undefined);
+  assert.equal(r.validFrom, undefined);
+});
+
 test('tesco: a label must be a whole word, so a price followed by "Washing" is not a was price', () => {
   const html = fixture('tesco-product-page-plain.html').replace('<div>€1.65</div>', '<div>€1.65</div><div>€2.00 Washing powder</div>');
   const r = reading(readPage('tesco', TESCO, { status: 200, html }));
