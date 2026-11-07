@@ -43,7 +43,7 @@ BASKET_TEST_POSTGRES="Host=localhost;Port=55432;Username=basket;Password=basket-
 `npm run lint` also runs `npm run drift` (`lifekit-chrome-check drift`: source that bypasses the design tokens). The route scan and the
 baselines cover every routed page at 390 and 1280 wide, light and dark; the list of pages is `frontend/e2e/support/screens.ts`.
 A finding in a library component, token or page template is fixed in lifekit-common, never excepted here. The baselines are Linux
-images (`frontend/e2e/screens.spec.ts-snapshots`) that only the **Update screen baselines** workflow rewrites, on the branch that changes a screen. Until the first images are committed the baseline screens are not registered, so `npm run e2e` skips them.
+images (`frontend/e2e/screens.spec.ts-snapshots`) that only the **Update screen baselines** workflow rewrites, on the branch that changes a screen. Until the first images are committed the baseline comparison is deferred (`npm run e2e` logs a notice and skips it); the pull request that commits them makes it unconditional.
 
 `scripts/test-backend.sh` does the backend run against a throwaway Postgres container and cleans it up.
 
