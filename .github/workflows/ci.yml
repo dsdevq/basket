@@ -45,6 +45,23 @@ jobs:
       - run: dotnet build backend/Basket.sln --configuration Release --no-restore
       - run: dotnet test backend/Basket.sln --configuration Release --no-build --verbosity normal
 
+  pc-reader:
+    name: pc-reader typecheck + test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: pc-reader
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24.x
+          cache: npm
+          cache-dependency-path: pc-reader/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
   frontend:
     name: frontend lint + build + test
     runs-on: ubuntu-latest

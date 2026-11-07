@@ -145,3 +145,30 @@ planning record so this repo carries its own reasons; the M1 section holds the c
   endpoint is refused too: nothing else looks at it.
 - **Test data.** Tesco and Aldi block the VPS, so the ingest fixture (`Fixtures/ingest-batch.json`) is a batch written to
   the contract with realistic prices, not a page recorded from a shop.
+
+## PC reader decisions (2026-11-07)
+
+- **A separate small program, `pc-reader/`.** Node/TypeScript run by Node 24 directly (no build step), two dependencies:
+  `playwright-core` to drive the PC's installed Chrome and `node-html-parser`. The parsers take a page's HTML and know
+  nothing of the browser, so they are tested against saved pages (`pc-reader/test/fixtures`, recorded or marked
+  hand-written). It posts through the same `POST /api/ingest/prices` as any client; nothing server-side changed.
+- **The work list is a local file the owner keeps.** The endpoint tells a token holder nothing about what is tracked, so
+  the reader reads `{store, url}` entries from `pc-reader/urls.local.json` (ignored by git), checked against the same
+  product-page shape the server accepts. A page not linked in basket comes back `unknown_listing`. A server-provided work
+  list (a token-scoped read endpoint) would widen what the token can learn and is the owner's separate decision.
+- **Ordinary browser, nothing hidden.** Installed Chrome with a clean profile of its own (never the owner's), visible by
+  default, no stealth plugin, fingerprint or user-agent change, proxy or CAPTCHA solving. Playwright's automation is not
+  concealed; a shop may refuse it.
+- **One request at a time per shop, at least 5 seconds apart, no retries**, shops one after the other: the same politeness
+  as the nightly Lidl job. A shop's readings are posted when its pages are done; a batch is cut at 200 readings; a refused
+  batch (bad token, 429) ends that shop's posting and is not retried, since the next run is the retry.
+- **A refusal stops that shop for the run.** A 403/429, Akamai's "Access Denied", a CAPTCHA or an interstitial ends the
+  shop's part (the rest of its pages are not asked, the refused one is not retried), what was read before it is still
+  posted, the other shop carries on, and the summary names the blocked page and how many were not asked (exit code 2).
+  This is reported, never worked round.
+- **Checked live on 2026-11-07.** aldi.ie served a clean Chrome profile on this PC (and the reader itself, run headless); its product pages carry the price,
+  stock and name as schema.org JSON-LD and the was price and discount badge in the `base-price` block (parsers built on
+  two recorded pages, one on offer). tesco.ie answered the same clean Chrome with Akamai's "Access Denied", so the Tesco
+  parser (JSON-LD plus the "Clubcard Price", "Was" and "from ... until ..." wording) is unverified against a live page
+  and was not retried. Whether Tesco serves the owner's own PC with an ordinary visible window is not known until he runs it.
+- **Not scheduled.** Nothing is installed to run the reader; the README notes what a systemd user timer would need.

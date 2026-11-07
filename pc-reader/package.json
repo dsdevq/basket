@@ -1,0 +1,21 @@
+{
+  "name": "basket-pc-reader",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Reads Tesco and Aldi product pages in an ordinary browser on the owner's PC and posts the prices to basket's ingest endpoint.",
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "start": "node src/main.ts",
+    "test": "node --test \"test/*.test.ts\"",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "node-html-parser": "^9.0.7",
+    "playwright-core": "^1.65.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "typescript": "^7.0.2"
+  }
+}
