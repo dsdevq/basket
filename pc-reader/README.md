@@ -28,7 +28,7 @@ ignored by git.
 | `BASKET_API_ORIGIN` | env or `.env.local` | Where basket runs, e.g. `https://basket.example.com`. `http` only for `localhost`. |
 | `BASKET_INGEST_TOKEN` | env or `.env.local` | The `bsk_...` token. Never logged. The environment wins over the file. |
 | `BASKET_READER_URLS` | env or `.env.local` | The URL file. Default `pc-reader/urls.local.json`. |
-| `BASKET_READER_PROFILE` | env or `.env.local` | Chrome profile directory. Default `~/.local/state/basket-pc-reader/profile`: a clean profile made for the reader, never your own. |
+| `BASKET_READER_PROFILE` | env or `.env.local` | Chrome profile directory. Default `~/.local/state/basket-pc-reader/profile`: a profile of the reader's own, never your everyday one. `npm run profile` opens the same directory by hand (below). |
 | `BASKET_READER_CHANNEL` | env or `.env.local` | Installed browser to drive. Default `chrome`. |
 | `BASKET_READER_HEADLESS` | env or `.env.local` | `1` for a window-less run (no display). Default is a normal visible window. |
 | `BASKET_READER_ENV_FILE` | env | Read settings from this file instead of `.env.local`. |
@@ -78,11 +78,35 @@ was blocked or a page was unreadable or refused (`unknown_listing` etc.), `1` co
 
 ## Tesco: not yet checked against a live page
 
-On 2026-11-07 tesco.ie answered this PC (a clean Chrome profile, home connection) with the same Akamai "Access Denied" as
-the VPS, so the Tesco parser follows the page's schema.org markup and is tested on hand-written fixtures only. It reads
-the price, name and stock from the JSON-LD offer and nothing from the visible text, so Tesco's was price, Clubcard price
-and offer dates are not posted until a live page shows where they can be read safely. The Aldi parser is tested on trimmed copies of live pages. If
-Tesco also refuses your PC the reader stops that shop, as above; it does not try again or work round it.
+On 2026-11-07 tesco.ie answered every fresh, reader-made Chrome profile with Akamai's "Access Denied" (as it does the VPS),
+while a long-used Chrome profile was served a real page. So the Tesco parser follows the page's schema.org markup and is
+tested on hand-written fixtures only. It reads the price, name and stock from the JSON-LD offer and nothing from the visible
+text, so Tesco's was price, Clubcard price and offer dates are not posted until a live page shows where they can be read
+safely. The Aldi parser is tested on trimmed copies of live pages.
+
+### The one manual step: open the reader's profile by hand once
+
+Like the Lidl Plus login, this is a one-off step you do yourself, accepted in [docs/decisions.md](../docs/decisions.md)
+("Tesco profile decision"). From your own WSL terminal (it needs a display; WSLg gives it one):
+
+```sh
+cd pc-reader && npm run profile
+```
+
+It opens your installed Chrome as a plain browser (no Playwright, no automation flags) on the reader's own profile
+directory, the same `BASKET_READER_PROFILE` the reader uses, at https://www.tesco.ie. Browse tesco.ie as you normally
+would, accept the cookie banner, sign in to Clubcard only if you want Clubcard prices, then **close Chrome** (the reader
+cannot open the profile while Chrome has it open). Then retry Tesco once:
+
+```sh
+npm start -- --store tesco
+```
+
+`--store tesco` (or `aldi`) runs only that shop's entries; everything else is unchanged. If Tesco still refuses, the reader
+stops that shop and records it as in "A blocked run"; it does not try again. Nothing here warms up, imitates or hides the
+automation, and the reader never handles your credentials: you type them into Chrome yourself. If Akamai still refuses,
+using your personal Chrome with an Allow click is your call, not something the reader does. If a Chrome crash leaves the
+profile locked, run `npm run profile` again and close Chrome normally.
 
 ## Develop
 

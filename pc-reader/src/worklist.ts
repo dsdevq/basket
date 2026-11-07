@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import type { StoreId, WorkItem } from './types.ts';
+import { STORES, type StoreId, type WorkItem } from './types.ts';
 
 const SHAPES: Record<StoreId, { host: string; path: RegExp }> = {
   aldi: { host: 'www.aldi.ie', path: /^\/product\/[a-z0-9-]+-\d{6,}$/i },
@@ -63,4 +63,18 @@ function normalise(entry: unknown): WorkItem | string {
     return `"${url}" is not a ${store} product page (expected https://${shape.host}${store === 'aldi' ? '/product/<name>-<number>' : '/groceries/en-IE/products/<number>'}).`;
   }
   return { store, url: `https://${shape.host}${path}` };
+}
+
+/** The `--store <name>` argument of `npm start -- --store tesco`: undefined when absent, an error for anything else. */
+export function parseStoreArg(argv: readonly string[]): StoreId | undefined {
+  const args = argv.filter((arg) => arg !== '--');
+  if (args.length === 0) {
+    return undefined;
+  }
+  const value = args[0] === '--store' ? args[1] : args[0]?.startsWith('--store=') ? args[0].slice('--store='.length) : undefined;
+  const store = STORES.find((s) => s === value);
+  if (args.length !== (args[0] === '--store' ? 2 : 1) || !store) {
+    throw new Error(`Usage: npm start [-- --store ${STORES.join('|')}]`);
+  }
+  return store;
 }
