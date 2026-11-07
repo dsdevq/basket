@@ -172,3 +172,24 @@ planning record so this repo carries its own reasons; the M1 section holds the c
   parser (JSON-LD price, name and stock only; no was price, Clubcard price or offer dates, since text on a page that
   cannot be checked may belong to a carousel or footer) is unverified against a live page and was not retried. Whether Tesco serves the owner's own PC with an ordinary visible window is not known until he runs it.
 - **Not scheduled.** Nothing is installed to run the reader; the README notes what a systemd user timer would need.
+
+## Tesco unreadable from the shop profile too (2026-11-07)
+
+- **What was tried, read-only and politely (5 s or more between loads, no sign-in):** a real Windows Chrome 156 on the
+  owner's home connection, started by hand from WSL on a profile made for the reader (a new `--user-data-dir`, nothing of
+  the owner's in it, remote debugging on that profile only, no Allow dialog) and driven over DevTools. tesco.ie
+  answered the product page `https://www.tesco.ie/shop/en-IE/products/323785291` and then its home page with Akamai's
+  "Access Denied" (HTTP 403); a real Linux Chrome on its own profile (headless, there is no display in the agent shell)
+  got the same. The same PC's Aldi pages load fine. Earlier the same day the owner's own, long-used Chrome profile was
+  served a real Tesco product page (title, JSON-LD and a Clubcard string present), so the home connection is not what is
+  refused: a fresh automation-driven profile is.
+- **Decision: nothing more is built to get Tesco.** The reader does not warm profiles up, imitate a person, hide that it
+  is driven, reuse the owner's browser or try other machines; the only road left would be one of those. The shop-profile
+  driver was not written. Tesco stays "Waiting for the next PC read" and the reader stops Tesco on its first refusal, as
+  built. Whether the owner wants to run the reader against a profile he has used himself (his call, and a new decision) or
+  to leave Tesco unread is open.
+- **Found on the way:** Tesco's canonical product path is now `/shop/en-IE/products/<id>`; the `/groceries/en-IE/` form
+  redirects to it. basket accepts only the `/groceries/en-IE/products/<id>` shape when a product is linked
+  (`Stores.TryNormalizeProductUrl`), so a `/shop/` address is refused as `url_invalid` by both the reader and the server.
+  Widening the server's shape is a backend change outside the reader's scope and is left for the owner.
+
