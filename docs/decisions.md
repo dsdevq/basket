@@ -189,9 +189,8 @@ planning record so this repo carries its own reasons; the M1 section holds the c
   built. Whether the owner wants to run the reader against a profile he has used himself (his call, and a new decision) or
   to leave Tesco unread is open.
 - **Found on the way:** Tesco's canonical product path is now `/shop/en-IE/products/<id>`; the `/groceries/en-IE/` form
-  redirects to it. basket accepts only the `/groceries/en-IE/products/<id>` shape when a product is linked
-  (`Stores.TryNormalizeProductUrl`), so a `/shop/` address is refused as `url_invalid` by both the reader and the server.
-  Widening the server's shape is a backend change outside the reader's scope and is left for the owner.
+  redirects to it. At the time basket accepted only the `/groceries/en-IE/products/<id>` shape, so a `/shop/` address
+  was refused as `url_invalid`; resolved in "Tesco product addresses: /shop and /groceries are one key" below.
 
 ## Tesco product addresses: /shop and /groceries are one key (2026-11-07)
 
