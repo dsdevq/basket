@@ -55,8 +55,9 @@ browser opens, naming the entry. Query strings and fragments are dropped.
 - It is an ordinary browser on your connection and does nothing to look like anything else: no stealth plugin, no
   fingerprint or user-agent changes, no proxy, no CAPTCHA solving. It is driven by Playwright, and a shop may notice and
   refuse; that is accepted (below).
-- Each page's price and stock are posted as read, with the was price, promo text and offer dates where the shop's markup
-  gives them (Aldi); basket dates the reading itself. A page it cannot read (shop changed its markup, 404) is reported and nothing is posted for it.
+- Each page's price, name and stock are posted as read, with the was price and promo text where the shop's markup gives
+  them (Aldi only; see the Tesco section below); basket dates the reading itself. A page it cannot read (shop changed its
+  markup, 404) is reported and nothing is posted for it.
 - Dunnes is not read yet.
 
 ## A blocked run
