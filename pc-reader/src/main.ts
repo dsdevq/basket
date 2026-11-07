@@ -2,7 +2,7 @@ import { openBrowser } from './browser.ts';
 import { loadConfig } from './config.ts';
 import { postBatch } from './ingest.ts';
 import { run } from './run.ts';
-import { loadWorkList } from './worklist.ts';
+import { loadWorkList, parseStoreArg } from './worklist.ts';
 
 /**
  * Exit code: 0 every page read and accepted, 1 the run could not start or a post failed outright, 2 the run finished
@@ -10,10 +10,12 @@ import { loadWorkList } from './worklist.ts';
  */
 async function main(): Promise<number> {
   const config = loadConfig();
-  const items = await loadWorkList(config.urlsFile);
+  const only = parseStoreArg(process.argv.slice(2));
+  const listed = await loadWorkList(config.urlsFile);
+  const items = only ? listed.filter((item) => item.store === only) : listed;
   if (items.length === 0) {
-    console.error(`${config.urlsFile} lists no pages; nothing to read.`);
-    return 0;
+    console.error(`${config.urlsFile} lists no ${only ? `${only} ` : ''}pages; nothing to read.`);
+    return only ? 1 : 0;
   }
 
   const browser = await openBrowser({ profileDir: config.profileDir, channel: config.channel, headless: config.headless });

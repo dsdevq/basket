@@ -27,11 +27,10 @@ export function parseEnvFile(text: string): Record<string, string> {
   return values;
 }
 
-/**
- * BASKET_API_ORIGIN and BASKET_INGEST_TOKEN come from the environment, or from the gitignored `pc-reader/.env.local`
- * (or the file named by BASKET_READER_ENV_FILE). The environment wins. The token is never logged.
- */
-export function loadConfig(env: NodeJS.ProcessEnv = process.env, readFile: (path: string) => string = (p) => readFileSync(p, 'utf8')): Config {
+type Settings = (key: string) => string | undefined;
+
+/** One setting: the environment first, then the gitignored env file (`BASKET_READER_ENV_FILE`, default `.env.local`). */
+function settings(env: NodeJS.ProcessEnv, readFile: (path: string) => string): { get: Settings; envFile: string } {
   const envFile = env['BASKET_READER_ENV_FILE'] ?? join(READER_DIR, '.env.local');
   let fromFile: Record<string, string> = {};
   try {
@@ -39,7 +38,29 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, readFile: (path
   } catch {
     // No local file: the environment alone has to carry it.
   }
-  const get = (key: string): string | undefined => env[key] || fromFile[key] || undefined;
+  return { get: (key) => env[key] || fromFile[key] || undefined, envFile };
+}
+
+function profileDirFrom(get: Settings, env: NodeJS.ProcessEnv): string {
+  const state = env['XDG_STATE_HOME'] ?? join(homedir(), '.local', 'state');
+  return resolve(get('BASKET_READER_PROFILE') ?? join(state, 'basket-pc-reader', 'profile'));
+}
+
+/** The reader's Chrome profile directory and browser, resolved exactly as the reader resolves them. Needs no token. */
+export function loadProfileSettings(
+  env: NodeJS.ProcessEnv = process.env,
+  readFile: (path: string) => string = (p) => readFileSync(p, 'utf8'),
+): { profileDir: string; channel: string } {
+  const { get } = settings(env, readFile);
+  return { profileDir: profileDirFrom(get, env), channel: get('BASKET_READER_CHANNEL') ?? 'chrome' };
+}
+
+/**
+ * BASKET_API_ORIGIN and BASKET_INGEST_TOKEN come from the environment, or from the gitignored `pc-reader/.env.local`
+ * (or the file named by BASKET_READER_ENV_FILE). The environment wins. The token is never logged.
+ */
+export function loadConfig(env: NodeJS.ProcessEnv = process.env, readFile: (path: string) => string = (p) => readFileSync(p, 'utf8')): Config {
+  const { get, envFile } = settings(env, readFile);
 
   const origin = get('BASKET_API_ORIGIN');
   const token = get('BASKET_INGEST_TOKEN');
@@ -60,12 +81,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, readFile: (path
     throw new Error('BASKET_INGEST_TOKEN does not look like a basket price token (it starts with bsk_).');
   }
 
-  const state = env['XDG_STATE_HOME'] ?? join(homedir(), '.local', 'state');
   return {
     origin: parsedOrigin.origin,
     token,
     urlsFile: resolve(get('BASKET_READER_URLS') ?? join(READER_DIR, 'urls.local.json')),
-    profileDir: resolve(get('BASKET_READER_PROFILE') ?? join(state, 'basket-pc-reader', 'profile')),
+    profileDir: profileDirFrom(get, env),
     channel: get('BASKET_READER_CHANNEL') ?? 'chrome',
     headless: get('BASKET_READER_HEADLESS') === '1',
   };

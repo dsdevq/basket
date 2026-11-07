@@ -146,6 +146,16 @@ planning record so this repo carries its own reasons; the M1 section holds the c
 - **Test data.** Tesco and Aldi block the VPS, so the ingest fixture (`Fixtures/ingest-batch.json`) is a batch written to
   the contract with realistic prices, not a page recorded from a shop.
 
+## Tesco profile decision
+
+- **2026-11-07: one accepted manual step, like the Lidl Plus login.** tesco.ie refuses every fresh automation-driven Chrome
+  profile with Akamai "Access Denied", while a long-used profile was served a real page. The reader keeps its own profile;
+  the owner opens it by hand once with `npm run profile` (plain Chrome on that directory, no Playwright or automation
+  flags), browses tesco.ie, accepts the cookie banner and signs in to Clubcard only if they want Clubcard prices, then
+  closes Chrome. `npm start -- --store tesco` then retries Tesco once from that profile. If Akamai still refuses, the
+  reader stops and records it as before; using the owner's personal Chrome with an Allow click is the owner's call, not
+  the reader's. Nothing warms, imitates or hides the automation, and the reader never handles credentials.
+
 ## PC reader decisions (2026-11-07)
 
 - **A separate small program, `pc-reader/`.** Node/TypeScript run by Node 24 directly (no build step), two dependencies:
