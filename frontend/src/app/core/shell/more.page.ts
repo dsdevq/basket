@@ -7,25 +7,22 @@ import {
   type MenuItem,
   MorePageComponent as MoreKit,
   type NavItem,
-  PageComponent,
 } from '@lifekit-hq/ui';
 
 import {SessionStore} from '../auth/session.store';
 
-/** Phone "More" tab: the pages past the tab bar, then the account. */
+/** Phone "More" tab: the pages past the tab bar, then the account. The kit is its own `cmn-page`. */
 @Component({
   selector: 'bk-more-page',
-  imports: [MoreKit, PageComponent],
+  imports: [MoreKit],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <cmn-page kind="list">
-      <cmn-more-page
-        [items]="items()"
-        [tabRoutes]="tabRoutes"
-        [account]="account()"
-        (itemSelect)="select($event)"
-      />
-    </cmn-page>
+    <cmn-more-page
+      [items]="items()"
+      [tabRoutes]="tabRoutes"
+      [account]="account()"
+      (itemSelect)="select($event)"
+    />
   `,
 })
 export class MorePage {
