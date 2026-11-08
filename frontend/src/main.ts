@@ -1,3 +1,6 @@
+// Registers the shared lk-* PWA elements (the update prompt and offline banner in the app shell) before bootstrap.
+import '@lifekit-hq/elements';
+
 import {bootstrapApplication} from '@angular/platform-browser';
 
 import {AppComponent} from './app/app.component';

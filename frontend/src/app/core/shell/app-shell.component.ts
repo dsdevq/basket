@@ -1,5 +1,12 @@
-import {ChangeDetectionStrategy, Component, computed, inject} from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  CUSTOM_ELEMENTS_SCHEMA,
+  inject,
+} from '@angular/core';
 import {Router, RouterOutlet} from '@angular/router';
+import {AppUpdateService} from '@lifekit-hq/core/pwa';
 import {
   ACCOUNT_SIGN_OUT_ID,
   accountMenu,
@@ -20,6 +27,7 @@ const PEOPLE: NavItem = {label: 'People', icon: 'Users', route: '/people'};
   selector: 'bk-app-shell',
   imports: [AppLayoutComponent, RouterOutlet],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  schemas: [CUSTOM_ELEMENTS_SCHEMA],
   template: `
     <cmn-app-layout
       [navItems]="navItems()"
@@ -30,6 +38,13 @@ const PEOPLE: NavItem = {label: 'People', icon: 'Users', route: '/people'};
       brand="basket"
       moreRoute="/more"
     >
+      <div cmnAppLayoutNotice>
+        <lk-offline-banner />
+        <lk-update-prompt
+          [ready]="update.updateReady()"
+          (lk-update-prompt-reload)="update.reload()"
+        />
+      </div>
       <router-outlet />
     </cmn-app-layout>
   `,
@@ -37,6 +52,8 @@ const PEOPLE: NavItem = {label: 'People', icon: 'Users', route: '/people'};
 export class AppShellComponent {
   private readonly session = inject(SessionStore);
   private readonly router = inject(Router);
+
+  protected readonly update = inject(AppUpdateService);
 
   protected readonly tabRoutes = [LIST.route, PRICES.route];
   protected readonly navItems = computed<NavItem[]>(() =>
