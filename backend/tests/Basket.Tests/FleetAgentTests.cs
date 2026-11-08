@@ -355,6 +355,23 @@ public sealed class FleetAgentTests : IClassFixture<BasketFactory>
     }
 
     [Fact]
+    public async Task An_issuer_reported_by_the_fetched_metadata_is_not_trusted_only_the_configured_one_is()
+    {
+        const string metadataIssuer = "http://logto:3001/oidc";
+        await using var factory = new BasketFactory { MetadataIssuer = metadataIssuer };
+        await factory.OwnerAsync();
+        var scopes = FleetScopes.PriceIngest + " " + FleetScopes.CatalogRead + " " + FleetScopes.CatalogAdd;
+
+        var fromMetadata = Fleet(factory, factory.Fleet.Mint(scopes, issuer: metadataIssuer));
+        (await PostPricesAsync(fromMetadata)).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        (await fromMetadata.GetAsync("/api/products")).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        (await fromMetadata.PostAsJsonAsync("/api/products", new { name = "Bread" })).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        var configured = Fleet(factory, factory.Fleet.Mint(scopes));
+        (await configured.GetAsync("/api/products")).StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
     public void The_scopes_are_the_ones_the_identity_service_grants()
     {
         FleetScopes.PriceIngest.Should().Be("basket:price-ingest");

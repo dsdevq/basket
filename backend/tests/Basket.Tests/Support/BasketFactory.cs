@@ -38,6 +38,9 @@ public sealed class BasketFactory : WebApplicationFactory<Program>
     /// <summary>The fleet identity's issuer and signing key, as the app is configured to trust them. Off when false.</summary>
     public bool FleetAgentEnabled { get; init; } = true;
 
+    /// <summary>The issuer the (test-injected) discovery document reports; defaults to the configured one.</summary>
+    public string MetadataIssuer { get; init; } = FleetTokens.Issuer;
+
     public FleetTokens Fleet { get; } = new();
 
     public BasketFactory()
@@ -86,7 +89,7 @@ public sealed class BasketFactory : WebApplicationFactory<Program>
             if (FleetAgentEnabled)
             {
                 // The identity service's discovery document, replaced by a fixed one holding the test key.
-                var configuration = new OpenIdConnectConfiguration { Issuer = FleetTokens.Issuer };
+                var configuration = new OpenIdConnectConfiguration { Issuer = MetadataIssuer };
                 configuration.SigningKeys.Add(Fleet.PublicKey);
                 services.Configure<JwtBearerOptions>(FleetAgent.Scheme, options => options.Configuration = configuration);
             }

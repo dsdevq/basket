@@ -126,10 +126,14 @@ public static class FleetAgent
             jwt.Configuration = new OpenIdConnectConfiguration();
         }
 
+        var pinnedIssuer = fleet.IsConfigured ? fleet.Issuer : "fleet-agent-not-configured";
         jwt.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
-            ValidIssuer = fleet.IsConfigured ? fleet.Issuer : "fleet-agent-not-configured",
+            ValidIssuer = pinnedIssuer,
+            IssuerValidator = (issuer, _, _) => string.Equals(issuer, pinnedIssuer, StringComparison.Ordinal)
+                ? issuer
+                : throw new SecurityTokenInvalidIssuerException("Issuer is not the configured fleet issuer.") { InvalidIssuer = issuer },
             ValidateAudience = true,
             ValidAudience = fleet.Audience,
             ValidateLifetime = true,

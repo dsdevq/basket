@@ -352,6 +352,14 @@ action class. People stay passkey-only on basket; this only adds a machine path.
   the issuer's own address; the issuer checked stays `Authority`), the issuer, the audience (`FleetAgent:Audience`, default the
   resource above), expiry (30 s skew) and an asymmetric algorithm; `alg: none` and shared-secret tokens never pass. Then the
   `scope` claim must hold the endpoint's scope. No secret is held by basket: it verifies, the fleet signs in at Logto.
+- **Why a backchannel address exists.** The identity service's issuer is the tailnet address (`https://<name>:3001/oidc`), and per
+  lifekit-stack `docs/runbook.md` ("How the pieces connect", Grafana OIDC) the host firewall does not reliably let a container
+  reach the host's own tailnet address; on-box OIDC clients reach Logto at `http://logto:3001/oidc` over the external Docker
+  network `identity-oidc`. The basket container is therefore expected not to reach the issuer's public address, and
+  `FleetAgent:BackchannelAuthority` is how it fetches discovery and signing keys. It is optional and empty by default; use only
+  `Authority` when the container can reach it. The accepted issuer is pinned to the trimmed `Authority` by an issuer validator, so
+  whatever issuer the fetched metadata reports can never change which issuer is trusted. Whether the basket container can reach
+  the backchannel address (and joining it to `identity-oidc`) is a deploy step not verified here.
 - **Off until configured.** With `FleetAgent:Authority` empty (the default, and the production compose passes it empty unless
   `FLEET_AGENT_AUTHORITY` is set in the env file) no fleet token validates anywhere. Turning it on is an env-file change and
   a redeploy, not a code change.
