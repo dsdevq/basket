@@ -141,7 +141,7 @@ planning record so this repo carries its own reasons; the M1 section holds the c
   effect on the next request. Requests are rate limited per client
   address (30 a minute) before the token is even checked.
 - **No cookie, no Origin.** The reader is a program: it sends no `Origin`, so the origin check skips `/api/ingest/...`
-  (and only that). The endpoint never reads the session cookie and answers 401 without a valid token, so a forged
+  (and, for a request carrying a bearer header, `/api/products`; see "Fleet identity on the machine endpoints"). The endpoint never reads the session cookie and answers 401 without a valid token, so a forged
   cross-site request has nothing to ride on, and a signed-in browser session alone is refused. A token sent to any other
   endpoint is refused too: nothing else looks at it.
 - **Test data.** Tesco and Aldi block the VPS, so the ingest fixture (`Fixtures/ingest-batch.json`) is a batch written to
