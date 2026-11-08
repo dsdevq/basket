@@ -61,8 +61,9 @@ planning record so this repo carries its own reasons; the M1 section holds the c
   needs to be shared or recovered from git. Move to SOPS if the set grows or a second operator appears.
 - **Memory budget:** app container 256 MB, Postgres 192 MB (`shared_buffers=48MB`, 30 connections). Hangfire runs 2
   workers; its only M1 job purges dead invites nightly at 04:30 Europe/Dublin.
-- **No service worker in M1.** The list must show the other person's changes, so it polls every 15 seconds while the
-  page is visible (two people do not need SignalR); offline support and push belong with a later milestone.
+- **Polling, not SignalR or push.** The list must show the other person's changes, so it polls every 15 seconds while the
+  page is visible (two people do not need SignalR); push belongs with a later milestone. M1 had no service worker; the
+  shell-only one is "Offline shell and update prompt" below.
 - **Generic lifekit icons.** The app uses the library's `lk` brand set until basket gets a mark of its own.
 
 ## Several passkeys per person
@@ -275,3 +276,35 @@ planning record so this repo carries its own reasons; the M1 section holds the c
 - **Follow-up, deliberately not here:** the Settings copy ("Lets your PC send Tesco and Aldi prices", and the same in the
   token sheet and relay section) still names two shops. Changing it moves the settings screen baselines, which this change
   keeps still; the app's own copy should name Dunnes when those baselines are next regenerated.
+
+## Offline shell and update prompt (2026-11-08)
+
+Item 5 of #51 (the phone UX audit's fix 13, basket half): the installed app opens without a network and offers a new release
+instead of running an old one for days. It is the pattern finance-sentry, lifekit-dashboard and the DevClaw console already use,
+not a new one.
+
+- **Angular's service worker, registered as in the other apps.** `ngsw-config.json` plus `serviceWorker` on the production
+  build (`ng serve` has no worker); `provideAppServiceWorker()` registers it once the app is stable (30 s at most), so first
+  paint never waits for it, with `updateViaCache: 'none'` so the browser re-fetches the worker script itself. The first visit
+  installs it; the shell is cached from the second request on, so "works offline" starts on the second visit.
+- **The shell and nothing else.** The `app` group (index, manifest, favicon, the JS and CSS bundles including lazy page chunks) is
+  prefetched; the `assets` group (icons, fonts) is cached when first used. There are **no `dataGroups`**, and `/api` is
+  excluded from both asset caching and the `index.html` navigation fallback. A request the config does not name is not
+  touched by the worker: it goes straight to the network.
+- **Why a stale shell cannot show someone else's data.** The cached files are the build output, identical for every visitor and
+  holding no list, price, name or session. Everything personal arrives through `/api` with the `__Host-basket` cookie, is never
+  stored by the worker, and is asked for again on every load. Offline, the shell opens and the session call fails, so the app
+  shows "Cannot reach basket" rather than a remembered session or list. Signing out or in as someone else needs no cache
+  clearing for the same reason. `ngsw-config.spec.ts` runs Angular's real config generator over the file and pins "no data
+  groups, nothing under `/api` cached, `/api` is not a navigation fallback"; `offline-shell.spec.ts` runs the built app with the
+  worker, goes offline, reloads, and lists Cache Storage for any `/api` entry.
+- **The update prompt is the shared one.** `AppUpdateService` (`@lifekit-hq/core/pwa`, the only owner of `SwUpdate`) and the
+  `lk-update-prompt` and `lk-offline-banner` elements (`@lifekit-hq/elements`, registered in `main.ts`) sit in the app
+  layout's notice slot, in flow under the top bar, so there is no design-system change. The prompt appears once a new version is
+  downloaded and Reload activates it; the service re-checks when the app returns to the foreground, and is created at start-up
+  so an update found on the sign-in page is not lost. The prompt does not interrupt: nothing reloads by itself, so a half-typed
+  item is never lost.
+- **Not done here.** The install hint (`lk-install-hint`), push, background sync and the iOS launch screen are separate; the
+  hint was left out because it would add a banner to every browser visit and is not part of "offline shell and update prompt".
+  The e2e config keeps `serviceWorkers: 'block'` for every other spec (the worker fetches around `page.route`); only
+  `offline-shell.spec.ts` allows it, against its own server that answers `/api`.
