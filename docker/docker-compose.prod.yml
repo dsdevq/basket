@@ -33,6 +33,9 @@ services:
       TZ: Europe/Dublin
     volumes:
       - keys:/keys
+    # `default` reaches db; `identity-oidc` is the external network the identity service (Logto) shares with its on-box
+    # clients, so FleetAgent__BackchannelAuthority=http://logto:3001/oidc resolves (docs/decisions.md "Fleet identity").
+    networks: [default, identity-oidc]
     tmpfs:
       - /tmp:size=16m
     read_only: true
@@ -84,6 +87,11 @@ services:
     logging:
       driver: json-file
       options: {max-size: 5m, max-file: "3"}
+
+networks:
+  # Created by lifekit-stack's deploy.sh, not by this stack; joined only by the app, never the database.
+  identity-oidc:
+    external: true
 
 secrets:
   # The npm registry token for the image build only (@lifekit-hq/* on GitHub Packages): export NODE_AUTH_TOKEN.

@@ -359,10 +359,19 @@ action class. People stay passkey-only on basket; this only adds a machine path.
   `FleetAgent:BackchannelAuthority` is how it fetches discovery and signing keys. It is optional and empty by default; use only
   `Authority` when the container can reach it. The accepted issuer is pinned to the trimmed `Authority` by an issuer validator, so
   whatever issuer the fetched metadata reports can never change which issuer is trusted. Whether the basket container can reach
-  the backchannel address (and joining it to `identity-oidc`) is a deploy step not verified here.
+  the backchannel address is a deploy check (see "Switching it on" below).
 - **Off until configured.** With `FleetAgent:Authority` empty (the default, and the production compose passes it empty unless
   `FLEET_AGENT_AUTHORITY` is set in the env file) no fleet token validates anywhere. Turning it on is an env-file change and
   a redeploy, not a code change.
+- **Switching it on (2026-11-08, lifekit-stack#491 item 3).** The production compose joins `basket-app` (not `basket-db`) to
+  the external network `identity-oidc`, alongside its own `default` network, so `http://logto:3001/oidc` resolves from the
+  container. The network is created by lifekit-stack's `deploy.sh`, not by this stack; `up` fails if it is missing. The two
+  values are host settings in `~/.config/basket/env`, not in git: `FLEET_AGENT_AUTHORITY=<IDENTITY_ENDPOINT>/oidc` (the issuer
+  the tokens carry, the same value the dashboard and the edge use) and `FLEET_AGENT_BACKCHANNEL_AUTHORITY=http://logto:3001/oidc`.
+  The deploy recreates `basket-app` only. Check after it: a `basket:catalog-read` token on `GET /api/products` at
+  `127.0.0.1:3310` answers 200, a token without that scope 403, no token 401 (lifekit-stack `docs/runbook.md`, "Fleet agent on
+  the dashboard and basket"). **Rollback:** empty both values in the env file and redeploy (every bearer is then refused, 401);
+  the `identity-oidc` membership can stay, it only lets the app read public keys.
 - **A disabled application.** Logto has no per-application switch: `fleet-agent.sh revoke` takes the role away, so the app still
   gets a token but with no scope, and every endpoint here refuses it (403). `revoke --delete` stops tokens being issued at all.
   A token already issued stays valid until it expires (an hour at most); basket does not call the identity service per request.

@@ -36,6 +36,11 @@ EOF
 characters). Keep it out of chat logs and tickets: whoever has it while no user exists can register as owner.
 Never put this file in git; do not use the captain's private age key for it.
 
+To accept the fleet's machine identity, also add `FLEET_AGENT_AUTHORITY` and `FLEET_AGENT_BACKCHANNEL_AUTHORITY` (not
+secrets; `docker/.env.example` and `docs/decisions.md` "Fleet identity" say what each is). The app joins the external
+Docker network `identity-oidc`, which lifekit-stack creates; check that `docker network inspect identity-oidc` works
+before the deploy. Both empty keeps the path off.
+
 ### 2. Start the stack
 
 ```sh
