@@ -51,3 +51,20 @@ test:
     Scale evidence to what the change touches; the pre-check command already builds and runs the unit and integration tests.
     Run scenarios only against a locally started stack with a throwaway database (docker/docker-compose.dev.yml publishes Postgres on 127.0.0.1:55432); never against production or the deployed app, and never touch other containers on the box.
     Changes that touch neither backend/ nor frontend/ (docs, workflows, tooling) need no scenario run.
+
+# Read from the default branch only. Entries come from the finding classes the review step raised on this repo
+# (issue #66); each is one or two sentences, so keep the set small and add a class only when it recurs.
+review:
+  path_instructions:
+    - path: "**"
+      instructions: |
+        Block on wrong behavior, a broken contract, or a change the intent did not ask for (a dependency, limit, tracked field, config knob, visible UI change, or code nothing calls), naming the intent clause it goes beyond. Do not raise wording, lockfile-duplicate or cleanup remarks.
+    - path: "backend/src/Basket.Api/Prices/**"
+      instructions: |
+        Check price parsing beyond the recorded fixtures: comma decimals under InvariantCulture, UTC day-ends against Europe/Dublin in summer, and each price paired with its own validity window. A failed read (non-OK page, or 200 with zero parsed items) must surface as a failure, never as "no price".
+    - path: "backend/**"
+      instructions: |
+        A requirement the intent states (a disabled or revoked caller refused) must be enforced by the code path, not only named in a test. A lookup keyed on a pair needs a unique index on that pair, and a test needs an oracle independent of the code under test.
+    - path: "frontend/**"
+      instructions: |
+        A refresh, poll or timer must not overwrite or remove state that a later user action or another element created (in-flight responses, shared element ids). Check a change to a shared client (passkey, auth, error handler) against every caller, and after an edit confirm each spec still imports every identifier it uses.
