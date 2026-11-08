@@ -81,29 +81,31 @@ export function lastPaidLine(paid: Paid | null): string {
  */
 export function detailLines(entry: ProductStore): string[] {
   const price = entry.price;
-  if (!price && entry.readBy === 'pc') {
-    // Tesco, Aldi and Dunnes block the server; their prices arrive when the PC next reads them.
-    return ['Waiting for the next PC read'];
-  }
-  if (!entry.listing) {
-    return ['No page linked yet'];
-  }
+  const paid = lastPaidLine(entry.lastPaid);
   if (!price) {
-    return [
-      entry.listing.error
-        ? `Not read yet · ${entry.listing.error}`
-        : 'Not read yet - the nightly pull will fetch it',
-    ];
+    return [unreadLine(entry), paid].filter(Boolean);
   }
   const read = [`Seen ${shortDate(price.observedOn)}`];
-  const paid = lastPaidLine(entry.lastPaid);
   if (paid) {
     read.push(paid);
   }
-  if (entry.listing.error) {
+  if (entry.listing?.error) {
     read.push(`Last read failed: ${entry.listing.error}`);
   }
   return [priceParts(price).join(' · '), read.join(' · ')].filter(Boolean);
+}
+
+function unreadLine(entry: ProductStore): string {
+  if (entry.readBy === 'pc') {
+    // Tesco, Aldi and Dunnes block the server; their prices arrive when the PC next reads them.
+    return 'Waiting for the next PC read';
+  }
+  if (!entry.listing) {
+    return 'No page linked yet';
+  }
+  return entry.listing.error
+    ? `Not read yet · ${entry.listing.error}`
+    : 'Not read yet - the nightly pull will fetch it';
 }
 
 const OUTCOME_TITLES: Record<RunOutcome, string> = {

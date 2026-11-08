@@ -109,6 +109,24 @@ describe('price formatting', () => {
     expect(detailLines({...linked, price: price()})).toEqual(['Seen 5 Nov']);
   });
 
+  it('keeps the last paid line on rows that have no reading yet', () => {
+    const known = {state: 'known', price: 1.99, paidOn: '2026-10-30'} as const;
+    const notConnected = {state: 'not_connected', price: null, paidOn: null} as const;
+
+    expect(detailLines(entry({readBy: 'pc', price: null, lastPaid: known}))).toEqual([
+      'Waiting for the next PC read',
+      'Last paid €1.99 on 30 Oct',
+    ]);
+    expect(detailLines(entry({listing: null, price: null, lastPaid: known}))).toEqual([
+      'No page linked yet',
+      'Last paid €1.99 on 30 Oct',
+    ]);
+    expect(detailLines(entry({price: null, lastPaid: notConnected}))).toEqual([
+      'Not read yet - the nightly pull will fetch it',
+      'Last paid: not yet connected',
+    ]);
+  });
+
   it('keeps the last known price visible when the latest read failed', () => {
     const failed = entry({
       listing: {url: 'u', title: null, checkedAt: null, error: 'page layout changed'},
