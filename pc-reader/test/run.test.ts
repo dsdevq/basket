@@ -6,6 +6,7 @@ import type { Page, Reading, WorkItem } from '../src/types.ts';
 import { fixture } from './support.ts';
 
 const aldi = (n: number): WorkItem => ({ store: 'aldi', url: `https://www.aldi.ie/product/item-${String(n).padStart(12, '0')}` });
+const dunnes = (n: number): WorkItem => ({ store: 'dunnes', url: `https://www.dunnesstoresgrocery.com/product/item-${n}00000` });
 const tesco = (n: number): WorkItem => ({ store: 'tesco', url: `https://www.tesco.ie/groceries/en-IE/products/${n}` });
 
 function harness(pages: (item: string) => Page | Error, postOutcome?: (readings: Reading[]) => PostOutcome) {
@@ -41,6 +42,8 @@ function harness(pages: (item: string) => Page | Error, postOutcome?: (readings:
 
 const aldiPage: Page = { status: 200, html: fixture('aldi-product-page.html') };
 const tescoPage: Page = { status: 200, html: fixture('tesco-product-page-plain.html') };
+const dunnesPage: Page = { status: 200, html: fixture('dunnes-product-page.html') };
+const challenged: Page = { status: 403, html: fixture('cloudflare-just-a-moment.html') };
 const denied: Page = { status: 200, html: fixture('akamai-access-denied.html') };
 
 test('pages on one site are loaded one at a time, at least 5 seconds apart', async () => {
@@ -117,4 +120,23 @@ test('per-reading refusals are reported against their URL', async () => {
   const { deps } = harness(() => aldiPage, (readings) => ({ status: 200, accepted: readings.length - 1, rejected: [{ index: 1, accepted: false, reason: 'unknown_listing' }] }));
   const [report] = await run([aldi(1), aldi(2)], deps);
   assert.deepEqual(report?.posted.rejected, [{ url: aldi(2).url, reason: 'unknown_listing' }]);
+});
+
+test('dunnes: pages are 5 seconds apart, the reading has the same shape as the others, and a challenge stops the store at once', async () => {
+  const ok = harness(() => dunnesPage);
+  const [report] = await run([dunnes(1), dunnes(2), dunnes(3)], ok.deps);
+  const gaps = ok.loads.slice(1).map((l, i) => l.at - (ok.loads[i]?.at ?? 0));
+  assert.ok(gaps.every((gap) => gap >= 5_000), `gaps ${gaps}`);
+  assert.equal(report?.store, 'dunnes');
+  assert.equal(report?.read, 3);
+  assert.deepEqual(ok.posts[0]?.[0], { store: 'dunnes', url: dunnes(1).url, title: 'Dunnes Stores Irish Whole Milk 2L', price: 2.2, inStock: true });
+
+  const refused = harness((url) => (url.includes('item-1') ? dunnesPage : challenged));
+  const reports = await run([dunnes(1), dunnes(2), dunnes(3), tesco(5555)], refused.deps);
+  const d = reports.find((r) => r.store === 'dunnes');
+  assert.equal(refused.loads.filter((l) => l.url.includes('dunnes')).length, 2, 'the challenged URL is asked once, the one after it not at all');
+  assert.equal(d?.blocked?.notAsked, 1);
+  assert.match(d?.blocked?.why ?? '', /HTTP 403/);
+  assert.equal(refused.posts[0]?.length, 1, 'the reading before the challenge is still posted');
+  assert.ok(reports.some((r) => r.store === 'tesco'), 'another store is still tried');
 });

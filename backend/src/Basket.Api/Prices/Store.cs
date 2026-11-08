@@ -2,17 +2,18 @@ using System.Text.RegularExpressions;
 
 namespace Basket.Api.Prices;
 
-/// <summary>The shops basket reads prices from. Dunnes and SuperValu are later milestones.</summary>
+/// <summary>The shops basket reads prices from. SuperValu is a later milestone.</summary>
 public enum Store
 {
     Lidl,
     Aldi,
     Tesco,
+    Dunnes,
 }
 
 public static partial class Stores
 {
-    public static IReadOnlyList<Store> All { get; } = [Store.Lidl, Store.Aldi, Store.Tesco];
+    public static IReadOnlyList<Store> All { get; } = [Store.Lidl, Store.Aldi, Store.Tesco, Store.Dunnes];
 
     /// <summary>The shop named by <paramref name="value"/> (any case), as it appears in an address or a posted batch.</summary>
     public static bool TryParse(string? value, out Store store)
@@ -35,6 +36,7 @@ public static partial class Stores
         Store.Lidl => "Lidl",
         Store.Aldi => "Aldi",
         Store.Tesco => "Tesco",
+        Store.Dunnes => "Dunnes",
         _ => throw new ArgumentOutOfRangeException(nameof(store)),
     };
 
@@ -43,13 +45,15 @@ public static partial class Stores
         Store.Lidl => "www.lidl.ie",
         Store.Aldi => "www.aldi.ie",
         Store.Tesco => "www.tesco.ie",
+        Store.Dunnes => "www.dunnesstoresgrocery.com",
         _ => throw new ArgumentOutOfRangeException(nameof(store)),
     };
 
     /// <summary>
     /// Who reads this shop's prices: <c>nightly</c> (the VPS job) or <c>pc</c> (an ordinary browser on the owner's home
     /// connection, writing through the token-signed ingest endpoint, <c>POST /api/ingest/prices</c>). tesco.ie and aldi.ie answer the VPS with
-    /// "Access Denied" (checked 2026-11-05) and basket does not try to get round that.
+    /// "Access Denied" (checked 2026-11-05) and dunnesstoresgrocery.com with Cloudflare's challenge (checked 2026-11-08);
+    /// basket does not try to get round either.
     /// </summary>
     public static string ReadBy(this Store store) => store == Store.Lidl ? "nightly" : "pc";
 
@@ -67,6 +71,7 @@ public static partial class Stores
         Store.Lidl => "https://www.lidl.ie/p/aubergine/p11214436",
         Store.Aldi => "https://www.aldi.ie/product/clonbawn-protein-milk-000000000000422541",
         Store.Tesco => "https://www.tesco.ie/groceries/en-IE/products/254317390",
+        Store.Dunnes => "https://www.dunnesstoresgrocery.com/product/dunnes-stores-swede-100317581",
         _ => throw new ArgumentOutOfRangeException(nameof(store)),
     };
 
@@ -95,6 +100,7 @@ public static partial class Stores
             Store.Lidl => LidlPath().IsMatch(path),
             Store.Aldi => AldiPath().IsMatch(path),
             Store.Tesco => TescoPath().IsMatch(path),
+            Store.Dunnes => DunnesPath().IsMatch(path),
             _ => false,
         };
         if (!matches)
@@ -125,6 +131,9 @@ public static partial class Stores
 
     [GeneratedRegex(@"^/product/[a-z0-9-]+-\d{6,}$", RegexOptions.IgnoreCase)]
     private static partial Regex AldiPath();
+
+    [GeneratedRegex(@"^/product/[a-z0-9-]+-\d{6,12}$", RegexOptions.IgnoreCase)]
+    private static partial Regex DunnesPath();
 
     [GeneratedRegex(@"^/(?:groceries|shop)/en-IE/products/(?<id>\d{4,12})$", RegexOptions.IgnoreCase)]
     private static partial Regex TescoPath();

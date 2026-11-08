@@ -37,21 +37,21 @@ public sealed class ProductTests : IClassFixture<BasketFactory>
         await _factory.WithDb(db => db.StoreListings.Where(l => l.ProductId == productId && l.Store == store).Select(l => l.Id).SingleAsync());
 
     [Fact]
-    public async Task A_new_product_starts_unlinked_in_all_three_shops_and_lidl_says_last_paid_is_not_connected()
+    public async Task A_new_product_starts_unlinked_in_all_four_shops_and_lidl_says_last_paid_is_not_connected()
     {
         var (owner, id) = await WithProductAsync("  Whole   milk 2L ");
 
         var product = await ProductAsync(owner, id);
 
         product.GetProperty("name").GetString().Should().Be("Whole milk 2L");
-        product.GetProperty("stores").EnumerateArray().Select(s => s.GetProperty("store").GetString()).Should().Equal("lidl", "aldi", "tesco");
+        product.GetProperty("stores").EnumerateArray().Select(s => s.GetProperty("store").GetString()).Should().Equal("lidl", "aldi", "tesco", "dunnes");
         foreach (var store in product.GetProperty("stores").EnumerateArray())
         {
             store.GetProperty("listing").ValueKind.Should().Be(JsonValueKind.Null);
             store.GetProperty("price").ValueKind.Should().Be(JsonValueKind.Null);
         }
 
-        product.GetProperty("stores").EnumerateArray().Select(s => s.GetProperty("readBy").GetString()).Should().Equal("nightly", "pc", "pc");
+        product.GetProperty("stores").EnumerateArray().Select(s => s.GetProperty("readBy").GetString()).Should().Equal("nightly", "pc", "pc", "pc");
         Entry(product, "lidl").GetProperty("lastPaid").GetProperty("state").GetString().Should().Be("not_connected");
         Entry(product, "aldi").GetProperty("lastPaid").ValueKind.Should().Be(JsonValueKind.Null);
     }
@@ -98,6 +98,9 @@ public sealed class ProductTests : IClassFixture<BasketFactory>
     [InlineData("aldi", "https://www.aldi.ie/results?q=milk")]
     [InlineData("tesco", "https://evil.example/groceries/en-IE/products/254317390")]
     [InlineData("tesco", "")]
+    [InlineData("dunnes", "https://www.dunnesstores.com/paul-costelloe-living-studio-brown-faux-fur-hat-3647114/p")]
+    [InlineData("dunnes", "https://www.dunnesstoresgrocery.com/categories/fresh-meat-poultry-id-47181")]
+    [InlineData("dunnes", "http://www.dunnesstoresgrocery.com/product/dunnes-stores-swede-100317581")]
     public async Task A_link_that_is_not_that_shops_product_page_is_refused_with_an_example(string store, string url)
     {
         var (owner, id) = await WithProductAsync("Anything");
@@ -110,12 +113,28 @@ public sealed class ProductTests : IClassFixture<BasketFactory>
         body.GetProperty("message").GetString().Should().Contain("like https://");
     }
 
+    [Theory]
+    [InlineData("https://www.dunnesstoresgrocery.com/product/dunnes-stores-swede-100317581?ref=x#top")]
+    [InlineData("https://dunnesstoresgrocery.com/product/dunnes-stores-hot-sauce-250g-id-100322749/")]
+    public async Task A_dunnes_grocery_page_links_with_the_tidied_address_and_waits_for_the_pc(string url)
+    {
+        var (owner, id) = await WithProductAsync("Swede");
+
+        var linked = await owner.PutAsJsonAsync($"/api/products/{id}/stores/dunnes", new { url });
+
+        linked.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await linked.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("url").GetString().Should().StartWith("https://www.dunnesstoresgrocery.com/product/").And.NotContain("?").And.NotContain("#").And.NotEndWith("/");
+        var entry = Entry(await ProductAsync(owner, id), "dunnes");
+        entry.GetProperty("readBy").GetString().Should().Be("pc");
+        entry.GetProperty("price").ValueKind.Should().Be(JsonValueKind.Null);
+    }
+
     [Fact]
     public async Task Unknown_shops_and_products_are_404()
     {
         var (owner, id) = await WithProductAsync("Anything");
 
-        (await owner.PutAsJsonAsync($"/api/products/{id}/stores/dunnes", new { url = "https://www.dunnesstoresgrocery.com/x" })).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await owner.PutAsJsonAsync($"/api/products/{id}/stores/supervalu", new { url = "https://shop.supervalu.ie/x" })).StatusCode.Should().Be(HttpStatusCode.NotFound);
         (await owner.PutAsJsonAsync($"/api/products/{Guid.NewGuid()}/stores/lidl", new { url = "https://www.lidl.ie/p/aubergine/p11214436" })).StatusCode.Should().Be(HttpStatusCode.NotFound);
         (await owner.DeleteAsync($"/api/products/{id}/stores/lidl")).StatusCode.Should().Be(HttpStatusCode.NotFound);
         (await owner.DeleteAsync($"/api/products/{Guid.NewGuid()}")).StatusCode.Should().Be(HttpStatusCode.NotFound);

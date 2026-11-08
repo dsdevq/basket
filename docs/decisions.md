@@ -245,6 +245,33 @@ planning record so this repo carries its own reasons; the M1 section holds the c
   refused a fresh automation-driven profile on the owner's own connection (see "Tesco unreadable from the shop profile
   too"), so Dunnes may end the same way; #29 finds out by one polite read, stops on the first refusal and reports it. If it
   is refused, the same ruling applies: nothing is built to get past it, and whether Dunnes stays unread is the owner's call.
-- **Not part of this change:** the `dunnes` store, its address shape, listings and the reader's parser. Those arrive with
-  #29 (the store enum is `Store.cs`; today a `dunnes` store route answers 404). Whether that needs a migration is decided
-  there and needs the owner's go.
+- **Not part of this change:** the `dunnes` store, its address shape, listings and the reader's parser; they arrive with
+  #29 (see "Dunnes: the store, its address shape and the reader's parser" below).
+
+## Dunnes: the store, its address shape and the reader's parser (2026-11-08, issue #29)
+
+- **The `dunnes` store is added, read by the PC reader.** `Stores` (`Store.cs`) gains `Dunnes` (host
+  `www.dunnesstoresgrocery.com`, `ReadBy` `pc`, no loyalty scheme), so a `dunnes` store route, link and ingest reading now
+  work like Tesco's; until a reading arrives a Dunnes row says "Waiting for the next PC read". The reader gains the same:
+  `dunnes` in the URL file and `--store`, the host check, the same pacing, blocked-page handling and ingest shape. This is
+  the only server change.
+- **No migration.** `Store` is persisted as a string (`HasConversion<string>().HasMaxLength(16)`, `"Dunnes"` fits), there is
+  no seed data and no check constraint on it, and the EF model snapshot does not list enum members, so adding the member
+  changes no schema. Checked by reading `AppDbContext` and the migrations, and by the backend test suite running green.
+- **Address shape: `https://www.dunnesstoresgrocery.com/product/<name>-<number>`**, `<number>` 6 to 12 digits, with the
+  `-id-` form (`.../product/dunnes-stores-hot-sauce-250g-id-100322749`) matched by the same rule. Taken from product
+  addresses of the shop that a public search lists; query, fragment and trailing slash are dropped. `dunnesstores.com` (the
+  clothing and home site) is not accepted.
+- **Not verified against a live page.** Cloudflare answered a plain request from the author's PC with the same "Just a
+  moment..." challenge it gives the VPS (2026-11-08, HTTP 403), so no real product page was read and nothing was done to get
+  past it. The parser reads the schema.org JSON-LD offer only (price, name, stock), as Tesco's does, and is tested on
+  hand-written fixtures marked as such in their first comment, plus the recorded challenge page, which must stop the shop.
+  The was price and promo text are not posted until a live page shows where they can be read. Whether Cloudflare serves the
+  reader's Chrome profile is found out by the first run, which stops on a refusal; whether Dunnes stays unread then is the
+  owner's call.
+- **Block detection also knows Cloudflare**: the "Just a moment..." and "Performing security verification" titles and a short
+  page that loads `challenges.cloudflare.com` count as a refusal, as the 403 itself already does.
+- **The reader's JSON-LD-only parse is shared** (`parseJsonLdOnly`) by Tesco and Dunnes instead of copied.
+- **Follow-up, deliberately not here:** the Settings copy ("Lets your PC send Tesco and Aldi prices", and the same in the
+  token sheet and relay section) still names two shops. Changing it moves the settings screen baselines, which this change
+  keeps still; the app's own copy should name Dunnes when those baselines are next regenerated.

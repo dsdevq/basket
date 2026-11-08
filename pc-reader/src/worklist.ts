@@ -4,6 +4,13 @@ import { STORES, type StoreId, type WorkItem } from './types.ts';
 const SHAPES: Record<StoreId, { host: string; path: RegExp }> = {
   aldi: { host: 'www.aldi.ie', path: /^\/product\/[a-z0-9-]+-\d{6,}$/i },
   tesco: { host: 'www.tesco.ie', path: /^\/groceries\/en-IE\/products\/\d{4,12}$/i },
+  dunnes: { host: 'www.dunnesstoresgrocery.com', path: /^\/product\/[a-z0-9-]+-\d{6,12}$/i },
+};
+
+const EXPECTED: Record<StoreId, string> = {
+  aldi: '/product/<name>-<number>',
+  tesco: '/groceries/en-IE/products/<number>',
+  dunnes: '/product/<name>-<number>',
 };
 
 /**
@@ -45,8 +52,9 @@ function normalise(entry: unknown): WorkItem | string {
     return 'expected an object with "store" and "url".';
   }
   const { store, url } = entry as Record<string, unknown>;
-  if (store !== 'aldi' && store !== 'tesco') {
-    return `"store" must be "aldi" or "tesco", got ${JSON.stringify(store)}.`;
+  const known = STORES.find((s) => s === store);
+  if (!known) {
+    return `"store" must be ${STORES.map((s) => `"${s}"`).join(', ')}, got ${JSON.stringify(store)}.`;
   }
   if (typeof url !== 'string') {
     return '"url" must be a string.';
@@ -57,12 +65,12 @@ function normalise(entry: unknown): WorkItem | string {
   } catch {
     return `"${url}" is not an address.`;
   }
-  const shape = SHAPES[store];
+  const shape = SHAPES[known];
   const path = parsed.pathname.replace(/\/+$/, '');
   if (parsed.protocol !== 'https:' || parsed.hostname !== shape.host || parsed.port !== '' || !shape.path.test(path)) {
-    return `"${url}" is not a ${store} product page (expected https://${shape.host}${store === 'aldi' ? '/product/<name>-<number>' : '/groceries/en-IE/products/<number>'}).`;
+    return `"${url}" is not a ${known} product page (expected https://${shape.host}${EXPECTED[known]}).`;
   }
-  return { store, url: `https://${shape.host}${path}` };
+  return { store: known, url: `https://${shape.host}${path}` };
 }
 
 /** The `--store <name>` argument of `npm start -- --store tesco`: undefined when absent, an error for anything else. */

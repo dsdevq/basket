@@ -1,8 +1,9 @@
 # pc-reader
 
-Reads Tesco and Aldi product pages in an ordinary browser on **your own PC and home connection** and posts the prices to
-basket's write-only ingest endpoint (`POST /api/ingest/prices`). tesco.ie and aldi.ie refuse the VPS, so this is how
-those two shops get prices (see [docs/decisions.md](../docs/decisions.md), "M2 decisions" and "Price ingest decisions").
+Reads Tesco, Aldi and Dunnes product pages in an ordinary browser on **your own PC and home connection** and posts the
+prices to basket's write-only ingest endpoint (`POST /api/ingest/prices`). tesco.ie, aldi.ie and dunnesstoresgrocery.com
+refuse the VPS, so this is how those three shops get prices (see [docs/decisions.md](../docs/decisions.md), "M2 decisions",
+"Price ingest decisions" and "Dunnes: the server cannot read it, the PC reader does").
 A product whose shop has not been read yet shows "Waiting for the next PC read" in basket.
 
 It is a small Node program: Chrome (installed on the PC, with a profile of its own) loads each page, a parser reads what
@@ -36,18 +37,20 @@ ignored by git.
 ## The URL file
 
 The ingest endpoint deliberately never tells a token holder which pages are tracked, so you keep the list yourself: a JSON
-array of `{ "store", "url" }`, `store` being `aldi` or `tesco`, `url` the product page you linked to the product in basket
+array of `{ "store", "url" }`, `store` being `aldi`, `dunnes` or `tesco`, `url` the product page you linked to the product in basket
 (the same address; a page that is not linked comes back `unknown_listing`).
 
 ```json
 [
   { "store": "aldi", "url": "https://www.aldi.ie/product/clonbawn-protein-milk-000000000000422541" },
-  { "store": "tesco", "url": "https://www.tesco.ie/groceries/en-IE/products/254317390" }
+  { "store": "tesco", "url": "https://www.tesco.ie/groceries/en-IE/products/254317390" },
+  { "store": "dunnes", "url": "https://www.dunnesstoresgrocery.com/product/dunnes-stores-swede-100317581" }
 ]
 ```
 
-Only product pages on the shop's own host are accepted (the shape basket accepts); anything else stops the run before a
-browser opens, naming the entry. Query strings and fragments are dropped.
+Only product pages on the shop's own host are accepted (the shape basket accepts; for Dunnes that is
+`https://www.dunnesstoresgrocery.com/product/<name>-<number>`, not the clothing and home site `dunnesstores.com`);
+anything else stops the run before a browser opens, naming the entry. Query strings and fragments are dropped.
 
 ## What it does, and does not do
 
@@ -56,13 +59,12 @@ browser opens, naming the entry. Query strings and fragments are dropped.
   fingerprint or user-agent changes, no proxy, no CAPTCHA solving. It is driven by Playwright, and a shop may notice and
   refuse; that is accepted (below).
 - Each page's price, name and stock are posted as read, with the was price and promo text where the shop's markup gives
-  them (Aldi only; see the Tesco section below); basket dates the reading itself. A page it cannot read (shop changed its
+  them (Aldi only; see the Tesco and Dunnes sections below); basket dates the reading itself. A page it cannot read (shop changed its
   markup, 404) is reported and nothing is posted for it.
-- Dunnes is not read yet.
 
 ## A blocked run
 
-If a shop answers with a 403/429, Akamai's "Access Denied" page, a CAPTCHA or an interstitial, the reader **stops that shop
+If a shop answers with a 403/429, Akamai's "Access Denied" page, Cloudflare's "Just a moment..." challenge, a CAPTCHA or an interstitial, the reader **stops that shop
 for the run** (the pages after it are not asked, the refused one is not retried), still posts what it read before the
 refusal, and carries on with the other shop. The summary then says so:
 
@@ -102,11 +104,22 @@ cannot open the profile while Chrome has it open). Then retry Tesco once:
 npm start -- --store tesco
 ```
 
-`--store tesco` (or `aldi`) runs only that shop's entries; everything else is unchanged. If Tesco still refuses, the reader
+`--store tesco` (or `aldi`, `dunnes`) runs only that shop's entries; everything else is unchanged. If Tesco still refuses, the reader
 stops that shop and records it as in "A blocked run"; it does not try again. Nothing here warms up, imitates or hides the
 automation, and the reader never handles your credentials: you type them into Chrome yourself. If Akamai still refuses,
 using your personal Chrome with an Allow click is your call, not something the reader does. If a Chrome crash leaves the
 profile locked, run `npm run profile` again and close Chrome normally.
+
+## Dunnes: not yet checked against a live page
+
+Dunnes' grocery shop, dunnesstoresgrocery.com, answers the VPS and a plain request from the author's PC alike with
+Cloudflare's "Just a moment..." challenge (2026-11-08, HTTP 403, `cf-mitigated: challenge`), so no real Dunnes product page
+has been read. The parser follows the page's schema.org JSON-LD offer, as Tesco's does, and is tested on hand-written
+fixtures only (plus the recorded challenge page, which must stop the shop). It posts the price, name and stock; the was
+price and promo text are not posted until a live page shows where they can be read safely. Dunnes has no card price in
+basket. Whether Cloudflare serves the reader's Chrome profile is not known: the first run stops on a refusal and reports
+it as in "A blocked run". Nothing is built to get past it; `npm run profile` and its manual step below are written for
+Tesco and are not a Dunnes workaround. `npm start -- --store dunnes` runs only Dunnes.
 
 ## Develop
 

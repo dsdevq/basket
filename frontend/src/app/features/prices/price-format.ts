@@ -70,7 +70,7 @@ function priceParts(price: Price): string[] {
 export function detail(entry: ProductStore): string {
   const price = entry.price;
   if (!price && entry.readBy === 'pc') {
-    // Tesco and Aldi block the server; their prices arrive when the PC next reads them.
+    // Tesco, Aldi and Dunnes block the server; their prices arrive when the PC next reads them.
     return 'Waiting for the next PC read';
   }
   if (!entry.listing) {

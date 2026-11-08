@@ -1,4 +1,5 @@
 [
   { "store": "aldi", "url": "https://www.aldi.ie/product/clonbawn-protein-milk-000000000000422541" },
-  { "store": "tesco", "url": "https://www.tesco.ie/groceries/en-IE/products/254317390" }
+  { "store": "tesco", "url": "https://www.tesco.ie/groceries/en-IE/products/254317390" },
+  { "store": "dunnes", "url": "https://www.dunnesstoresgrocery.com/product/dunnes-stores-swede-100317581" }
 ]

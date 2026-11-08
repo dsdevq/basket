@@ -13,11 +13,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Basket.Tests;
 
-/// <summary>The write-only price endpoint the PC-side reader posts Tesco and Aldi readings to.</summary>
+/// <summary>The write-only price endpoint the PC-side reader posts Tesco, Aldi and Dunnes readings to.</summary>
 public sealed class IngestTests : IClassFixture<BasketFactory>
 {
     private const string TescoUrl = "https://www.tesco.ie/groceries/en-IE/products/254317390";
     private const string AldiUrl = "https://www.aldi.ie/product/clonbawn-protein-milk-000000000000422541";
+    private const string DunnesUrl = "https://www.dunnesstoresgrocery.com/product/dunnes-stores-irish-whole-milk-2l-id-100317001";
     private const string LidlUrl = "https://www.lidl.ie/p/aubergine/p11214436";
 
     private readonly BasketFactory _factory;
@@ -240,6 +241,31 @@ public sealed class IngestTests : IClassFixture<BasketFactory>
         {
             (await db.PriceObservations.SingleAsync()).Price.Should().Be(1.99m);
             (await db.StoreListings.Where(l => l.Store == Store.Tesco).SingleAsync()).Url.Should().Be(TescoUrl);
+            return 0;
+        });
+    }
+
+    [Fact]
+    public async Task A_dunnes_reading_is_stored_like_the_others_against_its_listing()
+    {
+        var owner = await SeedAsync();
+        await _factory.WithDb(async db =>
+        {
+            db.StoreListings.Add(new StoreListing { Id = Guid.NewGuid(), ProductId = await db.Products.Select(p => p.Id).SingleAsync(), Store = Store.Dunnes, Url = DunnesUrl, AddedAt = DateTimeOffset.UtcNow });
+            await db.SaveChangesAsync();
+            return 0;
+        });
+        var (_, token) = await MintAsync(owner);
+
+        var response = await PostAsync(Relay(token), new { store = "dunnes", url = DunnesUrl + "?x=1", title = "Dunnes Stores Irish Whole Milk 2L", price = 2.20m, inStock = true });
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        Reasons(await response.Content.ReadFromJsonAsync<JsonElement>()).Should().Equal("ok");
+        await _factory.WithDb(async db =>
+        {
+            var listing = await db.StoreListings.SingleAsync(l => l.Store == Store.Dunnes);
+            listing.Title.Should().Be("Dunnes Stores Irish Whole Milk 2L");
+            (await db.PriceObservations.SingleAsync(o => o.ListingId == listing.Id)).Price.Should().Be(2.20m);
             return 0;
         });
     }

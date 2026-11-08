@@ -1,4 +1,5 @@
 import { parse } from 'node-html-parser';
+import type { ParseResult, Reading, StoreId } from '../types.ts';
 
 export interface JsonLdProduct {
   name?: string;
@@ -89,4 +90,30 @@ export function toMoney(value: unknown): number | undefined {
   }
   const amount = Number(text);
   return amount > 0 ? amount : undefined;
+}
+
+/**
+ * A product page read from its schema.org JSON-LD Product offer alone: price and stock from the offer, the name from the
+ * page's first `h1` (the JSON-LD name when there is none). Nothing is read from the visible text, so a carousel or footer
+ * with offers of its own cannot put another product's price on this one. A missing optional field is safe; an offer
+ * recorded against the wrong product is not.
+ */
+export function parseJsonLdOnly(store: StoreId, html: string, url: string): ParseResult {
+  const ld = readJsonLdProduct(html);
+  if (ld?.price === undefined && ld?.inStock !== false) {
+    return { kind: 'unreadable', why: 'no price on the page' };
+  }
+
+  const reading: Reading = { store, url };
+  const title = parse(html).querySelector('h1')?.text.trim() || ld?.name;
+  if (title) {
+    reading.title = title;
+  }
+  if (ld?.price !== undefined) {
+    reading.price = ld.price;
+  }
+  if (ld?.inStock !== undefined) {
+    reading.inStock = ld.inStock;
+  }
+  return { kind: 'reading', reading };
 }
