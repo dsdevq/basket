@@ -1,6 +1,6 @@
-export type StoreId = 'tesco' | 'aldi';
+export type StoreId = 'tesco' | 'aldi' | 'dunnes';
 
-export const STORES: readonly StoreId[] = ['aldi', 'tesco'];
+export const STORES: readonly StoreId[] = ['aldi', 'dunnes', 'tesco'];
 
 /** One reading in the shape `POST /api/ingest/prices` takes. Absent fields are left out, never sent as null. */
 export interface Reading {

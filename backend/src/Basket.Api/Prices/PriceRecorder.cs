@@ -5,7 +5,7 @@ namespace Basket.Api.Prices;
 
 /// <summary>
 /// The one way a reading enters the history, whoever took it: the nightly Lidl job, or the write-only ingest
-/// endpoint fed by the PC-side reader for Tesco and Aldi. Applies to the context; the caller saves.
+/// endpoint fed by the PC-side reader for Tesco, Aldi and Dunnes. Applies to the context; the caller saves.
 /// </summary>
 public sealed class PriceRecorder(AppDbContext db)
 {

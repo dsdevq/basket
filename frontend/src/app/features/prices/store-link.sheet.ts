@@ -21,6 +21,7 @@ const EXAMPLES = {
   lidl: 'https://www.lidl.ie/p/aubergine/p11214436',
   aldi: 'https://www.aldi.ie/product/clonbawn-protein-milk-000000000000422541',
   tesco: 'https://www.tesco.ie/groceries/en-IE/products/254317390',
+  dunnes: 'https://www.dunnesstoresgrocery.com/product/dunnes-stores-swede-100317581',
 } as const;
 
 /** Bottom sheet: paste the address of the product's page in one shop (or remove the link). */

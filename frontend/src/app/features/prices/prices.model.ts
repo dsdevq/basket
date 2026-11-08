@@ -1,4 +1,4 @@
-export type StoreId = 'lidl' | 'aldi' | 'tesco';
+export type StoreId = 'lidl' | 'aldi' | 'tesco' | 'dunnes';
 
 /** `current` is usable today; `upcoming` starts later; `ended` has run out since it was read; `unavailable` has no price. */
 export type PriceState = 'current' | 'upcoming' | 'ended' | 'unavailable';

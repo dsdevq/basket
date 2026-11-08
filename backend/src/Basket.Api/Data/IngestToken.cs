@@ -1,7 +1,7 @@
 namespace Basket.Api.Data;
 
 /// <summary>
-/// A credential for the PC-side price reader, issued by the owner. It has one scope: posting Tesco and Aldi price
+/// A credential for the PC-side price reader, issued by the owner. It has one scope: posting Tesco, Aldi and Dunnes price
 /// readings to <c>/api/ingest/prices</c>. It reads nothing and opens no other endpoint. Only the SHA-256 of the token
 /// is stored, so a database read never yields a usable token; revoking deletes the row.
 /// </summary>

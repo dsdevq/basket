@@ -7,6 +7,7 @@ import { fixture } from './support.ts';
 
 const ALDI = 'https://www.aldi.ie/product/clonbawn-protein-milk-000000000000422541';
 const TESCO = 'https://www.tesco.ie/groceries/en-IE/products/254317390';
+const DUNNES = 'https://www.dunnesstoresgrocery.com/product/dunnes-stores-irish-whole-milk-2l-id-100317001';
 
 function reading(result: ParseResult) {
   assert.equal(result.kind, 'reading', JSON.stringify(result));
@@ -47,7 +48,7 @@ test('tesco: a plain product has only its price', () => {
 });
 
 test('a page with no product data is unreadable, not a guess', () => {
-  for (const store of ['aldi', 'tesco'] as const) {
+  for (const store of ['aldi', 'dunnes', 'tesco'] as const) {
     const result = readPage(store, ALDI, { status: 200, html: fixture('page-without-product.html') });
     assert.equal(result.kind, 'unreadable');
   }
@@ -75,4 +76,23 @@ test('block: an ordinary product page is not mistaken for a challenge', () => {
 test('tesco: offers in a div and list carousel or the footer do not leak into this product', () => {
   const r = reading(readPage('tesco', TESCO, { status: 200, html: fixture('tesco-product-page-carousel.html') }));
   assert.deepEqual(r, { store: 'tesco', url: TESCO, title: 'Tesco Brown Bread 800G', price: 1.65, inStock: true });
+});
+
+test('dunnes: the price, title and stock come from the JSON-LD offer, and the old price and carousel in the text are not read', () => {
+  const r = reading(readPage('dunnes', DUNNES, { status: 200, html: fixture('dunnes-product-page.html') }));
+  assert.deepEqual(r, { store: 'dunnes', url: DUNNES, title: 'Dunnes Stores Irish Whole Milk 2L', price: 2.2, inStock: true });
+});
+
+test('dunnes: a sold-out product without a price is a valid out-of-stock reading', () => {
+  const r = reading(readPage('dunnes', DUNNES, { status: 200, html: fixture('dunnes-product-page-sold-out.html') }));
+  assert.deepEqual(r, { store: 'dunnes', url: DUNNES, title: 'Dunnes Stores Swede', inStock: false });
+});
+
+test('dunnes: Cloudflare\'s "Just a moment..." challenge, with or without its 403, stops the store', () => {
+  const challenge = fixture('cloudflare-just-a-moment.html');
+  assert.match(detectBlock({ status: 403, html: challenge }) ?? '', /HTTP 403/);
+  assert.match(readPage('dunnes', DUNNES, { status: 200, html: challenge }).kind, /blocked/);
+  const renamed = challenge.replace('Just a moment...', 'Performing security verification');
+  assert.match(detectBlock({ status: 200, html: renamed }) ?? '', /challenge/);
+  assert.match(detectBlock({ status: 200, html: '<title>Dunnes</title><script src="https://challenges.cloudflare.com/x.js"></script>' }) ?? '', /challenge/);
 });

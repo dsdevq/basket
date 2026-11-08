@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Reads Tesco and Aldi product pages in an ordinary browser on the owner's PC and posts the prices to basket's ingest endpoint.",
+  "description": "Reads Tesco, Aldi and Dunnes product pages in an ordinary browser on the owner's PC and posts the prices to basket's ingest endpoint.",
   "engines": { "node": ">=24" },
   "scripts": {
     "start": "node src/main.ts",
