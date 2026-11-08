@@ -130,9 +130,9 @@ describe('PricesPage', () => {
     expect(text).toContain('Whole milk 2L');
     expect(text).toContain('€0.99');
     expect(text).toContain('Lidl Plus €0.99, €1.29 without');
-    expect(text).toContain('seen 5 Nov');
+    expect(text).toContain('Seen 5 Nov');
     expect(text).toContain('€1.19');
-    expect(text).toContain('seen 4 Nov');
+    expect(text).toContain('Seen 4 Nov');
     expect(text).toContain('Waiting for the next PC read');
     expect(text).not.toContain('unavailable');
     expect(text).toContain('Last paid: not yet connected');

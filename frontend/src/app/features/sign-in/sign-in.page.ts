@@ -1,9 +1,8 @@
 import {ChangeDetectionStrategy, Component, inject, signal} from '@angular/core';
 import {Router} from '@angular/router';
-import {AlertComponent, ButtonComponent, PageComponent} from '@lifekit-hq/ui';
+import {AlertComponent, ButtonComponent, EmptyStateComponent, PageComponent} from '@lifekit-hq/ui';
 
 import {AuthApi} from '../../core/auth/auth.api';
-import {AUTH_PAGE_HOST, AuthIntroComponent} from '../../core/auth/auth-intro.component';
 import {
   PasskeyCancelledError,
   PasskeyClient,
@@ -11,6 +10,12 @@ import {
 } from '../../core/auth/passkey.client';
 import {SessionStore} from '../../core/auth/session.store';
 import {HttpStatus, statusOf} from '../../core/http-status';
+
+/** The shared pre-sign-in host, as a column, so the page fills the screen and the explanation sits mid-screen. */
+const SIGN_IN_HOST = {
+  role: 'main',
+  class: 'flex min-h-dvh flex-col bg-surface-bg [&>cmn-page]:flex-1',
+} as const;
 
 function describe(error: unknown): string {
   if (error instanceof PasskeyCancelledError) {
@@ -31,19 +36,29 @@ function describe(error: unknown): string {
 
 @Component({
   selector: 'bk-sign-in-page',
-  imports: [AuthIntroComponent, AlertComponent, ButtonComponent, PageComponent],
-  host: AUTH_PAGE_HOST,
+  imports: [AlertComponent, ButtonComponent, EmptyStateComponent, PageComponent],
+  host: SIGN_IN_HOST,
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <cmn-page title="basket" kind="list">
-      <bk-auth-intro lead="The shopping list for the two of you." />
-      @if (problem()) {
-        <cmn-alert [title]="problem()" variant="error" />
-      }
-      <cmn-button [loading]="busy()" (clicked)="signIn()" variant="primary" icon="KeyRound">
-        Sign in with a passkey
-      </cmn-button>
-      <p class="text-cmn-xs text-text-secondary">New here? Open the invite link you were sent.</p>
+    <cmn-page title="basket" kind="list" fill>
+      <!-- Carbon Empty states / HIG Onboarding: the explanation first, one primary action, the way in for new people last -->
+      <div class="my-auto flex flex-col items-center gap-cmn-3">
+        <cmn-empty-state
+          icon="ShoppingBasket"
+          message="The shopping list for the two of you"
+          subMessage="Sign in with the passkey on this phone. There is no password."
+        >
+          <cmn-button [loading]="busy()" (clicked)="signIn()" cta variant="primary" icon="KeyRound">
+            Sign in with a passkey
+          </cmn-button>
+        </cmn-empty-state>
+        @if (problem()) {
+          <cmn-alert [title]="problem()" variant="error" class="w-full" />
+        }
+        <p class="text-center text-cmn-xs text-text-secondary">
+          New here? Open the invite link you were sent.
+        </p>
+      </div>
     </cmn-page>
   `,
 })

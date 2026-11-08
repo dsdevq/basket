@@ -15,6 +15,7 @@ import {
 } from '@lifekit-hq/ui';
 import {firstValueFrom, fromEvent, interval} from 'rxjs';
 
+import {ComposerBarComponent} from '../../core/shell/composer-bar.component';
 import {type ItemAction, ItemActionsSheetComponent} from './item-actions.sheet';
 import type {ListItem} from './list.model';
 import {ListStore} from './list.store';
@@ -27,6 +28,7 @@ const REFRESH_MS = 15_000;
   imports: [
     NgTemplateOutlet,
     ReactiveFormsModule,
+    ComposerBarComponent,
     ButtonComponent,
     CheckboxComponent,
     EmptyStateComponent,
@@ -38,21 +40,7 @@ const REFRESH_MS = 15_000;
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <cmn-page kind="list">
-      <form [formGroup]="form" (ngSubmit)="add()" class="flex items-center gap-cmn-2">
-        <cmn-input
-          formControlName="text"
-          class="min-w-0 flex-1"
-          aria-label="Add an item"
-          placeholder="Add an item"
-          enterkeyhint="done"
-          autocomplete="off"
-        />
-        <cmn-button [loading]="store.adding()" type="submit" variant="primary" icon="Plus"
-          >Add</cmn-button
-        >
-      </form>
-
+    <cmn-page kind="list" fill>
       @switch (store.status()) {
         @case ('loading') {
           <cmn-skeleton shape="section" />
@@ -96,6 +84,21 @@ const REFRESH_MS = 15_000;
           }
         }
       }
+      <bk-composer-bar>
+        <form [formGroup]="form" (ngSubmit)="add()" class="flex items-center gap-cmn-2">
+          <cmn-input
+            formControlName="text"
+            class="min-w-0 flex-1"
+            aria-label="Add an item"
+            placeholder="Add an item"
+            enterkeyhint="done"
+            autocomplete="off"
+          />
+          <cmn-button [loading]="store.adding()" type="submit" variant="primary" icon="Plus"
+            >Add</cmn-button
+          >
+        </form>
+      </bk-composer-bar>
     </cmn-page>
 
     <ng-template #row let-item>

@@ -1,4 +1,4 @@
-import {detail, euro, headline, lastPaidLine, shortDate, storeProblem} from './price-format';
+import {detailLines, euro, headline, lastPaidLine, shortDate, storeProblem} from './price-format';
 import type {Price, ProductStore, StoreStatus} from './prices.model';
 
 function price(over: Partial<Price> = {}): Price {
@@ -37,7 +37,7 @@ describe('price formatting', () => {
     expect(euro(null)).toBe('');
   });
 
-  it('puts the best price today on the right and says why it is there underneath', () => {
+  it('puts the best price today on the right and says why it is there, then when it was read, underneath', () => {
     const lidl = entry({
       price: price({
         price: 2.29,
@@ -51,9 +51,10 @@ describe('price formatting', () => {
     });
 
     expect(headline(lidl)).toBe('€1.99');
-    expect(detail(lidl)).toBe(
-      'Lidl Plus €1.99, €2.29 without · was €2.49 · Mix n Match · until 11 Nov · seen 5 Nov'
-    );
+    expect(detailLines(lidl)).toEqual([
+      'Lidl Plus €1.99, €2.29 without · was €2.49 · Mix n Match · until 11 Nov',
+      'Seen 5 Nov',
+    ]);
   });
 
   it('does not offer an upcoming or ended offer as the price', () => {
@@ -63,18 +64,18 @@ describe('price formatting', () => {
     const ended = entry({price: price({state: 'ended', best: null, validUntil: '2026-11-04'})});
 
     expect(headline(upcoming)).toBe('from 12 Nov');
-    expect(detail(upcoming)).toBe('offer €2.29 starts 12 Nov · seen 5 Nov');
+    expect(detailLines(upcoming)).toEqual(['offer €2.29 starts 12 Nov', 'Seen 5 Nov']);
     expect(headline(ended)).toBe('ended');
-    expect(detail(ended)).toBe('offer ended 4 Nov · seen 5 Nov');
+    expect(detailLines(ended)).toEqual(['offer ended 4 Nov', 'Seen 5 Nov']);
   });
 
   it('says what is missing when there is no reading', () => {
     expect(headline(entry({listing: null, price: null}))).toBe('');
-    expect(detail(entry({listing: null, price: null}))).toBe('No page linked yet');
+    expect(detailLines(entry({listing: null, price: null}))).toEqual(['No page linked yet']);
     expect(headline(entry({price: null}))).toBe('—');
-    expect(detail(entry({price: null}))).toContain('nightly pull');
+    expect(detailLines(entry({price: null}))[0]).toContain('nightly pull');
     expect(
-      detail(
+      detailLines(
         entry({
           price: null,
           listing: {
@@ -85,7 +86,7 @@ describe('price formatting', () => {
           },
         })
       )
-    ).toBe('Not read yet · www.tesco.ie answered HTTP 403');
+    ).toEqual(['Not read yet · www.tesco.ie answered HTTP 403']);
     expect(headline(entry({price: price({state: 'unavailable', best: null, price: null})}))).toBe(
       'no price'
     );
@@ -101,11 +102,11 @@ describe('price formatting', () => {
     });
     const linked = entry({store: 'aldi', name: 'Aldi', readBy: 'pc', price: null});
 
-    expect(detail(waiting)).toBe('Waiting for the next PC read');
-    expect(detail(linked)).toBe('Waiting for the next PC read');
+    expect(detailLines(waiting)).toEqual(['Waiting for the next PC read']);
+    expect(detailLines(linked)).toEqual(['Waiting for the next PC read']);
     expect(headline(linked)).toBe('—');
     expect(headline(waiting)).toBe('');
-    expect(detail({...linked, price: price()})).toBe('seen 5 Nov');
+    expect(detailLines({...linked, price: price()})).toEqual(['Seen 5 Nov']);
   });
 
   it('keeps the last known price visible when the latest read failed', () => {
@@ -114,7 +115,13 @@ describe('price formatting', () => {
     });
 
     expect(headline(failed)).toBe('€2.29');
-    expect(detail(failed)).toBe('seen 5 Nov · last read failed: page layout changed');
+    expect(detailLines(failed)).toEqual(['Seen 5 Nov · Last read failed: page layout changed']);
+  });
+
+  it('puts the last paid price on the reading line, not on the offer line', () => {
+    const paid = entry({lastPaid: {state: 'known', price: 1.99, paidOn: '2026-10-30'}});
+
+    expect(detailLines(paid)).toEqual(['Seen 5 Nov · Last paid €1.99 on 30 Oct']);
   });
 
   it('shows the last paid price, or that it is not connected yet', () => {

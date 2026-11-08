@@ -275,3 +275,31 @@ planning record so this repo carries its own reasons; the M1 section holds the c
 - **Follow-up, deliberately not here:** the Settings copy ("Lets your PC send Tesco and Aldi prices", and the same in the
   token sheet and relay section) still names two shops. Changing it moves the settings screen baselines, which this change
   keeps still; the app's own copy should name Dunnes when those baselines are next regenerated.
+
+## Phone fixes from the 390px audit (issue #51, items 1-4)
+
+Page-side only, on the current design system: no token, palette, type-scale or lifekit-common component changes. Each
+change borrows one named pattern; the audit is the 2026-11-07 phone UX audit (390px emulation on fixtures).
+
+- **The Add field is a bottom bar, not a top form (Apple HIG Toolbars; Reminders' bottom "New Reminder").** List and
+  Prices end with a `bk-composer-bar` (`core/shell/composer-bar.component.ts`): sticky to the bottom of the scroll
+  area, so it sits just above the tab bar on a long list and rests at the bottom of a short page (the page uses
+  `cmn-page` `fill`). `cmn-dialog-actions` was the audit's suggestion, but it is the sheet footer (negative sheet
+  margins, a sticky offset made for a sheet's padding) and does nothing in a page, so the bar uses the same tokens and
+  classes on its own host instead. The `cmnAppLayoutFab` slot was not used either: it belongs to the shell, and a page
+  cannot project into it.
+- **No promise of a gesture that does not exist (HIG Writing).** The list load error no longer says "Pull down to try
+  again". It says "Check your connection and try again", which is what the error state's "Try again" button already does.
+  Reword again when the library's pull-to-refresh lands.
+- **Sign-in leads with the explanation and one primary action (Carbon Empty states; HIG Onboarding).** A `cmn-empty-state`
+  (icon, "The shopping list for the two of you", "Sign in with the passkey on this phone. There is no password.", the
+  passkey button in its `cta` slot) in the middle of the screen, the invite hint under it. The join and unreachable
+  pages keep `bk-auth-intro`; they are not part of this change.
+- **A Prices row is a value on the right and two short lines on the left (HIG Lists and tables; Carbon content density).**
+  `detailLines` replaces the run-on `detail` string: line one is what the price is (card price, old price, promo, end
+  date), line two is the reading (seen date, last paid, a failed read). Single-fact rows ("Waiting for the next PC read")
+  stay one line. The row keeps the library's `cmn-list-item-row`; the line break is a `\n` shown with `pre-line`.
+- **Out of scope here:** the offline shell / service worker (own task) and every library-side item (44px hit areas,
+  skeleton before auth, swipe rows, pull-to-refresh, tab-bar text, startup image) stay with lifekit-common. The Linux
+  baselines for List, Prices and Sign-in change with this and are re-rendered by the "Update screen baselines" workflow on
+  CI, not committed from a local run.

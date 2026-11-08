@@ -8,6 +8,8 @@ const INSET_TOP = 62;
 const INSET_BOTTOM = 34;
 const ITEM_COUNT = 40;
 const SCROLL_PROBE = 500;
+// The shell leaves 8px of breathing room between the content and the tab bar.
+const BREATHING = 8;
 
 const SESSION = {authenticated: true, user: {id: 'u1', displayName: 'Denys', role: 'owner'}};
 const ITEMS = Array.from({length: ITEM_COUNT}, (_, i) => ({
@@ -66,6 +68,35 @@ for (const [name, viewport, insets] of [
         expect(scroll).toEqual({overflow: 0, scrollY: 0});
       });
     }
+
+    for (const route of ['/list', '/prices']) {
+      test(`${route}: the add bar rests in the thumb zone, just above the tab bar`, async ({
+        page,
+      }) => {
+        await page.route('**/api/products', r => r.fulfill({json: {products: [], stores: []}}));
+        await open(page, route, insets);
+
+        const bar = (await page.locator('bk-composer-bar').boundingBox())!;
+        const nav = (await page.locator('cmn-bottom-tab-bar nav').boundingBox())!;
+        expect(bar.y).toBeGreaterThan(viewport.height / 2);
+        expect(nav.y - (bar.y + bar.height)).toBeGreaterThanOrEqual(0);
+        expect(nav.y - (bar.y + bar.height)).toBeLessThanOrEqual(BREATHING);
+      });
+    }
+
+    test('/list: the add bar stays above the tab bar while a long list scrolls', async ({page}) => {
+      await open(page, '/list', insets);
+      await expect(page.locator('cmn-list-item-row')).toHaveCount(ITEM_COUNT);
+      await page.evaluate(() => (document.querySelector('main') as HTMLElement).scrollTo(0, 0));
+
+      const gap = await page.evaluate(() => {
+        const bar = document.querySelector('bk-composer-bar') as HTMLElement;
+        const nav = document.querySelector('cmn-bottom-tab-bar nav') as HTMLElement;
+        return nav.getBoundingClientRect().top - bar.getBoundingClientRect().bottom;
+      });
+      expect(gap).toBeGreaterThanOrEqual(0);
+      expect(gap).toBeLessThanOrEqual(BREATHING);
+    });
 
     test('/list: the last item scrolls clear of the tab bar', async ({page}) => {
       await open(page, '/list', insets);

@@ -14,7 +14,7 @@ interface ListState {
 }
 
 const MESSAGES = {
-  load: 'Could not load the list. Pull down to try again.',
+  load: 'Could not load the list. Check your connection and try again.',
   add: 'Could not add that. Try again.',
   update: 'Could not update that item. It is back as it was.',
   remove: 'Could not delete that item.',

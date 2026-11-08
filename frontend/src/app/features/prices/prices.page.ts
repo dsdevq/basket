@@ -15,7 +15,8 @@ import {
 } from '@lifekit-hq/ui';
 import {firstValueFrom, fromEvent} from 'rxjs';
 
-import {detail, headline, lastPaidLine, storeProblem} from './price-format';
+import {ComposerBarComponent} from '../../core/shell/composer-bar.component';
+import {detailLines, headline, storeProblem} from './price-format';
 import type {Product, ProductStore} from './prices.model';
 import {PricesStore} from './prices.store';
 import {type ProductAction, ProductActionsSheetComponent} from './product-actions.sheet';
@@ -26,6 +27,7 @@ import {StoreLinkSheetComponent} from './store-link.sheet';
   selector: 'bk-prices-page',
   imports: [
     ReactiveFormsModule,
+    ComposerBarComponent,
     AlertComponent,
     ButtonComponent,
     EmptyStateComponent,
@@ -37,21 +39,7 @@ import {StoreLinkSheetComponent} from './store-link.sheet';
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <cmn-page kind="list">
-      <form [formGroup]="form" (ngSubmit)="add()" class="flex items-center gap-cmn-2">
-        <cmn-input
-          formControlName="name"
-          class="min-w-0 flex-1"
-          aria-label="Add a product"
-          placeholder="Add a product, e.g. Whole milk 2L"
-          enterkeyhint="done"
-          autocomplete="off"
-        />
-        <cmn-button [loading]="store.adding()" type="submit" variant="primary" icon="Plus"
-          >Add</cmn-button
-        >
-      </form>
-
+    <cmn-page kind="list" fill>
       @for (problem of problems(); track problem) {
         <cmn-alert [title]="problem" variant="warning" />
       }
@@ -93,7 +81,7 @@ import {StoreLinkSheetComponent} from './store-link.sheet';
                   [dimmed]="!entry.listing"
                   [action]="true"
                   (activated)="link(product, entry)"
-                  class="[&_.truncate]:overflow-visible [&_.truncate]:whitespace-normal [&_.truncate]:break-words"
+                  class="[&_.truncate]:overflow-visible [&_.truncate]:whitespace-pre-line [&_.truncate]:break-words"
                 >
                   <span amount class="text-cmn-sm font-semibold text-text-primary">{{
                     headline(entry)
@@ -104,6 +92,21 @@ import {StoreLinkSheetComponent} from './store-link.sheet';
           }
         }
       }
+      <bk-composer-bar>
+        <form [formGroup]="form" (ngSubmit)="add()" class="flex items-center gap-cmn-2">
+          <cmn-input
+            formControlName="name"
+            class="min-w-0 flex-1"
+            aria-label="Add a product"
+            placeholder="Add a product, e.g. Whole milk 2L"
+            enterkeyhint="done"
+            autocomplete="off"
+          />
+          <cmn-button [loading]="store.adding()" type="submit" variant="primary" icon="Plus"
+            >Add</cmn-button
+          >
+        </form>
+      </bk-composer-bar>
     </cmn-page>
   `,
 })
@@ -142,9 +145,9 @@ export class PricesPage implements OnInit {
       .filter(Boolean);
   }
 
+  /** One line per fact group; the row keeps the line breaks. */
   protected describe(entry: ProductStore): string {
-    const paid = lastPaidLine(entry.lastPaid);
-    return paid ? `${detail(entry)} · ${paid}` : detail(entry);
+    return detailLines(entry).join('\n');
   }
 
   protected async add(): Promise<void> {
