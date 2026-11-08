@@ -336,3 +336,39 @@ not a new one.
   hint was left out because it would add a banner to every browser visit and is not part of "offline shell and update prompt".
   The e2e config keeps `serviceWorkers: 'block'` for every other spec (the worker fetches around `page.route`); only
   `offline-shell.spec.ts` allows it, against its own server that answers `/api`.
+
+## Fleet identity on the machine endpoints (2026-11-08, #62)
+
+Owner decision 2026-11-08 ("Agree, thats good"): the fleet gets a service identity on his own apps. In the owner's Logto it is
+the machine-to-machine application `fleet-agent` with one API resource (`https://fleet.lifekit.internal/api`) and one scope per
+action class. People stay passkey-only on basket; this only adds a machine path.
+
+- **Three endpoints, three scopes, nothing else.** `POST /api/ingest/prices` needs `basket:price-ingest`, `GET /api/products`
+  needs `basket:catalog-read`, `POST /api/products` needs `basket:catalog-add`. Sign-in, invites, members, passkeys, ingest
+  tokens, lists, product deletion and store linking take a signed-in person only, as before. A fleet token on any of them is
+  refused (401, or 403 where the origin check answers first), and a fleet token never makes a session.
+- **How a token is accepted.** The token is a JWT from the identity service. Basket checks the signature against the issuer's
+  published keys (discovery at `FleetAgent:Authority`, or `FleetAgent:BackchannelAuthority` when the container cannot reach
+  the issuer's own address; the issuer checked stays `Authority`), the issuer, the audience (`FleetAgent:Audience`, default the
+  resource above), expiry (30 s skew) and an asymmetric algorithm; `alg: none` and shared-secret tokens never pass. Then the
+  `scope` claim must hold the endpoint's scope. No secret is held by basket: it verifies, the fleet signs in at Logto.
+- **Off until configured.** With `FleetAgent:Authority` empty (the default, and the production compose passes it empty unless
+  `FLEET_AGENT_AUTHORITY` is set in the env file) no fleet token validates anywhere. Turning it on is an env-file change and
+  a redeploy, not a code change.
+- **A disabled application.** Logto has no per-application switch: `fleet-agent.sh revoke` takes the role away, so the app still
+  gets a token but with no scope, and every endpoint here refuses it (403). `revoke --delete` stops tokens being issued at all.
+  A token already issued stays valid until it expires (an hour at most); basket does not call the identity service per request.
+- **The `bsk_` flow is untouched.** The ingest endpoint judges the owner-minted token exactly as before, with the same 401 body
+  and `WWW-Authenticate: Bearer`; only a request whose bearer is not a valid `bsk_` token is then offered to the fleet check.
+  Nothing about issuing, listing or revoking those tokens changed.
+- **A bearer header means the request stands on the token alone.** The catalog routes accept a signed-in person or a fleet token;
+  when the request carries a bearer header the cookie is ignored, and only then does the origin check let a request without an
+  `Origin` through (and only on `/api/products`, as `/api/ingest` already did). A cross-site page cannot set that header, so a
+  forged request still has nothing to ride on, and a signed-in browser with a bad bearer is refused, not served by its cookie.
+- **No migration.** `product.AddedByUserId` is a required foreign key to a user, and the fleet identity is not one. A product the
+  fleet adds is therefore recorded against the owner (the oldest owner account) rather than adding a nullable column or a service
+  user; the `Fleet agent {ClientId} authorised for {Scope}` log line is where the fleet's own actions are told apart. If the
+  owner wants "added by the fleet" shown on the product, that is a nullable column and a migration, which waits for his go.
+- **Tests** use a signing key generated per run and tokens minted in the test; no real credential or Logto call is involved.
+  They cover a valid token per endpoint, a wrong scope, an expired token, a token for another audience or issuer, a forged
+  signature, an unsigned token, a scope-less token (the disabled application), every non-machine endpoint, and the path being off.

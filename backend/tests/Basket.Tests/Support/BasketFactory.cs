@@ -1,12 +1,15 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using Basket.Api.Auth;
 using Basket.Api.Data;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Time.Testing;
+using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Npgsql;
 
 namespace Basket.Tests.Support;
@@ -32,6 +35,11 @@ public sealed class BasketFactory : WebApplicationFactory<Program>
 
     public string? Bootstrap { get; init; } = BootstrapToken;
 
+    /// <summary>The fleet identity's issuer and signing key, as the app is configured to trust them. Off when false.</summary>
+    public bool FleetAgentEnabled { get; init; } = true;
+
+    public FleetTokens Fleet { get; } = new();
+
     public BasketFactory()
     {
         using var connection = new NpgsqlConnection(_adminConnection);
@@ -44,6 +52,7 @@ public sealed class BasketFactory : WebApplicationFactory<Program>
     public override async ValueTask DisposeAsync()
     {
         await base.DisposeAsync();
+        Fleet.Dispose();
         NpgsqlConnection.ClearAllPools();
         await using var connection = new NpgsqlConnection(_adminConnection);
         await connection.OpenAsync();
@@ -65,10 +74,22 @@ public sealed class BasketFactory : WebApplicationFactory<Program>
             builder.UseSetting("Auth:BootstrapToken", Bootstrap);
         }
 
+        if (FleetAgentEnabled)
+        {
+            builder.UseSetting("FleetAgent:Authority", FleetTokens.Issuer);
+        }
+
         builder.ConfigureTestServices(services =>
         {
             services.RemoveAll<TimeProvider>();
             services.AddSingleton<TimeProvider>(Clock);
+            if (FleetAgentEnabled)
+            {
+                // The identity service's discovery document, replaced by a fixed one holding the test key.
+                var configuration = new OpenIdConnectConfiguration { Issuer = FleetTokens.Issuer };
+                configuration.SigningKeys.Add(Fleet.PublicKey);
+                services.Configure<JwtBearerOptions>(FleetAgent.Scheme, options => options.Configuration = configuration);
+            }
         });
     }
 

@@ -57,15 +57,28 @@ public static class IngestEndpoints
     private static async Task<IResult> PostPrices(
         HttpContext http,
         IngestTokenService tokens,
+        FleetAgentAuthenticator fleet,
         PriceIngest ingest,
         ILogger<PriceIngest> log,
         CancellationToken ct)
     {
-        // Who is asking comes first, so a caller without a token learns nothing about the request's shape.
+        // Who is asking comes first, so a caller without a token learns nothing about the request's shape. The
+        // owner-minted bsk_ token is judged exactly as before; only when it is not one does a fleet token get a look.
         if (!await tokens.AuthenticateAsync(IngestTokens.FromHeader(http.Request.Headers.Authorization), ct))
         {
-            http.Response.Headers.WWWAuthenticate = "Bearer";
-            return Results.Json(new { error = "unauthorized", message = "A valid price token is required." }, statusCode: 401);
+            var caller = await fleet.AuthenticateAsync(http);
+            if (caller is null)
+            {
+                http.Response.Headers.WWWAuthenticate = "Bearer";
+                return Results.Json(new { error = "unauthorized", message = "A valid price token is required." }, statusCode: 401);
+            }
+
+            if (!caller.Has(FleetScopes.PriceIngest))
+            {
+                return Results.Json(new { error = "forbidden", message = "That token may not send prices." }, statusCode: 403);
+            }
+
+            log.LogInformation("Fleet agent {ClientId} authorised for {Scope}", caller.ClientId, FleetScopes.PriceIngest);
         }
 
         if (http.Request.ContentLength > MaxBodyBytes)

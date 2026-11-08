@@ -242,5 +242,7 @@ public static class AuthEndpoints
 public static class Policies
 {
     public const string Owner = "owner";
+    public const string CatalogRead = "catalog-read";
+    public const string CatalogAdd = "catalog-add";
     public const string DisplayNameClaim = "display_name";
 }

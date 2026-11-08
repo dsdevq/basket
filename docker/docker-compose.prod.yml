@@ -27,6 +27,9 @@ services:
       ConnectionStrings__Default: "Host=db;Port=5432;Database=basket;Username=basket;Password=${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in the env file};GSS Encryption Mode=Disable"
       Auth__Origins__0: "${PUBLIC_ORIGIN:?set PUBLIC_ORIGIN in the env file}"
       Auth__BootstrapToken: "${BOOTSTRAP_TOKEN:?set BOOTSTRAP_TOKEN in the env file}"
+      # The fleet's machine identity (docs/decisions.md "Fleet identity"). Empty = the path is off; neither is a secret.
+      FleetAgent__Authority: "${FLEET_AGENT_AUTHORITY:-}"
+      FleetAgent__BackchannelAuthority: "${FLEET_AGENT_BACKCHANNEL_AUTHORITY:-}"
       TZ: Europe/Dublin
     volumes:
       - keys:/keys
