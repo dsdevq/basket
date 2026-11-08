@@ -14,7 +14,7 @@ public sealed class OriginCheckMiddleware(RequestDelegate next, IOptions<AuthOpt
         var request = context.Request;
         var unsafeMethod = !HttpMethods.IsGet(request.Method) && !HttpMethods.IsHead(request.Method)
             && !HttpMethods.IsOptions(request.Method);
-        if (unsafeMethod && request.Path.StartsWithSegments("/api") && !IsIngest(request)
+        if (unsafeMethod && request.Path.StartsWithSegments("/api") && !IsMachine(request)
             && !options.Value.IsAllowedOrigin(request.Headers.Origin.ToString()))
         {
             context.Response.StatusCode = StatusCodes.Status403Forbidden;
@@ -25,11 +25,15 @@ public sealed class OriginCheckMiddleware(RequestDelegate next, IOptions<AuthOpt
     }
 
     /// <summary>
-    /// The price reader is a program, not a page: it sends no Origin and signs with a bearer token. The ingest
-    /// endpoint never looks at the session cookie and answers 401 without a valid token, so there is nothing for a
-    /// forged cross-site request to ride on.
+    /// The price reader and the fleet identity are programs, not pages: they send no Origin and sign with a bearer
+    /// token. The ingest endpoint never looks at the session cookie and answers 401 without a valid token. The catalog
+    /// add takes the bearer path only when the request carries a bearer header, and then ignores the cookie entirely;
+    /// a cross-site page cannot set that header, so there is nothing for a forged request to ride on.
     /// </summary>
-    private static bool IsIngest(HttpRequest request) => request.Path.StartsWithSegments("/api/ingest");
+    private static bool IsMachine(HttpRequest request) =>
+        request.Path.StartsWithSegments("/api/ingest")
+        || (FleetAgent.HasBearer(request)
+            && string.Equals((request.Path.Value ?? string.Empty).TrimEnd('/'), "/api/products", StringComparison.OrdinalIgnoreCase));
 }
 
 /// <summary>Response headers for a public surface. The CSP is configuration so the theme script's hash can be pinned in it.</summary>

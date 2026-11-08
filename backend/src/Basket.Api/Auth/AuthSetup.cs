@@ -2,6 +2,7 @@ using System.Security.Claims;
 using System.Threading.RateLimiting;
 using Basket.Api.Data;
 using Basket.Api.Prices.Ingest;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
 
@@ -60,8 +61,12 @@ public static class AuthSetup
                 };
             });
 
+        services.AddFleetAgent(configuration);
+
         services.AddAuthorizationBuilder()
-            .AddPolicy(Policies.Owner, policy => policy.RequireAuthenticatedUser().RequireRole(Roles.Owner));
+            .AddPolicy(Policies.Owner, policy => policy.RequireAuthenticatedUser().RequireRole(Roles.Owner))
+            .AddPolicy(Policies.CatalogRead, policy => FleetOrMember(policy, FleetScopes.CatalogRead))
+            .AddPolicy(Policies.CatalogAdd, policy => FleetOrMember(policy, FleetScopes.CatalogAdd));
 
         services.AddRateLimiter(limits =>
         {
@@ -91,6 +96,15 @@ public static class AuthSetup
 
         return services;
     }
+
+    /// <summary>
+    /// A machine endpoint: a signed-in person as before, or the fleet identity holding <paramref name="scope"/>. Both
+    /// schemes are listed so either can authenticate; the requirement decides which one counts.
+    /// </summary>
+    private static void FleetOrMember(AuthorizationPolicyBuilder policy, string scope) => policy
+        .AddAuthenticationSchemes(IdentityConstants.ApplicationScheme, FleetAgent.Scheme)
+        .RequireAuthenticatedUser()
+        .AddRequirements(new FleetScopeRequirement(scope));
 
     /// <summary>The caller's address after the forwarded-headers middleware has run.</summary>
     private static string ClientKey(HttpContext context) => context.Connection.RemoteIpAddress?.ToString() ?? "unknown";

@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Basket.Api.Auth;
 using Basket.Api.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -54,8 +55,10 @@ public static class ProductEndpoints
     public static void MapProductEndpoints(this IEndpointRouteBuilder api)
     {
         var products = api.MapGroup("/products");
-        products.MapGet("/", GetProducts);
-        products.MapPost("/", AddProduct);
+        // The only two routes the fleet identity may call (scopes basket:catalog-read / basket:catalog-add); the rest
+        // of the group, like every other endpoint, takes a signed-in person only.
+        products.MapGet("/", GetProducts).RequireAuthorization(Policies.CatalogRead);
+        products.MapPost("/", AddProduct).RequireAuthorization(Policies.CatalogAdd);
         products.MapDelete("/{id:guid}", DeleteProduct);
         products.MapPut("/{id:guid}/stores/{store}", LinkStore);
         products.MapDelete("/{id:guid}/stores/{store}", UnlinkStore);
@@ -105,7 +108,7 @@ public static class ProductEndpoints
 
     private static async Task<IResult> AddProduct(
         AddProductRequest request,
-        ClaimsPrincipal principal,
+        HttpContext http,
         AppDbContext db,
         TimeProvider clock,
         CancellationToken ct)
@@ -126,12 +129,18 @@ public static class ProductEndpoints
             return Results.Json(new { error = "product_exists", message = "That product is already tracked." }, statusCode: 409);
         }
 
+        var addedBy = await AddedByAsync(http, db, ct);
+        if (addedBy is null)
+        {
+            return Results.Json(new { error = "no_owner", message = "There is no owner to record the product against yet." }, statusCode: 409);
+        }
+
         var product = new Product
         {
             Id = Guid.NewGuid(),
             Name = name,
             AddedAt = clock.GetUtcNow(),
-            AddedByUserId = Guid.Parse(principal.FindFirstValue(ClaimTypes.NameIdentifier)!),
+            AddedByUserId = addedBy.Value,
         };
         db.Products.Add(product);
         await db.SaveChangesAsync(ct);
@@ -141,6 +150,27 @@ public static class ProductEndpoints
             product.Name,
             Stores.All.Select(s => new ProductStoreResponse(Slug(s), s.DisplayName(), s.ReadBy(), null, null, LastPaid(s, null))).ToList());
         return Results.Created($"/api/products/{product.Id}", created);
+    }
+
+    /// <summary>
+    /// Who a new product is recorded against. A person adds it as themselves. The fleet identity is not a user and
+    /// <c>AddedByUserId</c> is a required foreign key to one, so its products are recorded against the owner, who
+    /// owns the fleet identity (no schema change); the log line names the fleet client that added it.
+    /// </summary>
+    private static async Task<Guid?> AddedByAsync(HttpContext http, AppDbContext db, CancellationToken ct)
+    {
+        if (!FleetAgent.HasBearer(http.Request))
+        {
+            return Guid.Parse(http.User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        }
+
+        return await (
+            from u in db.Users.AsNoTracking()
+            join ur in db.UserRoles on u.Id equals ur.UserId
+            join r in db.Roles on ur.RoleId equals r.Id
+            where r.Name == Roles.Owner
+            orderby u.CreatedAt
+            select (Guid?)u.Id).FirstOrDefaultAsync(ct);
     }
 
     private static async Task<IResult> DeleteProduct(Guid id, AppDbContext db, CancellationToken ct) =>
