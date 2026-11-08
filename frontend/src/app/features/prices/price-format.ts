@@ -66,30 +66,6 @@ function priceParts(price: Price): string[] {
   return parts;
 }
 
-/** The line under the store name: promo, card price, old price, and the day it was read. */
-export function detail(entry: ProductStore): string {
-  const price = entry.price;
-  if (!price && entry.readBy === 'pc') {
-    // Tesco, Aldi and Dunnes block the server; their prices arrive when the PC next reads them.
-    return 'Waiting for the next PC read';
-  }
-  if (!entry.listing) {
-    return 'No page linked yet';
-  }
-  if (!price) {
-    return entry.listing.error
-      ? `Not read yet · ${entry.listing.error}`
-      : 'Not read yet - the nightly pull will fetch it';
-  }
-  const parts: string[] = [];
-  parts.push(...priceParts(price));
-  parts.push(`seen ${shortDate(price.observedOn)}`);
-  if (entry.listing.error) {
-    parts.push(`last read failed: ${entry.listing.error}`);
-  }
-  return parts.join(' · ');
-}
-
 export function lastPaidLine(paid: Paid | null): string {
   if (!paid) {
     return '';
@@ -97,6 +73,39 @@ export function lastPaidLine(paid: Paid | null): string {
   return paid.state === 'known'
     ? `Last paid ${euro(paid.price)} on ${shortDate(paid.paidOn)}`
     : 'Last paid: not yet connected';
+}
+
+function unreadLine(entry: ProductStore): string {
+  if (entry.readBy === 'pc') {
+    // Tesco, Aldi and Dunnes block the server; their prices arrive when the PC next reads them.
+    return 'Waiting for the next PC read';
+  }
+  if (!entry.listing) {
+    return 'No page linked yet';
+  }
+  return entry.listing.error
+    ? `Not read yet · ${entry.listing.error}`
+    : 'Not read yet - the nightly pull will fetch it';
+}
+
+/**
+ * The lines under the store name, one fact group per line: what the price is (card price, old price, promo,
+ * how long it lasts), then when it was read and how that went. A shop with no reading yet has one line.
+ */
+export function detailLines(entry: ProductStore): string[] {
+  const price = entry.price;
+  const paid = lastPaidLine(entry.lastPaid);
+  if (!price) {
+    return [unreadLine(entry), paid].filter(Boolean);
+  }
+  const read = [`Seen ${shortDate(price.observedOn)}`];
+  if (paid) {
+    read.push(paid);
+  }
+  if (entry.listing?.error) {
+    read.push(`Last read failed: ${entry.listing.error}`);
+  }
+  return [priceParts(price).join(' · '), read.join(' · ')].filter(Boolean);
 }
 
 const OUTCOME_TITLES: Record<RunOutcome, string> = {
