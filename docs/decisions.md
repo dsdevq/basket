@@ -297,8 +297,8 @@ change borrows one named pattern; the audit is the 2026-11-07 phone UX audit (39
   pages keep `bk-auth-intro`; they are not part of this change.
 - **A Prices row is a value on the right and two short lines on the left (HIG Lists and tables; Carbon content density).**
   `detailLines` replaces the run-on `detail` string: line one is what the price is (card price, old price, promo, end
-  date), line two is the reading (seen date, last paid, a failed read). Single-fact rows ("Waiting for the next PC read")
-  stay one line. The row keeps the library's `cmn-list-item-row`; the line break is a `\n` shown with `pre-line`.
+  date), line two is the reading (seen date, last paid, a failed read). A shop with no price yet ("Waiting for the next PC
+  read") has one line saying why, plus the last-paid line when there is one. The row keeps the library's `cmn-list-item-row`; the line break is a `\n` shown with `pre-line`.
 - **Out of scope here:** the offline shell / service worker (own task) and every library-side item (44px hit areas,
   skeleton before auth, swipe rows, pull-to-refresh, tab-bar text, startup image) stay with lifekit-common. The Linux
   baselines for List, Prices and Sign-in change with this and are re-rendered by the "Update screen baselines" workflow on
