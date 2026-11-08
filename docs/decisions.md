@@ -245,10 +245,8 @@ planning record so this repo carries its own reasons; the M1 section holds the c
   refused a fresh automation-driven profile on the owner's own connection (see "Tesco unreadable from the shop profile
   too"), so Dunnes may end the same way; #29 finds out by one polite read, stops on the first refusal and reports it. If it
   is refused, the same ruling applies: nothing is built to get past it, and whether Dunnes stays unread is the owner's call.
-- **Not part of this change:** the `dunnes` store, its address shape, listings and the reader's parser. Those arrive with
-  #29 (the store enum is `Store.cs`; today a `dunnes` store route answers 404). Whether that needs a migration is decided
-  there and needs the owner's go.
-
+- **Not part of this change:** the `dunnes` store, its address shape, listings and the reader's parser; they arrive with
+  #29 (see "Dunnes: the store, its address shape and the reader's parser" below).
 
 ## Dunnes: the store, its address shape and the reader's parser (2026-11-08, issue #29)
 

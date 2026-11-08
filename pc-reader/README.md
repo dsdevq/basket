@@ -86,17 +86,6 @@ tested on hand-written fixtures only. It reads the price, name and stock from th
 text, so Tesco's was price, Clubcard price and offer dates are not posted until a live page shows where they can be read
 safely. The Aldi parser is tested on trimmed copies of live pages.
 
-## Dunnes: not yet checked against a live page
-
-Dunnes' grocery shop, dunnesstoresgrocery.com, answers the VPS and a plain request from the author's PC alike with
-Cloudflare's "Just a moment..." challenge (2026-11-08, HTTP 403, `cf-mitigated: challenge`), so no real Dunnes product page
-has been read. The parser follows the page's schema.org JSON-LD offer, as Tesco's does, and is tested on hand-written
-fixtures only (plus the recorded challenge page, which must stop the shop). It posts the price, name and stock; the was
-price and promo text are not posted until a live page shows where they can be read safely. Dunnes has no card price in
-basket. Whether Cloudflare serves the reader's Chrome profile is not known: the first run stops on a refusal and reports
-it as in "A blocked run". Nothing is built to get past it; `npm run profile` and its manual step below are written for
-Tesco and are not a Dunnes workaround. `npm start -- --store dunnes` runs only Dunnes.
-
 ### The one manual step: open the reader's profile by hand once
 
 Like the Lidl Plus login, this is a one-off step you do yourself, accepted in [docs/decisions.md](../docs/decisions.md)
@@ -120,6 +109,17 @@ stops that shop and records it as in "A blocked run"; it does not try again. Not
 automation, and the reader never handles your credentials: you type them into Chrome yourself. If Akamai still refuses,
 using your personal Chrome with an Allow click is your call, not something the reader does. If a Chrome crash leaves the
 profile locked, run `npm run profile` again and close Chrome normally.
+
+## Dunnes: not yet checked against a live page
+
+Dunnes' grocery shop, dunnesstoresgrocery.com, answers the VPS and a plain request from the author's PC alike with
+Cloudflare's "Just a moment..." challenge (2026-11-08, HTTP 403, `cf-mitigated: challenge`), so no real Dunnes product page
+has been read. The parser follows the page's schema.org JSON-LD offer, as Tesco's does, and is tested on hand-written
+fixtures only (plus the recorded challenge page, which must stop the shop). It posts the price, name and stock; the was
+price and promo text are not posted until a live page shows where they can be read safely. Dunnes has no card price in
+basket. Whether Cloudflare serves the reader's Chrome profile is not known: the first run stops on a refusal and reports
+it as in "A blocked run". Nothing is built to get past it; `npm run profile` and its manual step below are written for
+Tesco and are not a Dunnes workaround. `npm start -- --store dunnes` runs only Dunnes.
 
 ## Develop
 

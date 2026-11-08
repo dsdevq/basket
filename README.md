@@ -1,6 +1,6 @@
 # basket
 
-Where to buy what I buy: grocery app over Lidl, Aldi and Tesco in Dublin.
+Where to buy what I buy: grocery app over Lidl, Aldi, Tesco and Dunnes in Dublin.
 
 For the two of us first: **one shared shopping list** on the phone, and (M2) **prices** read every night for the products
 we buy. Matching, a shop plan and Lidl Plus receipts come in later milestones (see [docs/decisions.md](docs/decisions.md)).
