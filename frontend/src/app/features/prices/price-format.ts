@@ -75,6 +75,19 @@ export function lastPaidLine(paid: Paid | null): string {
     : 'Last paid: not yet connected';
 }
 
+function unreadLine(entry: ProductStore): string {
+  if (entry.readBy === 'pc') {
+    // Tesco, Aldi and Dunnes block the server; their prices arrive when the PC next reads them.
+    return 'Waiting for the next PC read';
+  }
+  if (!entry.listing) {
+    return 'No page linked yet';
+  }
+  return entry.listing.error
+    ? `Not read yet · ${entry.listing.error}`
+    : 'Not read yet - the nightly pull will fetch it';
+}
+
 /**
  * The lines under the store name, one fact group per line: what the price is (card price, old price, promo,
  * how long it lasts), then when it was read and how that went. A shop with no reading yet has one line.
@@ -93,19 +106,6 @@ export function detailLines(entry: ProductStore): string[] {
     read.push(`Last read failed: ${entry.listing.error}`);
   }
   return [priceParts(price).join(' · '), read.join(' · ')].filter(Boolean);
-}
-
-function unreadLine(entry: ProductStore): string {
-  if (entry.readBy === 'pc') {
-    // Tesco, Aldi and Dunnes block the server; their prices arrive when the PC next reads them.
-    return 'Waiting for the next PC read';
-  }
-  if (!entry.listing) {
-    return 'No page linked yet';
-  }
-  return entry.listing.error
-    ? `Not read yet · ${entry.listing.error}`
-    : 'Not read yet - the nightly pull will fetch it';
 }
 
 const OUTCOME_TITLES: Record<RunOutcome, string> = {
