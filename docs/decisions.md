@@ -211,3 +211,40 @@ planning record so this repo carries its own reasons; the M1 section holds the c
 - **Moving stored rows to the `/shop` form would be a migration** (listings, and any reader holding the old form) and
   is a separate owner decision, not part of this change.
 
+
+## Dunnes: the server cannot read it, the PC reader does (2026-11-08)
+
+- **Owner's words:** "I shop in 4 different stores. Lidl, aldi, tesco, dunnes. I want to have one app where I could sort
+  things out." This adds Dunnes to the stores (it changes the 2026-10-29 call of Lidl, Aldi and Tesco for now). Epic #21,
+  checked in #28 before assuming, as Tesco was.
+- **Borrowed pattern: the PC relay already built for Tesco and Aldi** (an ordinary browser on the owner's home
+  connection reads the pages and posts them to the write-only `POST /api/ingest/prices`). Nothing new is invented; no page
+  or screen changes, so no baseline moves.
+- **What was requested, from this VPS (IPv6 `2a03:4000:63:431:...`, 2026-11-08 01:23-01:25 UTC), read-only, one request
+  at a time, 6 s apart or more, honest `basket-price-check/1.0` user agent, no cookies kept, no sign-in:**
+
+  | Request | What came back |
+  |---|---|
+  | `https://www.dunnesstores.com/robots.txt` | 200, 729 bytes. Disallows search, account, basket and filter paths; product pages (`/<name>-<id>/p`) are not disallowed. |
+  | `https://www.dunnesstores.com/` | 200, 2.8 MB page (VTEX storefront). |
+  | `https://www.dunnesstores.com/sitemap.xml`, `sitemap/category-0.xml` | 200 both. |
+  | `https://www.dunnesstores.com/paul-costelloe-living-studio-brown-faux-fur-hat-3647114/p` | 200; schema.org `Product` JSON-LD with `offers` (`lowPrice` 30, `priceCurrency` EUR). |
+  | `https://www.dunnesstoresgrocery.com/` and `/robots.txt` | **403**, header `cf-mitigated: challenge`, Cloudflare "Just a moment..." page with a Turnstile widget. |
+  | the same grocery address in an ordinary headless Chrome (chrome-devtools-axi) | the same "Performing security verification" page; nothing past it was asked. |
+
+- **Two different sites.** `dunnesstores.com` is open to the VPS but is Dunnes' clothing and home shop: its category
+  sitemap (the 6 top levels: kids, home, women, men, school, seasonal) has no food or grocery category, and the only
+  grocery-like path is `home/kitchen-and-dining/food-storage`. The groceries the owner buys are sold on
+  `dunnesstoresgrocery.com`, and that is the site a Dunnes product link in basket points at. It answers this VPS, plain
+  client and browser alike, with Cloudflare's managed challenge. **Result: blocked from the VPS.**
+- **Decision: Dunnes is read by the PC reader (issue #29), not by a nightly server job like Lidl.** The server does not
+  solve the challenge, change its user agent, spoof a browser, use a proxy or a third-party solving service, and does not
+  read `dunnesstores.com` instead (it carries no grocery products, so it would price the wrong thing). No protection is
+  bypassed. Until a reading arrives a Dunnes row says "Waiting for the next PC read", as Tesco does.
+- **Not known yet, and not assumed:** whether Cloudflare serves the PC reader's fresh Chrome profile. Tesco's Akamai
+  refused a fresh automation-driven profile on the owner's own connection (see "Tesco unreadable from the shop profile
+  too"), so Dunnes may end the same way; #29 finds out by one polite read, stops on the first refusal and reports it. If it
+  is refused, the same ruling applies: nothing is built to get past it, and whether Dunnes stays unread is the owner's call.
+- **Not part of this change:** the `dunnes` store, its address shape, listings and the reader's parser. Those arrive with
+  #29 (the store enum is `Store.cs`; today a `dunnes` store route answers 404). Whether that needs a migration is decided
+  there and needs the owner's go.
