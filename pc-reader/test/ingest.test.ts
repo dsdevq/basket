@@ -28,7 +28,7 @@ test('the batch is POSTed as {"prices": [...]} to /api/ingest/prices with the be
 
 test('the shape the reader posts matches the contract fixture the backend tests use', () => {
   const contract = JSON.parse(readFileSync(new URL('../../backend/tests/Basket.Tests/Fixtures/ingest-batch.json', import.meta.url), 'utf8')) as { prices: Record<string, unknown>[] };
-  const allowed = new Set(['store', 'url', 'title', 'price', 'wasPrice', 'loyaltyPrice', 'loyaltyScheme', 'promoText', 'validFrom', 'validUntil', 'inStock']);
+  const allowed = new Set(['store', 'url', 'title', 'price', 'wasPrice', 'loyaltyPrice', 'loyaltyScheme', 'promoText', 'validFrom', 'validUntil', 'inStock', 'imageUrl']);
   for (const price of contract.prices) {
     assert.ok(Object.keys(price).every((key) => allowed.has(key)), JSON.stringify(price));
   }

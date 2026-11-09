@@ -15,7 +15,8 @@ public sealed record IngestPrice(
     string? PromoText,
     DateOnly? ValidFrom,
     DateOnly? ValidUntil,
-    bool? InStock);
+    bool? InStock,
+    string? ImageUrl = null);
 
 public sealed record IngestRequest(IReadOnlyList<IngestPrice>? Prices);
 
@@ -27,7 +28,8 @@ public sealed record IngestResponse(int Accepted, int Rejected, IReadOnlyList<In
 /// <summary>
 /// Turns a posted batch into dated <see cref="PriceObservation"/> rows through <see cref="PriceRecorder"/>, the same
 /// write path as the nightly job. Each reading stands alone: a bad one is rejected with a reason and the others are
-/// kept. The reading is dated by the server's clock, never by the poster, so a stale or replayed batch cannot
+/// kept. A reading may carry the product photo's address (<c>imageUrl</c>), stored on the listing; the address is checked,
+/// the picture itself is never fetched or kept. The reading is dated by the server's clock, never by the poster, so a stale or replayed batch cannot
 /// overwrite a newer reading of the same day with an older one.
 /// </summary>
 public sealed class PriceIngest(AppDbContext db, PriceRecorder recorder, TimeProvider clock)
@@ -43,6 +45,7 @@ public sealed class PriceIngest(AppDbContext db, PriceRecorder recorder, TimePro
         public const string PriceInvalid = "price_invalid";
         public const string NoPrice = "no_price";
         public const string DatesInvalid = "dates_invalid";
+        public const string ImageInvalid = "image_invalid";
         public const string UnknownListing = "unknown_listing";
         public const string Duplicate = "duplicate";
     }
@@ -181,6 +184,14 @@ public sealed class PriceIngest(AppDbContext db, PriceRecorder recorder, TimePro
             return Reasons.DatesInvalid;
         }
 
+        // The photo is optional. Absent (or blank) is fine and never clears what is stored; one that is present but not a
+        // plain https address is refused, so a reader that has started sending something else hears about it.
+        string? image = null;
+        if (!string.IsNullOrWhiteSpace(item.ImageUrl) && !ImageUrls.TryNormalize(item.ImageUrl, out image))
+        {
+            return Reasons.ImageInvalid;
+        }
+
         var scheme = item.LoyaltyPrice is null
             ? null
             : UserNames.Clean(item.LoyaltyScheme, 32) ?? (store.LoyaltyScheme() is { Length: > 0 } own ? own : null);
@@ -197,7 +208,8 @@ public sealed class PriceIngest(AppDbContext db, PriceRecorder recorder, TimePro
                 UserNames.Clean(item.PromoText, 200),
                 item.ValidFrom,
                 item.ValidUntil,
-                inStock));
+                inStock,
+                image));
         return null;
     }
 

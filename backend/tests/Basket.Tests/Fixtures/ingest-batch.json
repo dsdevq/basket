@@ -11,7 +11,8 @@
       "promoText": "Clubcard Price",
       "validFrom": "2026-11-02",
       "validUntil": "2026-11-15",
-      "inStock": true
+      "inStock": true,
+      "imageUrl": "https://digitalcontent.api.tesco.com/v2/media/ghs/0a1b2c3d/tesco-fresh-whole-milk.jpeg?h=225&w=225"
     },
     {
       "store": "aldi",
