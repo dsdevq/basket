@@ -16,28 +16,48 @@ Needs Node 24 and Google Chrome (or set `BASKET_READER_CHANNEL=msedge`).
 ```sh
 cd pc-reader
 npm ci
-cp .env.example .env.local        # fill in the origin and the token
-cp urls.example.json urls.local.json   # list the pages to read
+cp .env.example .env.local        # fill in the origin and the credentials
 npm start
 ```
 
-Make the token in basket under **Settings > Price reader** (owner only). It is shown once. Both files you filled in are
-ignored by git.
+There are two ways to prove itself to basket; the reader uses the first one that is set.
+
+- **The fleet identity (preferred).** The reader signs in to the fleet's identity service by OAuth client credentials
+  (`BASKET_FLEET_CLIENT_ID`, `BASKET_FLEET_CLIENT_SECRET`, `BASKET_FLEET_ISSUER`) and gets a short-lived token for the scopes
+  `basket:price-ingest` (push prices) and `basket:catalog-read` (read the tracked pages). It renews the token a minute before it
+  expires. No token is minted in basket and no page list is kept by hand: the list comes from basket's catalog (below). Basket
+  already validates these tokens (docs/decisions.md, "Fleet identity on the machine endpoints"); the reader asks for nothing else.
+- **The `bsk_` token.** Make it in basket under **Settings > Price reader** (owner only); it is shown once. It pushes prices
+  but cannot read the catalog, so with it alone you keep the URL file (below), `cp urls.example.json urls.local.json`.
+
+Files you fill in (`.env.local`, `urls.local.json`) are ignored by git. The secret and the token are never logged.
 
 | Setting | Where | Meaning |
 |---|---|---|
 | `BASKET_API_ORIGIN` | env or `.env.local` | Where basket runs, e.g. `https://basket.example.com`. `http` only for `localhost`. |
-| `BASKET_INGEST_TOKEN` | env or `.env.local` | The `bsk_...` token. Never logged. The environment wins over the file. |
-| `BASKET_READER_URLS` | env or `.env.local` | The URL file. Default `pc-reader/urls.local.json`. |
+| `BASKET_FLEET_CLIENT_ID` | env or `.env.local` | The fleet identity's client id (the `fleet-agent` application). With the next two, replaces the `bsk_` token. |
+| `BASKET_FLEET_CLIENT_SECRET` | env or `.env.local` | Its secret. Never logged, never in the repo. |
+| `BASKET_FLEET_ISSUER` | env or `.env.local` | The identity service's issuer address, e.g. `http://127.0.0.1:3001/oidc`; the reader posts to `<issuer>/token`. `http` only for `localhost`/`127.0.0.1`. Setting only some of the three is an error naming the rest. |
+| `BASKET_INGEST_TOKEN` | env or `.env.local` | The `bsk_...` token, used when no fleet setting is present. Never logged. The environment wins over the file. |
+| `BASKET_READER_URLS` | env or `.env.local` | The URL file (fallback list). Default `pc-reader/urls.local.json`. |
 | `BASKET_READER_PROFILE` | env or `.env.local` | Chrome profile directory. Default `~/.local/state/basket-pc-reader/profile`: a profile of the reader's own, never your everyday one. `npm run profile` opens the same directory by hand (below). |
 | `BASKET_READER_CHANNEL` | env or `.env.local` | Installed browser to drive. Default `chrome`. |
 | `BASKET_READER_HEADLESS` | env or `.env.local` | `1` for a window-less run (no display). Default is a normal visible window. |
 | `BASKET_READER_ENV_FILE` | env | Read settings from this file instead of `.env.local`. |
 
-## The URL file
+## Which pages: the catalog, then the URL file
 
-The ingest endpoint deliberately never tells a token holder which pages are tracked, so you keep the list yourself: a JSON
-array of `{ "store", "url" }`, `store` being `aldi`, `dunnes` or `tesco`, `url` the product page you linked to the product in basket
+With the fleet identity the reader reads the list from basket itself (`GET /api/products`, scope `basket:catalog-read`): every
+product's linked page at a shop the PC reads (Aldi, Dunnes, Tesco). Each address goes through the same check as the URL file
+below; one that fails it is skipped and counted in the log. Link a product to a shop page in basket and the next run reads it.
+An empty catalog means nothing to read (the file is not consulted).
+
+The URL file is the **fallback**, used only when the reader has no fleet identity (the `bsk_` token cannot read the catalog) or
+the catalog call fails (identity service or basket unreachable, a refusal); the run logs which. If the file is missing then too,
+the run stops naming both reasons.
+
+The ingest endpoint deliberately never tells a `bsk_` token holder which pages are tracked, so for that path (or as a fallback)
+you keep the list yourself: a JSON array of `{ "store", "url" }`, `store` being `aldi`, `dunnes` or `tesco`, `url` the product page you linked to the product in basket
 (the same address; a page that is not linked comes back `unknown_listing`).
 
 ```json
@@ -124,7 +144,7 @@ Tesco and are not a Dunnes workaround. `npm start -- --store dunnes` runs only D
 ## Develop
 
 ```sh
-npm test            # parsers on saved pages, pacing, blocked handling, work list, ingest client (no network)
+npm test            # parsers on saved pages, pacing, blocked handling, work list, ingest client, fleet token and catalog (no network)
 npm run typecheck
 ```
 
@@ -132,8 +152,8 @@ npm run typecheck
 no personal data. Parsers (`src/parse/`) take a page's HTML and know nothing about the browser; `src/browser.ts` is the
 only file that touches Chrome.
 
-To run it by hand against a local basket: start the dev stack as in the root README, make a token in the dev app's
-Settings, and point `BASKET_API_ORIGIN` at `http://localhost:3310`.
+To run it by hand against a local basket: start the dev stack as in the root README, make a `bsk_` token in the dev app's
+Settings (or use the fleet identity), and point `BASKET_API_ORIGIN` at `http://localhost:3310`.
 
 ## Running it on a schedule (not set up)
 

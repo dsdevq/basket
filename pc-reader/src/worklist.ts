@@ -47,7 +47,7 @@ export function parseWorkList(data: unknown): WorkItem[] {
   return items;
 }
 
-function normalise(entry: unknown): WorkItem | string {
+export function normalise(entry: unknown): WorkItem | string {
   if (typeof entry !== 'object' || entry === null) {
     return 'expected an object with "store" and "url".';
   }

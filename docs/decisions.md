@@ -163,7 +163,8 @@ planning record so this repo carries its own reasons; the M1 section holds the c
   `playwright-core` to drive the PC's installed Chrome and `node-html-parser`. The parsers take a page's HTML and know
   nothing of the browser, so they are tested against saved pages (`pc-reader/test/fixtures`, recorded or marked
   hand-written). It posts through the same `POST /api/ingest/prices` as any client; nothing server-side changed.
-- **The work list is a local file the owner keeps.** The endpoint tells a token holder nothing about what is tracked, so
+- **The work list is a local file the owner keeps** (for a `bsk_` token; with the fleet identity it comes from the catalog,
+  see "The PC reader signs in as the fleet"). The endpoint tells a token holder nothing about what is tracked, so
   the reader reads `{store, url}` entries from `pc-reader/urls.local.json` (ignored by git), checked against the same
   product-page shape the server accepts. A page not linked in basket comes back `unknown_listing`. A server-provided work
   list (a token-scoped read endpoint) would widen what the token can learn and is the owner's separate decision.
@@ -389,3 +390,14 @@ action class. People stay passkey-only on basket; this only adds a machine path.
 - **Tests** use a signing key generated per run and tokens minted in the test; no real credential or Logto call is involved.
   They cover a valid token per endpoint, a wrong scope, an expired token, a token for another audience or issuer, a forged
   signature, an unsigned token, a scope-less token (the disabled application), every non-machine endpoint, and the path being off.
+
+## The PC reader signs in as the fleet (2026-11-09)
+
+Owner's goal: no owner-minted token and no hand-kept URL list. `pc-reader` now takes the fleet identity from its environment
+(`BASKET_FLEET_CLIENT_ID`, `BASKET_FLEET_CLIENT_SECRET`, `BASKET_FLEET_ISSUER`; never in the repo, never logged) and fetches a
+token by OAuth client credentials at `<issuer>/token` for `basket:price-ingest` and `basket:catalog-read` on the resource basket
+already checks, renewing it a minute before expiry. It pushes prices with that token and reads its page list from
+`GET /api/products` (PC-read shops only, each address re-checked against the shop's own product-page shape). The server side is
+unchanged: same endpoints, scopes and validation as "Fleet identity on the machine endpoints". `urls.local.json` stays as a fallback
+only when the reader has no fleet identity or the catalog call fails; the `bsk_` token path is unchanged and used when no fleet
+setting is present. A fleet identity set alongside a `bsk_` token wins. No migration.
