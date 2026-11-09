@@ -382,7 +382,7 @@ action class. People stay passkey-only on basket; this only adds a machine path.
   Nothing about issuing, listing or revoking those tokens changed.
 - **A bearer header means the request stands on the token alone.** The catalog routes accept a signed-in person or a fleet token;
   when the request carries a bearer header the cookie is ignored, and only then does the origin check let a request without an
-  `Origin` through (and only on `/api/products`, as `/api/ingest` already did). A cross-site page cannot set that header, so a
+  `Origin` through (and only on the catalog add and the store-page link, as `/api/ingest` already did; see "The fleet links store pages"). A cross-site page cannot set that header, so a
   forged request still has nothing to ride on, and a signed-in browser with a bad bearer is refused, not served by its cookie.
 - **No migration.** `product.AddedByUserId` is a required foreign key to a user, and the fleet identity is not one. A product the
   fleet adds is therefore recorded against the owner (the oldest owner account) rather than adding a nullable column or a service
