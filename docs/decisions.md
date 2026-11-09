@@ -566,4 +566,5 @@ product as a card with a photo, so the nightly read keeps each store listing's p
   Existing rows are null and fill in on the next read (Lidl that night, Aldi at the next PC run). Rollback is dropping the
   column. It needs the owner's go before merge.
 - **Tests** cover the Lidl tile and product-page capture (including `og:image` and bad addresses), the recorder's keep/replace
-  rule, ingest with the field present, absent, blank, over the cap and not https, relinking clearing it, and the Aldi parser.
+  rule, ingest with the field present, absent, blank, and a bad address (over the cap, not https) ignored with the price kept and any
+  stored photo left alone, relinking clearing it, and the reader's address check and the Aldi parser.
