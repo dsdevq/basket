@@ -12,6 +12,7 @@ we buy. Matching, a shop plan and Lidl Plus receipts come in later milestones (s
   software authenticator).
 - `backend/src/Basket.Api/Prices` - M2: the nightly Hangfire price pull (Lidl), its parsers and polite fetcher, the
   product and price endpoints, and `Prices/Ingest`: the token-signed write-only endpoint the owner's PC posts Tesco, Aldi and Dunnes prices to. Tests use recorded shop pages in `backend/tests/Basket.Tests/Fixtures`, never the network.
+- `backend/src/Basket.Api/Matching` - the shelf's base: deterministic candidate matching (barcode, name and size rules, no model) that proposes each product's equivalent in the other shops and never overwrites a match the owner confirmed ([decisions](docs/decisions.md)).
 - `pc-reader/` - the small Node program that reads Tesco, Aldi and Dunnes product pages in a browser on the owner's PC and posts
   them to the ingest endpoint ([README](pc-reader/README.md)).
 - `frontend/` - Angular 22 on [lifekit-common](https://github.com/lifekit-hq/lifekit-common) (`@lifekit-hq/ui`,
