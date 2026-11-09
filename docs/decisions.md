@@ -675,3 +675,14 @@ a planned store or the shelf. Patterns borrowed: AnyList and OurGroceries ("clea
 - **Screens.** The new route is in `frontend/e2e/support/screens.ts` (the route scan, screen check and baselines read it) and the
   list mock has a ticked item, so the List baselines change too. Linux baselines are drawn on CI only, by the "Update screen
   baselines" workflow dispatched on the branch.
+
+## Shell before the session call
+
+- **The shell draws before `/api/session` answers.** `AppComponent` holds the signed-in shell until the first navigation
+  ends (the guards wait for the session, then the page's chunk loads): `cmn-app-layout` with `[accountPending]="true"`, and
+  in the page's place a `cmn-page` of the address's kind holding the matching `cmn-skeleton` preset (`list` for every page
+  today) inside a `role="status"` "Loading" region. Only the routed content waits for the session. Sign-in, invite and the
+  unreachable page draw no shell; their layout is a separate fix. Pattern: Apple HIG, Loading and Launching (show something
+  right away) and the Carbon Loading pattern, as written up in lifekit-common's `docs/PHONE-CONTRACT.md`, "First paint".
+  `e2e/cold-start.spec.ts` holds the audit's `basket-boot` probe: session delayed 900 ms, layout shift under 0.1 on every page
+  at 390 and 1280.
