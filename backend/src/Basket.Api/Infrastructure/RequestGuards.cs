@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Basket.Api.Auth;
 using Microsoft.Extensions.Options;
 
@@ -7,7 +8,7 @@ namespace Basket.Api.Infrastructure;
 /// CSRF defence for the cookie-authenticated API, on top of the SameSite=Strict session cookie: a state-changing
 /// request must name an allowed origin. Browsers always send Origin on such requests, so a missing one is refused.
 /// </summary>
-public sealed class OriginCheckMiddleware(RequestDelegate next, IOptions<AuthOptions> options)
+public sealed partial class OriginCheckMiddleware(RequestDelegate next, IOptions<AuthOptions> options)
 {
     public Task InvokeAsync(HttpContext context)
     {
@@ -27,13 +28,23 @@ public sealed class OriginCheckMiddleware(RequestDelegate next, IOptions<AuthOpt
     /// <summary>
     /// The price reader and the fleet identity are programs, not pages: they send no Origin and sign with a bearer
     /// token. The ingest endpoint never looks at the session cookie and answers 401 without a valid token. The catalog
-    /// add takes the bearer path only when the request carries a bearer header, and then ignores the cookie entirely;
-    /// a cross-site page cannot set that header, so there is nothing for a forged request to ride on.
+    /// add (<c>POST /api/products</c>) and the store-page link (<c>PUT /api/products/{id}/stores/{store}</c>) take the
+    /// bearer path only when the request carries a bearer header, and then ignore the cookie entirely; a cross-site page
+    /// cannot set that header, so there is nothing for a forged request to ride on. No other product route is skipped.
     /// </summary>
     private static bool IsMachine(HttpRequest request) =>
         request.Path.StartsWithSegments("/api/ingest")
-        || (FleetAgent.HasBearer(request)
-            && string.Equals((request.Path.Value ?? string.Empty).TrimEnd('/'), "/api/products", StringComparison.OrdinalIgnoreCase));
+        || (FleetAgent.HasBearer(request) && IsFleetCatalogWrite(request));
+
+    private static bool IsFleetCatalogWrite(HttpRequest request)
+    {
+        var path = (request.Path.Value ?? string.Empty).TrimEnd('/');
+        return (HttpMethods.IsPost(request.Method) && string.Equals(path, "/api/products", StringComparison.OrdinalIgnoreCase))
+            || (HttpMethods.IsPut(request.Method) && StoreLinkPath().IsMatch(path));
+    }
+
+    [GeneratedRegex("^/api/products/[0-9a-fA-F-]{36}/stores/[^/]+$")]
+    private static partial Regex StoreLinkPath();
 }
 
 /// <summary>Response headers for a public surface. The CSP is configuration so the theme script's hash can be pinned in it.</summary>

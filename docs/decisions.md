@@ -344,9 +344,10 @@ Owner decision 2026-11-08 ("Agree, thats good"): the fleet gets a service identi
 the machine-to-machine application `fleet-agent` with one API resource (`https://fleet.lifekit.internal/api`) and one scope per
 action class. People stay passkey-only on basket; this only adds a machine path.
 
-- **Three endpoints, three scopes, nothing else.** `POST /api/ingest/prices` needs `basket:price-ingest`, `GET /api/products`
-  needs `basket:catalog-read`, `POST /api/products` needs `basket:catalog-add`. Sign-in, invites, members, passkeys, ingest
-  tokens, lists, product deletion and store linking take a signed-in person only, as before. A fleet token on any of them is
+- **Four endpoints, three scopes, nothing else.** `POST /api/ingest/prices` needs `basket:price-ingest`, `GET /api/products`
+  needs `basket:catalog-read`, `POST /api/products` and `PUT /api/products/{id}/stores/{store}` (the store-page link, added
+  2026-11-09, see "The fleet links store pages") need `basket:catalog-add`. Sign-in, invites, members, passkeys, ingest
+  tokens, lists, product deletion and store unlinking take a signed-in person only, as before. A fleet token on any of them is
   refused (401, or 403 where the origin check answers first), and a fleet token never makes a session.
 - **How a token is accepted.** The token is a JWT from the identity service. Basket checks the signature against the issuer's
   published keys (discovery at `FleetAgent:Authority`, or `FleetAgent:BackchannelAuthority` when the container cannot reach
@@ -381,7 +382,7 @@ action class. People stay passkey-only on basket; this only adds a machine path.
   Nothing about issuing, listing or revoking those tokens changed.
 - **A bearer header means the request stands on the token alone.** The catalog routes accept a signed-in person or a fleet token;
   when the request carries a bearer header the cookie is ignored, and only then does the origin check let a request without an
-  `Origin` through (and only on `/api/products`, as `/api/ingest` already did). A cross-site page cannot set that header, so a
+  `Origin` through (and only on the catalog add and the store-page link, as `/api/ingest` already did; see "The fleet links store pages"). A cross-site page cannot set that header, so a
   forged request still has nothing to ride on, and a signed-in browser with a bad bearer is refused, not served by its cookie.
 - **No migration.** `product.AddedByUserId` is a required foreign key to a user, and the fleet identity is not one. A product the
   fleet adds is therefore recorded against the owner (the oldest owner account) rather than adding a nullable column or a service
@@ -401,3 +402,21 @@ already checks, renewing it a minute before expiry. It pushes prices with that t
 unchanged: same endpoints, scopes and validation as "Fleet identity on the machine endpoints". `urls.local.json` stays as a fallback
 only when the reader has no fleet identity or the catalog call fails; the `bsk_` token path is unchanged and used when no fleet
 setting is present. A fleet identity set alongside a `bsk_` token wins. No migration.
+
+## The fleet links store pages (2026-11-09)
+
+Owner's goal: the Tesco and Aldi reader gets its work list without the owner linking each product by hand. The fleet identity
+could already create a product; it can now also link a store page to one, with the scope it already holds.
+
+- **One more route, the same policy.** `PUT /api/products/{id}/stores/{store}` uses the `basket:catalog-add` policy, the one
+  `POST /api/products` uses. No new scope, no change to the Logto role. `DELETE /api/products/{id}` and
+  `DELETE /api/products/{id}/stores/{store}` stay people-only: a fleet token on either is refused (401, or 403 where the origin
+  check answers first), as the people-only table test asserts.
+- **Same checks as for a person.** The shop name, the product's existence and the address's shape (`Stores.TryNormalizeProductUrl`)
+  are unchanged; relinking a different page still forgets the old readings.
+- **No user id to handle.** Linking writes a `StoreListing`, which carries no author, so unlike the product add there is no owner
+  to record it against and no migration. The `Fleet agent {ClientId} authorised for basket:catalog-add` log line tells the
+  fleet's link apart.
+- **Origin check.** A bearer request skips the origin check only for `POST /api/products` and `PUT /api/products/{id}/stores/{store}`
+  (previously the path `/api/products` alone). A bearer on any other product route is still judged on its origin, and with the
+  bearer the cookie is ignored, as before.
