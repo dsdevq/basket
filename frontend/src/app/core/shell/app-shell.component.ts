@@ -4,6 +4,7 @@ import {
   computed,
   CUSTOM_ELEMENTS_SCHEMA,
   inject,
+  input,
 } from '@angular/core';
 import {Router, RouterOutlet} from '@angular/router';
 import {AppUpdateService} from '@lifekit-hq/core/pwa';
@@ -15,11 +16,14 @@ import {
   CmnWhatsNewService,
   type MenuItem,
   type NavItem,
+  PageComponent,
+  SkeletonComponent,
   WHATS_NEW_MENU_ID,
   whatsNewMenuItem,
 } from '@lifekit-hq/ui';
 
 import {SessionStore} from '../auth/session.store';
+import type {PendingPage} from './pending-route';
 
 const LIST: NavItem = {label: 'List', icon: 'ShoppingBasket', route: '/list'};
 const PRICES: NavItem = {label: 'Prices', icon: 'Tag', route: '/prices'};
@@ -30,7 +34,7 @@ const PEOPLE: NavItem = {label: 'People', icon: 'Users', route: '/people'};
 /** The signed-in frame: the lifekit app layout with List, Prices, Promotions and Cards as the tabs and People/Settings behind More. */
 @Component({
   selector: 'bk-app-shell',
-  imports: [AppLayoutComponent, RouterOutlet],
+  imports: [AppLayoutComponent, PageComponent, RouterOutlet, SkeletonComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   schemas: [CUSTOM_ELEMENTS_SCHEMA],
   template: `
@@ -38,6 +42,7 @@ const PEOPLE: NavItem = {label: 'People', icon: 'Users', route: '/people'};
       [navItems]="navItems()"
       [tabRoutes]="tabRoutes"
       [account]="account()"
+      [accountPending]="!!pending()"
       [phoneOverlay]="true"
       (avatarMenuSelect)="onMenu($event)"
       brand="basket"
@@ -50,7 +55,15 @@ const PEOPLE: NavItem = {label: 'People', icon: 'Users', route: '/people'};
           (lk-update-prompt-reload)="update.reload()"
         />
       </div>
-      <router-outlet />
+      @if (pending(); as page) {
+        <cmn-page [kind]="page.kind" [title]="page.title" fill>
+          <div role="status" aria-label="Loading">
+            <cmn-skeleton [shape]="page.shape" />
+          </div>
+        </cmn-page>
+      } @else {
+        <router-outlet />
+      }
     </cmn-app-layout>
   `,
 })
@@ -58,6 +71,9 @@ export class AppShellComponent {
   private readonly session = inject(SessionStore);
   private readonly router = inject(Router);
   private readonly whatsNew = inject(CmnWhatsNewService);
+
+  /** The page to hold while the session call is out; unset once the routed page can show. */
+  public readonly pending = input<PendingPage | null>(null);
 
   protected readonly update = inject(AppUpdateService);
 
