@@ -41,6 +41,13 @@ export const APP_ROUTES: Routes = [
         loadComponent: () => import('./features/prices/prices.page').then(m => m.PricesPage),
       },
       {
+        path: 'promotions',
+        title: 'Promotions',
+        data: {title: 'Promotions'} satisfies PageChromeData,
+        loadComponent: () =>
+          import('./features/promotions/promotions.page').then(m => m.PromotionsPage),
+      },
+      {
         path: 'more',
         title: 'More',
         data: {title: 'More'} satisfies PageChromeData,
