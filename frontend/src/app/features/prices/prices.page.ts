@@ -39,7 +39,7 @@ import {StoreLinkSheetComponent} from './store-link.sheet';
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <cmn-page kind="list" fill [reload]="reload">
+    <cmn-page [reload]="reload" kind="list" fill>
       @for (problem of problems(); track problem) {
         <cmn-alert [title]="problem" variant="warning" />
       }
@@ -115,14 +115,14 @@ export class PricesPage implements OnInit {
   private readonly document = inject(DOCUMENT);
   private readonly destroyRef = inject(DestroyRef);
 
-  /** Pull to refresh on this tab root: the shell's pull gesture calls it and waits for the promise. */
-  protected readonly reload = (): Promise<void> => this.store.load();
-
   protected readonly store = inject(PricesStore);
 
   protected readonly name = new FormControl('', {nonNullable: true});
   protected readonly form = new FormGroup({name: this.name});
   protected readonly headline = headline;
+
+  /** Pull to refresh on this tab root: the shell's pull gesture calls it and waits for the promise. */
+  protected readonly reload = (): Promise<void> => this.store.load();
 
   public ngOnInit(): void {
     void this.store.load();
