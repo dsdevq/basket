@@ -2,6 +2,7 @@ import {HttpClient} from '@angular/common/http';
 import {inject, Injectable} from '@angular/core';
 import {firstValueFrom} from 'rxjs';
 
+import type {StoreId} from '../prices/prices.model';
 import type {ListItem} from './list.model';
 
 @Injectable({providedIn: 'root'})
@@ -15,6 +16,11 @@ export class ListApi {
 
   public add(text: string): Promise<ListItem> {
     return firstValueFrom(this.http.post<ListItem>('/api/list/items', {text}));
+  }
+
+  /** Adds a product picked on the Shelf; the server answers with the open line when it is already there. */
+  public addProduct(productId: string, store: StoreId | null): Promise<ListItem> {
+    return firstValueFrom(this.http.post<ListItem>('/api/list/items', {productId, store}));
   }
 
   public setChecked(id: string, checked: boolean): Promise<ListItem> {

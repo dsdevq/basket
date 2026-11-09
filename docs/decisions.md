@@ -704,3 +704,45 @@ unit that walk order will sort by; this change only keeps it. The sort is not bu
   hand-written from the schema.org shape and say so. A shop whose page has neither markup simply leaves the field empty.
 - **One additive migration, `StoreListingCategory`:** one nullable `varchar(200)` column on `store_listing`; no rewrite, no
   backfill. It follows `StoreListingImageUrl` (the product photo) and is independent of it.
+
+## The Shelf: pick products from a shop instead of typing them (2026-11-09, issues #32 and #11)
+
+Owner's ask: "select the store and select the products from the list from the store and form a list to buy. Without manually typing
+things to buy", with "tiles, photos, price (promotion if applicable)" as the card. A new **Shelf** tab does it. The tab bar is now List, Shelf, Prices and Cards; Promotions moved behind **More** (it is a view over
+prices, and a fifth tab would leave six slots with More on a 390 px bar).
+
+- **Borrowed patterns, named.** The product tile grid of **Bring!** (a photo tile per product, one tap puts it on the shared list,
+  the tile shows it is there) and the favourites list of the **Tesco app** (browse what a shop sells, with its price, and add from
+  there). No new interaction is invented. The shop selector is lifekit-common's `cmn-segmented` (All, Lidl, Aldi, Tesco, Dunnes)
+  and the tile is its `cmn-selectable-card`, pressed while the product is on the list. The page is the `overview` template, which
+  has no rail and takes the full width, so the grid goes from two columns at 390 px to five at 1280 px.
+- **What a card shows**, all of it already on the product endpoint: photo, name, the best price today (a card holder's price when it
+  is the lowest, with "with Clubcard"), the old price struck through, the promo text as a tag, how long the offer lasts, when it was
+  read ("Seen 5 Nov"), and "Out of stock" when the reading says so. An offer that has not started or has ended shows "from 12 Nov"
+  or "ended" and none of the deal lines. A page with no reading yet says so. `PriceResponse` gains `inStock` (it was stored, not sent).
+- **A shop's filter shows that shop's reading.** Tesco keeps the products with a Tesco page and shows the Tesco price and photo.
+  **All** keeps every product and shows the shop with the lowest current price, named on the card; this is a display choice, not
+  the compare sheet or matching (issues #9, #10), which stay out.
+- **A tap is one list line per product and shop.** The list item gets a nullable `ProductId` and a nullable `Store` (issue #11): the
+  line is named after the product (the server ignores any text sent with a product), the shop is where it was picked, and **All**
+  records no shop. The shop has to be one that lists the product (400 `not_sold_there`). A second tap, or a second phone, gets the
+  open line back (200, not 201) and a partial unique index on `(product_id, store)` for open lines (`NULLS NOT DISTINCT`, so "no
+  shop" counts as one value) holds it when two taps race. A ticked line is history: tapping the product again makes a new line,
+  and un-ticking the old one while a new one is open answers 409 `already_on_list` rather than breaking the index. Deleting a
+  product keeps its list lines as plain text (`ON DELETE SET NULL`). Free-text lines are untouched; the composer stays on the List
+  tab as their only way in. The List row shows the shop as a tag.
+- **Photos.** The column and the price-ingest `imageUrl` already exist (the nightly read's photo address, see "The product photo" above:
+  an address that is absent or fails the check is ignored and never costs a price). This change returns it as `imageUrl` on the
+  listing in `GET /api/products` and accepts it on the catalog link (`PUT /api/products/{id}/stores/{store}`, optional `imageUrl`,
+  checked by the same `ImageUrls` rule; a bad one there is a 400 `image_invalid`, because that call is a deliberate write). A link
+  without a photo keeps the stored one; relinking a different page forgets it. A tile with no photo, or whose photo does not load,
+  shows the product's initial on the surface colour.
+- **Content-security policy: `img-src` now allows `https:`.** The shops' image hosts are not known until the reader sends them, and
+  an allowlist of guessed hosts would break the first photo that came from another one. Only the image directive widens, the
+  address is server-validated as above, and the image tag sends no referrer. Narrow it to the hosts the reader really uses once
+  they are known.
+- **One additive migration, waiting for the owner's go:** `20261110120000_ListItemProduct` (two nullable columns on `list_item`, a
+  foreign key and the partial index). It rewrites no row and needs no backfill; `Down` drops all four. It is dated after
+  `20261110110000_Trips`.
+- **Not in this change** (recorded as follow-ups): matching of free text to products (#9), search-to-add (#31), the match sheet
+  (#10), reading photos from the shops (#30), trip close and history, the compare sheet and the shop plan.

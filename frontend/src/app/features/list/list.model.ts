@@ -1,3 +1,5 @@
+import type {StoreId} from '../prices/prices.model';
+
 export interface Person {
   readonly id: string;
   readonly name: string;
@@ -11,4 +13,8 @@ export interface ListItem {
   readonly addedBy: Person;
   readonly checkedAt: string | null;
   readonly checkedBy: Person | null;
+  /** The product this line was picked as on the Shelf; null for a free-text line. */
+  readonly productId: string | null;
+  /** The shop it was picked from; null for a free-text line or a pick from "All". */
+  readonly store: StoreId | null;
 }

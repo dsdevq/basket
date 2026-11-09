@@ -7,9 +7,9 @@ namespace Basket.Api.Prices;
 
 public sealed record AddProductRequest(string? Name);
 
-public sealed record LinkStoreRequest(string? Url);
+public sealed record LinkStoreRequest(string? Url, string? ImageUrl = null);
 
-public sealed record ListingResponse(string Url, string? Title, DateTimeOffset? CheckedAt, string? Error, string? Category);
+public sealed record ListingResponse(string Url, string? Title, DateTimeOffset? CheckedAt, string? Error, string? Category, string? ImageUrl);
 
 /// <summary>
 /// One dated reading. <see cref="State"/>: <c>current</c> (usable today), <c>upcoming</c> (the offer starts later),
@@ -26,7 +26,8 @@ public sealed record PriceResponse(
     string? PromoText,
     DateOnly? ValidFrom,
     DateOnly? ValidUntil,
-    decimal? Best);
+    decimal? Best,
+    bool InStock);
 
 /// <summary>The last price really paid. <c>not_connected</c> until the owner's one-off Lidl Plus login exists (M4).</summary>
 public sealed record PaidResponse(string State, decimal? Price, DateOnly? PaidOn);
@@ -81,10 +82,10 @@ public static class ProductEndpoints
             {
                 var listing = listings[product.Id].FirstOrDefault(l => l.Store == store);
                 return new ProductStoreResponse(
-                    Slug(store),
+                    store.Slug(),
                     store.DisplayName(),
                     store.ReadBy(),
-                    listing is null ? null : new ListingResponse(listing.Url, listing.Title, listing.LastCheckedAt, listing.LastError, listing.Category),
+                    listing is null ? null : new ListingResponse(listing.Url, listing.Title, listing.LastCheckedAt, listing.LastError, listing.Category, listing.ImageUrl),
                     listing is not null && latest.TryGetValue(listing.Id, out var observation) ? ToPrice(observation, today) : null,
                     LastPaid(store, paid.GetValueOrDefault((product.Id, store))));
             }).ToList())).ToList();
@@ -97,7 +98,7 @@ public static class ProductEndpoints
         {
             var run = runs.FirstOrDefault(r => r.Store == store);
             return new StoreStatusResponse(
-                Slug(store),
+                store.Slug(),
                 store.DisplayName(),
                 store.ReadBy(),
                 run is null ? null : new RunResponse(run.FinishedAt, run.Outcome.ToString().ToLowerInvariant(), run.Listings, run.Read, run.Message));
@@ -148,7 +149,7 @@ public static class ProductEndpoints
         var created = new ProductResponse(
             product.Id,
             product.Name,
-            Stores.All.Select(s => new ProductStoreResponse(Slug(s), s.DisplayName(), s.ReadBy(), null, null, LastPaid(s, null))).ToList());
+            Stores.All.Select(s => new ProductStoreResponse(s.Slug(), s.DisplayName(), s.ReadBy(), null, null, LastPaid(s, null))).ToList());
         return Results.Created($"/api/products/{product.Id}", created);
     }
 
@@ -201,6 +202,12 @@ public static class ProductEndpoints
                 statusCode: 400);
         }
 
+        string? imageUrl = null;
+        if (!string.IsNullOrWhiteSpace(request.ImageUrl) && !ImageUrls.TryNormalize(request.ImageUrl, out imageUrl))
+        {
+            return Results.Json(new { error = "image_invalid", message = "The photo has to be an https address." }, statusCode: 400);
+        }
+
         var listing = await db.StoreListings.SingleOrDefaultAsync(l => l.ProductId == id && l.Store == shop, ct);
         if (listing is null)
         {
@@ -219,8 +226,9 @@ public static class ProductEndpoints
         }
 
         listing.Url = url.ToString();
+        listing.ImageUrl = imageUrl ?? listing.ImageUrl;
         await db.SaveChangesAsync(ct);
-        return Results.Ok(new ListingResponse(listing.Url, listing.Title, listing.LastCheckedAt, listing.LastError, listing.Category));
+        return Results.Ok(new ListingResponse(listing.Url, listing.Title, listing.LastCheckedAt, listing.LastError, listing.Category, listing.ImageUrl));
     }
 
     private static async Task<IResult> UnlinkStore(Guid id, string store, AppDbContext db, CancellationToken ct) =>
@@ -249,11 +257,9 @@ public static class ProductEndpoints
         decimal? best = state == PriceStates.Current
             ? new[] { o.Price, o.LoyaltyPrice }.Where(p => p is not null).Min()
             : null;
-        return new PriceResponse(o.ObservedOn, state, o.Price, o.WasPrice, o.LoyaltyPrice, o.LoyaltyScheme, o.PromoText, o.ValidFrom, o.ValidUntil, best);
+        return new PriceResponse(o.ObservedOn, state, o.Price, o.WasPrice, o.LoyaltyPrice, o.LoyaltyScheme, o.PromoText, o.ValidFrom, o.ValidUntil, best, o.InStock);
     }
 
     private static DateOnly Today(TimeProvider clock) =>
         DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(clock.GetUtcNow(), Dublin).DateTime);
-
-    private static string Slug(Store store) => store.ToString().ToLowerInvariant();
 }

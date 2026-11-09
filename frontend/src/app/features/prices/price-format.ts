@@ -1,9 +1,17 @@
-import type {Paid, Price, ProductStore, RunOutcome, StoreStatus} from './prices.model';
+import type {Paid, Price, ProductStore, RunOutcome, StoreId, StoreStatus} from './prices.model';
 
 const CENTS = 2;
 const MONTH_OF_YEAR = 1;
 const DAY_OF_MONTH = 2;
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** The shops by the name people use for them. */
+export const STORE_NAMES: Record<StoreId, string> = {
+  lidl: 'Lidl',
+  aldi: 'Aldi',
+  tesco: 'Tesco',
+  dunnes: 'Dunnes',
+};
 
 /** "2026-11-05" -> "5 Nov". Dates arrive as plain days (Dublin), so they are never shifted by a time zone. */
 export function shortDate(day: string | null): string {

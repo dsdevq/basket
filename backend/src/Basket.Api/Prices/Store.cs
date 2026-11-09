@@ -31,6 +31,9 @@ public static partial class Stores
         return false;
     }
 
+    /// <summary>The lower-case name a shop goes by in addresses and in the API (<c>tesco</c>).</summary>
+    public static string Slug(this Store store) => store.ToString().ToLowerInvariant();
+
     public static string DisplayName(this Store store) => store switch
     {
         Store.Lidl => "Lidl",

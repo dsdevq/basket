@@ -4,6 +4,7 @@ import {patchState, signalStore, withComputed, withMethods, withState} from '@ng
 
 import {SessionStore} from '../../core/auth/session.store';
 import {HttpStatus, statusOf} from '../../core/http-status';
+import type {StoreId} from '../prices/prices.model';
 import {ListApi} from './list.api';
 import type {ListItem} from './list.model';
 
@@ -75,6 +76,18 @@ export const ListStore = signalStore(
             return false;
           } finally {
             patchState(store, {adding: false});
+          }
+        },
+
+        /** Puts a Shelf pick on the list (one line per product and shop); false when it did not go through. */
+        async addProduct(productId: string, shop: StoreId | null): Promise<boolean> {
+          try {
+            const line = await api.addProduct(productId, shop);
+            setItems([...store.items().filter(item => item.id !== line.id), line]);
+            return true;
+          } catch {
+            toast.error(MESSAGES.add);
+            return false;
           }
         },
 

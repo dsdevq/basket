@@ -265,6 +265,15 @@ namespace Basket.Api.Data.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("is_checked");
 
+                    b.Property<Guid?>("ProductId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("product_id");
+
+                    b.Property<string>("Store")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("store");
+
                     b.Property<string>("Text")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -278,6 +287,12 @@ namespace Basket.Api.Data.Migrations
                     b.HasIndex("CheckedByUserId");
 
                     b.HasIndex("IsChecked", "AddedAt");
+
+                    b.HasIndex("ProductId", "Store")
+                        .IsUnique()
+                        .HasFilter("is_checked = false AND product_id IS NOT NULL");
+
+                    NpgsqlIndexBuilderExtensions.AreNullsDistinct(b.HasIndex("ProductId", "Store"), false);
 
                     b.ToTable("list_item", (string)null);
                 });
@@ -778,6 +793,11 @@ namespace Basket.Api.Data.Migrations
                     b.HasOne("Basket.Api.Data.AppUser", null)
                         .WithMany()
                         .HasForeignKey("CheckedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Basket.Api.Data.Product", null)
+                        .WithMany()
+                        .HasForeignKey("ProductId")
                         .OnDelete(DeleteBehavior.SetNull);
                 });
 

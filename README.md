@@ -16,7 +16,7 @@ we buy, and the four shops' **loyalty cards** as barcodes to show at the till. M
 - `pc-reader/` - the small Node program that reads Tesco, Aldi and Dunnes product pages in a browser on the owner's PC and posts
   them to the ingest endpoint ([README](pc-reader/README.md)).
 - `frontend/` - Angular 22 on [lifekit-common](https://github.com/lifekit-hq/lifekit-common) (`@lifekit-hq/ui`,
-  `core`, `tokens`), Violet `#7c3aed` seed, phone-first with bottom sheets.
+  `core`, `tokens`), Violet `#7c3aed` seed, phone-first with bottom sheets; the Shelf tab is where products are picked from a shop (no typing).
 - `docker/` - one image (the API serves the Angular build), the production compose project `basket`, a dev database.
 - `docs/` - [decisions](docs/decisions.md) and the [VPS runbook](docs/vps-setup.md).
 

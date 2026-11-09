@@ -44,6 +44,12 @@ export const APP_ROUTES: Routes = [
         loadComponent: () => import('./features/history/history.page').then(m => m.HistoryPage),
       },
       {
+        path: 'shelf',
+        title: 'Shelf',
+        data: {title: 'Shelf'} satisfies PageChromeData,
+        loadComponent: () => import('./features/shelf/shelf.page').then(m => m.ShelfPage),
+      },
+      {
         path: 'prices',
         title: 'Prices',
         data: {title: 'Prices'} satisfies PageChromeData,
@@ -52,7 +58,7 @@ export const APP_ROUTES: Routes = [
       {
         path: 'promotions',
         title: 'Promotions',
-        data: {title: 'Promotions'} satisfies PageChromeData,
+        data: {title: 'Promotions', parent: '/more'} satisfies PageChromeData,
         loadComponent: () =>
           import('./features/promotions/promotions.page').then(m => m.PromotionsPage),
       },
