@@ -11,6 +11,7 @@ interface ListState {
   readonly items: readonly ListItem[];
   readonly status: 'loading' | 'ready' | 'error';
   readonly adding: boolean;
+  readonly closing: boolean;
 }
 
 const MESSAGES = {
@@ -18,12 +19,14 @@ const MESSAGES = {
   add: 'Could not add that. Try again.',
   update: 'Could not update that item. It is back as it was.',
   remove: 'Could not delete that item.',
+  close: 'Could not finish the trip. The list is as it was. Try again.',
+  closeChanged: 'The list just changed. Check it and tap Done shopping again.',
 } as const;
 
 /** The shared list. Changes show at once and are rolled back if the server refuses them. */
 export const ListStore = signalStore(
   {providedIn: 'root'},
-  withState<ListState>({items: [], status: 'loading', adding: false}),
+  withState<ListState>({items: [], status: 'loading', adding: false, closing: false}),
   withComputed(({items}) => ({
     toBuy: computed(() => items().filter(item => !item.checked)),
     done: computed(() => items().filter(item => item.checked)),
@@ -44,20 +47,22 @@ export const ListStore = signalStore(
       const replace = (next: ListItem): void =>
         setItems(store.items().map(item => (item.id === next.id ? next : item)));
 
-      return {
-        /** Fetches the list. `quiet` keeps what is on screen if the call fails (the background refresh). */
-        async load(quiet = false): Promise<void> {
-          const seen = changes;
-          try {
-            const items = await api.items();
-            patchState(store, changes === seen ? {items, status: 'ready'} : {status: 'ready'});
-          } catch {
-            if (!quiet) {
-              patchState(store, {status: store.items().length ? 'ready' : 'error'});
-              toast.error(MESSAGES.load);
-            }
+      /** Fetches the list. `quiet` keeps what is on screen if the call fails (the background refresh). */
+      const load = async (quiet = false): Promise<void> => {
+        const seen = changes;
+        try {
+          const items = await api.items();
+          patchState(store, changes === seen ? {items, status: 'ready'} : {status: 'ready'});
+        } catch {
+          if (!quiet) {
+            patchState(store, {status: store.items().length ? 'ready' : 'error'});
+            toast.error(MESSAGES.load);
           }
-        },
+        }
+      };
+
+      return {
+        load,
 
         async add(text: string): Promise<boolean> {
           patchState(store, {adding: true});
@@ -87,6 +92,34 @@ export const ListStore = signalStore(
           } catch {
             replace(item);
             toast.error(MESSAGES.update);
+          }
+        },
+
+        /**
+         * Done shopping: the server files the ticked items as a trip and takes them off the list. The list is
+         * emptied here only after it said yes, then re-read, so what stays is what the server kept.
+         */
+        async closeTrip(): Promise<boolean> {
+          if (store.closing()) {
+            return false;
+          }
+          patchState(store, {closing: true});
+          try {
+            await api.close();
+            setItems(store.items().filter(item => !item.checked));
+            toast.success('Trip saved to History');
+            void load(true);
+            return true;
+          } catch (error) {
+            if (statusOf(error) === HttpStatus.conflict) {
+              toast.error(MESSAGES.closeChanged);
+              void load(true);
+            } else {
+              toast.error(MESSAGES.close);
+            }
+            return false;
+          } finally {
+            patchState(store, {closing: false});
           }
         },
 

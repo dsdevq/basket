@@ -503,6 +503,58 @@ namespace Basket.Api.Data.Migrations
                     b.ToTable("store_listing", (string)null);
                 });
 
+            modelBuilder.Entity("Basket.Api.Data.Trip", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("ClosedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("closed_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClosedAt");
+
+                    b.ToTable("trip", (string)null);
+                });
+
+            modelBuilder.Entity("Basket.Api.Data.TripItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset?>("CheckedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("checked_at");
+
+                    b.Property<Guid?>("CheckedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("checked_by_user_id");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("text");
+
+                    b.Property<Guid>("TripId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("trip_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CheckedByUserId");
+
+                    b.HasIndex("TripId");
+
+                    b.ToTable("trip_item", (string)null);
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>
                 {
                     b.Property<int>("Id")
@@ -714,6 +766,20 @@ namespace Basket.Api.Data.Migrations
                     b.HasOne("Basket.Api.Data.Product", null)
                         .WithMany()
                         .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Basket.Api.Data.TripItem", b =>
+                {
+                    b.HasOne("Basket.Api.Data.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("CheckedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Basket.Api.Data.Trip", null)
+                        .WithMany()
+                        .HasForeignKey("TripId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

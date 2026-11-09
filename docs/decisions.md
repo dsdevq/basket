@@ -420,3 +420,41 @@ could already create a product; it can now also link a store page to one, with t
 - **Origin check.** A bearer request skips the origin check only for `POST /api/products` and `PUT /api/products/{id}/stores/{store}`
   (previously the path `/api/products` alone). A bearer on any other product route is still judged on its origin, and with the
   bearer the cookie is ignored, as before.
+
+## Done shopping and the history of trips (2026-11-10)
+
+Owner's words: "I want have buy lists. And the history of lists." and, after ticking everything, "it should be in the past".
+Issues 37 (close the trip) and 38 (history and reload), built on the list as it is today: no dependency on the compare sheet,
+a planned store or the shelf. Patterns borrowed: AnyList and OurGroceries ("clear crossed-off items" and the list history).
+
+- **A closed trip is a date, the ticked items and who ticked them, nothing more.** Two new tables, `trip` (`id`, `closed_at`) and
+  `trip_item` (`id`, `trip_id`, `text`, `checked_at`, `checked_by_user_id`). No shops, prices or planned store: marking a planned
+  store on a trip (issue 36) stays out. `trip_item` rows go with their trip; a deleted account leaves `checked_by_user_id` empty
+  and the history then shows the item without a name.
+- **The close is an explicit action.** "Done shopping" sits on the Ticked section of the List tab and asks for a confirm that says
+  what happens. It is not triggered when the last item is ticked (the default taken in issue 37; a ticked row can still be
+  unticked by a mis-tap). `POST /api/list/close` copies the ticked items into a new trip and deletes them from `list_item` in one
+  transaction. It refuses with 409 `nothing_ticked` when nothing is ticked, and with 409 `list_changed` (nothing filed) when the
+  delete does not touch every row that was copied, which is what a second device closing at the same moment, or someone
+  unticking an item, looks like. Two taps at once therefore file one trip.
+- **What is not ticked stays on the list.** "Empties the list" is read the way AnyList reads it: the ticked items leave, the rest
+  waits for the next shop. When everything was ticked, which is the case the owner described, the list is empty and ready for a
+  new one. The confirm names the count that stays so this is never a surprise. Clearing unticked items too would lose things he
+  has not bought; that is the call to veto if he wants the other reading.
+- **History is a page, not a tab.** `/history` (title "History", back to the list) is reached from the clock icon in the List
+  tab's top bar, the lifekit page-action contract for a trailing action; it is not a third tab. Trips are listed newest first with
+  the day they were closed, the item count, each item and "Ticked by <name>". `GET /api/trips` returns 20 trips per page with a
+  `hasMore` flag; "Show older trips" asks for the next page with `before=<closedAt of the last trip shown>`, so a trip closed
+  while he is paging cannot shift or repeat a page.
+- **"Same as last time" adds, it does not replace.** `POST /api/trips/{id}/reload` puts the trip's items on the list as new
+  to-buy lines added by whoever tapped, in the trip's order. An item whose text (any letter case) is already waiting on the list is
+  skipped, so a second tap adds nothing; a ticked line with the same text does not count as waiting. The 500-item cap of the list
+  applies: over it the call answers 409 `list_full` and adds nothing. The trip stays in the history. The page then returns to the
+  List tab and a toast says how many were added.
+- **Free text, as the list is.** Reloading copies the typed text; there is no link to a product, so a later change to the
+  catalogue never rewrites a past trip.
+- **Migration: additive only.** `20261109225114_Trips` creates the two tables and their indexes and touches no existing table
+  or row. It needs the owner's go before merge; `Down` drops both tables. Backend tests run it from empty on every class.
+- **Screens.** The new route is in `frontend/e2e/support/screens.ts` (the route scan, screen check and baselines read it) and the
+  list mock has a ticked item, so the List baselines change too. Linux baselines are drawn on CI only: the PR carries the
+  `update-baselines` label for the "Update screen baselines" workflow.

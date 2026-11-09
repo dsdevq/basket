@@ -1,6 +1,6 @@
 import {signal} from '@angular/core';
 import {type ComponentFixture, TestBed} from '@angular/core/testing';
-import {CmnDrawerService, ToastService} from '@lifekit-hq/ui';
+import {CmnDialogService, CmnDrawerService, ToastService} from '@lifekit-hq/ui';
 import {of} from 'rxjs';
 
 import {SessionStore} from '../../core/auth/session.store';
@@ -38,7 +38,9 @@ interface Harness {
     add: ReturnType<typeof vi.fn>;
     setChecked: ReturnType<typeof vi.fn>;
     remove: ReturnType<typeof vi.fn>;
+    close: ReturnType<typeof vi.fn>;
   };
+  readonly dialog: {confirm: ReturnType<typeof vi.fn>};
   readonly drawer: {open: ReturnType<typeof vi.fn>};
   readonly host: HTMLElement;
 }
@@ -49,12 +51,15 @@ async function render(items: ListItem[]): Promise<Harness> {
     add: vi.fn(),
     setChecked: vi.fn(),
     remove: vi.fn().mockResolvedValue(undefined),
+    close: vi.fn().mockResolvedValue({}),
   };
   const drawer = {open: vi.fn()};
+  const dialog = {confirm: vi.fn().mockReturnValue(of(true))};
   TestBed.configureTestingModule({
     providers: [
       {provide: ListApi, useValue: api},
       {provide: CmnDrawerService, useValue: drawer},
+      {provide: CmnDialogService, useValue: dialog},
       {provide: ToastService, useValue: {error: vi.fn(), success: vi.fn()}},
       {
         provide: SessionStore,
@@ -65,7 +70,7 @@ async function render(items: ListItem[]): Promise<Harness> {
   const fixture = TestBed.createComponent(ListPage);
   fixture.detectChanges();
   await settle(fixture);
-  return {fixture, api, drawer, host: fixture.nativeElement as HTMLElement};
+  return {fixture, api, dialog, drawer, host: fixture.nativeElement as HTMLElement};
 }
 
 describe('ListPage', () => {
@@ -156,5 +161,64 @@ describe('ListPage', () => {
     await settle(fixture);
 
     expect(api.remove).not.toHaveBeenCalled();
+  });
+
+  describe('Done shopping', () => {
+    const button = (host: HTMLElement): HTMLButtonElement | undefined =>
+      Array.from(host.querySelectorAll('button')).find(b =>
+        b.textContent?.includes('Done shopping')
+      );
+
+    it('is offered only when something is ticked', async () => {
+      const none = await render([item('1', 'Spinach')]);
+      expect(button(none.host)).toBeUndefined();
+      TestBed.resetTestingModule();
+
+      const some = await render([item('1', 'Spinach'), item('2', 'Butter', {checked: true})]);
+      expect(button(some.host)).toBeDefined();
+    });
+
+    it('files the trip after the confirm and leaves the list empty when everything was ticked', async () => {
+      const {fixture, api, dialog, host} = await render([
+        item('1', 'Spinach', {checked: true}),
+        item('2', 'Butter', {checked: true}),
+      ]);
+      api.items.mockResolvedValue([]);
+
+      button(host)?.click();
+      await settle(fixture);
+      await settle(fixture);
+
+      expect(dialog.confirm).toHaveBeenCalledTimes(1);
+      expect(dialog.confirm.mock.calls[0][0].message).toContain('2 ticked items go to History');
+      expect(api.close).toHaveBeenCalledTimes(1);
+      expect(host.textContent).toContain('Nothing on the list');
+      expect(host.textContent).not.toContain('Spinach');
+    });
+
+    it('says what stays on the list when some items are not ticked', async () => {
+      const {fixture, dialog, host} = await render([
+        item('1', 'Spinach'),
+        item('2', 'Butter', {checked: true}),
+      ]);
+
+      button(host)?.click();
+      await settle(fixture);
+
+      expect(dialog.confirm.mock.calls[0][0].message).toContain(
+        '1 ticked item goes to History. The 1 not ticked stay on the list.'
+      );
+    });
+
+    it('does nothing when the confirm is dismissed', async () => {
+      const {fixture, api, dialog, host} = await render([item('2', 'Butter', {checked: true})]);
+      dialog.confirm.mockReturnValue(of(false));
+
+      button(host)?.click();
+      await settle(fixture);
+
+      expect(api.close).not.toHaveBeenCalled();
+      expect(host.textContent).toContain('Butter');
+    });
   });
 });
