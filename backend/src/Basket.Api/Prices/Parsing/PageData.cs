@@ -114,6 +114,47 @@ internal static partial class PageData
         return moment is { } value ? DateOnly.FromDateTime(value.DateTime) : null;
     }
 
+    /// <summary>
+    /// The first usable photo address of a value that holds one: a string, an array of strings, or an object with a
+    /// <c>url</c> (the three shapes schema.org <c>image</c> takes). Anything that is not a plain https address is skipped.
+    /// </summary>
+    public static string? ImageUrl(JsonElement? image)
+    {
+        switch (image)
+        {
+            case { ValueKind: JsonValueKind.String } text:
+                return ImageUrls.TryNormalize(WebUtility.HtmlDecode(text.GetString()), out var url) ? url : null;
+            case { ValueKind: JsonValueKind.Array } list:
+                return list.EnumerateArray().Select(item => ImageUrl(item)).FirstOrDefault(found => found is not null);
+            case { ValueKind: JsonValueKind.Object } obj when obj.TryGetProperty("url", out var inner):
+                return ImageUrl(inner);
+            default:
+                return null;
+        }
+    }
+
+    /// <summary>The page's <c>og:image</c> address (what shops give link previews), when it is a usable one.</summary>
+    public static string? OgImage(string html)
+    {
+        foreach (Match tag in MetaTag().Matches(html))
+        {
+            var attributes = tag.Value;
+            var property = MetaProperty().Match(attributes);
+            if (!property.Success || !string.Equals(property.Groups["v"].Value, "og:image", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var content = MetaContent().Match(attributes);
+            if (content.Success && ImageUrls.TryNormalize(WebUtility.HtmlDecode(content.Groups["v"].Value), out var url))
+            {
+                return url;
+            }
+        }
+
+        return null;
+    }
+
     public static string? Clean(string? text)
     {
         if (string.IsNullOrWhiteSpace(text))
@@ -141,6 +182,15 @@ internal static partial class PageData
 
     [GeneratedRegex(@"<script[^>]*type=""application/ld\+json""[^>]*>(?<json>.*?)</script>", RegexOptions.Singleline | RegexOptions.IgnoreCase)]
     private static partial Regex JsonLdBlock();
+
+    [GeneratedRegex(@"\bproperty\s*=\s*""(?<v>[^""]*)""", RegexOptions.IgnoreCase)]
+    private static partial Regex MetaProperty();
+
+    [GeneratedRegex(@"\bcontent\s*=\s*""(?<v>[^""]*)""", RegexOptions.IgnoreCase)]
+    private static partial Regex MetaContent();
+
+    [GeneratedRegex(@"<meta\b[^>]*>", RegexOptions.IgnoreCase)]
+    private static partial Regex MetaTag();
 
     [GeneratedRegex(@"data-grid-data=""(?<data>[^""]*)""")]
     private static partial Regex GridDataAttribute();

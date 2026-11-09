@@ -5,6 +5,40 @@ export interface JsonLdProduct {
   name?: string;
   price?: number;
   inStock?: boolean;
+  image?: string;
+}
+
+/** The server's cap on a photo address (`ImageUrls.MaxLength`). */
+const MAX_IMAGE_URL = 500;
+
+/** A usable photo address: absolute https, no login in it, within the server's cap; anything else is no photo. */
+export function toImageUrl(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  const text = value.trim();
+  if (text.length === 0 || text.length > MAX_IMAGE_URL) {
+    return undefined;
+  }
+  try {
+    const url = new URL(text);
+    return url.protocol === 'https:' && url.username === '' && url.password === '' ? text : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** schema.org `image` is a string, a list, or an object with a `url`; the first usable address wins. */
+function firstImage(value: unknown): string | undefined {
+  if (Array.isArray(value)) {
+    return value.map(firstImage).find((found) => found !== undefined);
+  }
+  return isRecord(value) ? toImageUrl(value['url']) : toImageUrl(value);
+}
+
+/** The page's `og:image` (the picture shops give link previews), when it is a usable address. */
+export function readOgImage(html: string): string | undefined {
+  return toImageUrl(parse(html).querySelector('meta[property="og:image"]')?.getAttribute('content'));
 }
 
 /** The first schema.org Product in the page's JSON-LD blocks, reduced to what the reader posts. */
@@ -53,6 +87,10 @@ function findProduct(node: unknown): JsonLdProduct | undefined {
   const result: JsonLdProduct = {};
   if (typeof node['name'] === 'string' && node['name'].trim()) {
     result.name = node['name'].trim();
+  }
+  const image = firstImage(node['image']);
+  if (image !== undefined) {
+    result.image = image;
   }
   if (offer) {
     const price = toMoney(offer['price'] ?? (isRecord(offer['priceSpecification']) ? offer['priceSpecification']['price'] : undefined));
