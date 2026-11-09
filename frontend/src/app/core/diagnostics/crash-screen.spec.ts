@@ -1,9 +1,11 @@
 import {Location} from '@angular/common';
-import {ChangeDetectionStrategy, Component, ErrorHandler, inject} from '@angular/core';
+import {ChangeDetectionStrategy, Component, ErrorHandler, inject, signal} from '@angular/core';
 import {TestBed} from '@angular/core/testing';
 import {provideRouter, Router, type Routes} from '@angular/router';
+import {AppUpdateService} from '@lifekit-hq/core/pwa';
 
 import {AppComponent} from '../../app.component';
+import {SessionStore} from '../auth/session.store';
 import {
   CRASH_ELEMENT_ID,
   CrashErrorHandler,
@@ -92,12 +94,19 @@ describe('crash screen', () => {
       throw new TypeError('guard broke');
     };
 
+    /** What the shell, which `AppComponent` draws until the first navigation ends, injects. */
+    const shellProviders = [
+      {provide: AppUpdateService, useValue: {updateReady: signal(false), reload: vi.fn()}},
+      {provide: SessionStore, useValue: {isOwner: signal(false), user: signal(null)}},
+    ];
+
     async function boot(initialUrl: string, routes: Routes): Promise<void> {
       TestBed.configureTestingModule({
         rethrowApplicationErrors: false,
         providers: [
           provideRouter(routes),
           provideMountMarker(),
+          ...shellProviders,
           {provide: ErrorHandler, useClass: CrashErrorHandler},
         ],
       });
@@ -120,12 +129,15 @@ describe('crash screen', () => {
 
     afterEach(() => document.documentElement.removeAttribute(MOUNTED_ATTRIBUTE));
 
-    it('is not mounted while <router-outlet> is up but no routed page has rendered', () => {
-      TestBed.configureTestingModule({providers: [provideRouter([]), provideMountMarker()]});
+    it('is not mounted while the shell holds its pending page and no routed page has rendered', () => {
+      TestBed.configureTestingModule({
+        providers: [provideRouter([]), provideMountMarker(), ...shellProviders],
+      });
       const fixture = TestBed.createComponent(AppComponent);
       fixture.detectChanges();
 
-      expect(fixture.nativeElement.querySelector('router-outlet')).not.toBeNull();
+      expect(fixture.nativeElement.querySelector('bk-app-shell')).not.toBeNull();
+      expect(fixture.nativeElement.querySelector('router-outlet')).toBeNull();
       expect(isAppMounted(document)).toBe(false);
 
       new CrashErrorHandler().handleError(new Error('boom'));
@@ -155,7 +167,9 @@ describe('crash screen', () => {
     });
 
     it('explains an uncaught error that happens before the first page renders', () => {
-      TestBed.configureTestingModule({providers: [provideRouter([]), provideMountMarker()]});
+      TestBed.configureTestingModule({
+        providers: [provideRouter([]), provideMountMarker(), ...shellProviders],
+      });
       TestBed.createComponent(AppComponent).detectChanges();
 
       window.dispatchEvent(
