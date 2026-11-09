@@ -51,8 +51,9 @@ test('config: environment wins over the local file; secrets are required, https 
   const file = () => 'BASKET_API_ORIGIN=https://file.example\nBASKET_INGEST_TOKEN=bsk_file\n';
   const fromFile = loadConfig({}, file);
   assert.equal(fromFile.origin, 'https://file.example');
-  assert.equal(loadConfig({ BASKET_API_ORIGIN: 'https://env.example/', BASKET_INGEST_TOKEN: 'bsk_env' }, file).token, 'bsk_env');
-  assert.throws(() => loadConfig({}, () => { throw new Error('missing'); }), /BASKET_API_ORIGIN and BASKET_INGEST_TOKEN/);
+  assert.deepEqual(loadConfig({ BASKET_API_ORIGIN: 'https://env.example/', BASKET_INGEST_TOKEN: 'bsk_env' }, file).auth, { kind: 'token', token: 'bsk_env' });
+  assert.throws(() => loadConfig({}, () => { throw new Error('missing'); }), /BASKET_API_ORIGIN/);
+  assert.throws(() => loadConfig({ BASKET_API_ORIGIN: 'https://a.example' }, () => { throw new Error('missing'); }), /BASKET_INGEST_TOKEN/);
   assert.throws(() => loadConfig({ BASKET_API_ORIGIN: 'http://basket.example', BASKET_INGEST_TOKEN: 'bsk_x' }, file), /https/);
   assert.equal(loadConfig({ BASKET_API_ORIGIN: 'http://localhost:3310', BASKET_INGEST_TOKEN: 'bsk_x' }, file).origin, 'http://localhost:3310');
   assert.throws(() => loadConfig({ BASKET_API_ORIGIN: 'https://a.example', BASKET_INGEST_TOKEN: 'nope' }, file), /bsk_/);

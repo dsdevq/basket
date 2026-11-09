@@ -1,5 +1,7 @@
 import { openBrowser } from './browser.ts';
+import { fetchCatalogWorkList, resolveWorkList } from './catalog.ts';
 import { loadConfig } from './config.ts';
+import { bearerSource } from './fleet.ts';
 import { postBatch } from './ingest.ts';
 import { run } from './run.ts';
 import { loadWorkList, parseStoreArg } from './worklist.ts';
@@ -11,10 +13,15 @@ import { loadWorkList, parseStoreArg } from './worklist.ts';
 async function main(): Promise<number> {
   const config = loadConfig();
   const only = parseStoreArg(process.argv.slice(2));
-  const listed = await loadWorkList(config.urlsFile);
+  const bearer = bearerSource(config.auth);
+  const listed = await resolveWorkList({
+    catalog: config.auth.kind === 'fleet' ? () => fetchCatalogWorkList(config.origin, bearer) : undefined,
+    file: () => loadWorkList(config.urlsFile),
+    log: (line) => console.error(line),
+  });
   const items = only ? listed.filter((item) => item.store === only) : listed;
   if (items.length === 0) {
-    console.error(`${config.urlsFile} lists no ${only ? `${only} ` : ''}pages; nothing to read.`);
+    console.error(`No ${only ? `${only} ` : ''}pages to read (the page list is empty).`);
     return only ? 1 : 0;
   }
 
@@ -22,7 +29,7 @@ async function main(): Promise<number> {
   try {
     const reports = await run(items, {
       load: (url) => browser.load(url),
-      post: (readings) => postBatch(config.origin, config.token, readings),
+      post: async (readings) => postBatch(config.origin, await bearer(), readings),
       sleep: (ms) => new Promise((done) => setTimeout(done, ms)),
       now: () => Date.now(),
       log: (line) => console.error(line),
