@@ -14,6 +14,12 @@ public sealed class Product
     public DateTimeOffset AddedAt { get; set; }
 
     public Guid AddedByUserId { get; set; }
+
+    /// <summary>
+    /// The product's barcode as a 14-digit GTIN (an EAN-13 gets a leading zero), or null when unknown. Barcodes are the
+    /// strongest evidence the matcher has: a candidate carrying the same one is the same product. Unique across products.
+    /// </summary>
+    public string? Barcode { get; set; }
 }
 
 /// <summary>The page of one shop that sells a product: where the nightly job reads its price.</summary>
@@ -34,8 +40,56 @@ public sealed class StoreListing
 
     public DateTimeOffset? LastCheckedAt { get; set; }
 
+    /// <summary>
+    /// When a person chose this page as the product's equivalent in this shop (pasted it, or accepted a proposal). A
+    /// listing with a value here is a confirmed match: matching never replaces it, proposes beside it or lets a machine
+    /// link a different page over it. Null for a page the fleet linked, which stays unconfirmed until a person says so.
+    /// </summary>
+    public DateTimeOffset? ConfirmedAt { get; set; }
+
     /// <summary>Why the last read did not produce a price; null when it did.</summary>
     public string? LastError { get; set; }
+}
+
+public enum CandidateStatus
+{
+    /// <summary>Suggested by the matcher; waiting for a person to confirm or reject it.</summary>
+    Proposed,
+
+    /// <summary>A person said this is not the same product; it is never proposed again.</summary>
+    Rejected,
+}
+
+/// <summary>
+/// A shop page the matcher thinks may be the equivalent of a product. Proposals live apart from <see cref="StoreListing"/>:
+/// nothing reads prices from them and they change no confirmed match. A person confirming one (the match sheet) writes the
+/// listing; rejecting one flips <see cref="Status"/> so the same page is not suggested again.
+/// </summary>
+public sealed class MatchCandidate
+{
+    public Guid Id { get; set; }
+
+    public Guid ProductId { get; set; }
+
+    public Store Store { get; set; }
+
+    public string Url { get; set; } = string.Empty;
+
+    /// <summary>The shop's own name for it, as the store search showed it.</summary>
+    public string? Title { get; set; }
+
+    /// <summary>The page's barcode (14-digit GTIN), when the search result carried one.</summary>
+    public string? Barcode { get; set; }
+
+    /// <summary>Why it was proposed: <c>barcode</c>, <c>name_size</c> or <c>name</c> (see <c>CandidateMatcher</c>).</summary>
+    public string Basis { get; set; } = string.Empty;
+
+    /// <summary>0-100; only an order for the sheet to show the likeliest first, never a probability.</summary>
+    public int Score { get; set; }
+
+    public CandidateStatus Status { get; set; }
+
+    public DateTimeOffset ProposedAt { get; set; }
 }
 
 /// <summary>One dated price reading. One row per listing per Dublin day; a second read the same day replaces it.</summary>

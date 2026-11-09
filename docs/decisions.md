@@ -420,3 +420,52 @@ could already create a product; it can now also link a store page to one, with t
 - **Origin check.** A bearer request skips the origin check only for `POST /api/products` and `PUT /api/products/{id}/stores/{store}`
   (previously the path `/api/products` alone). A bearer on any other product route is still judged on its origin, and with the
   bearer the cookie is ignored, as before.
+
+## Product catalog base and deterministic candidate matching (2026-11-09, issue #9, part of the Shelf epic #21)
+
+Owner's words: "I dont need to enter the product, I should be able to select it and see the image i believe. Like shopping
+basket you know ?" The shelf needs a catalog and a way to find each product's equivalent in the four shops. Q6 stands: barcodes,
+store search and size rules, no model in the app.
+
+- **Already there, not rebuilt:** the `product` and `store_listing` tables, `GET`/`POST /api/products`, the store-page link
+  (`PUT /api/products/{id}/stores/{store}`), and the fleet identity's `basket:catalog-read` / `basket:catalog-add` scopes on
+  them (PRs #64 and #70, "The fleet links store pages"). This change adds only what #9 still lacked.
+- **Candidates are proposals in their own table.** `match_candidate` holds `{product, store, url, title, barcode, basis, score,
+  status}` and is read by nothing that reads prices. A proposal never becomes a `store_listing` by itself; confirming one is a
+  person's act on the match sheet (#10), which writes the listing. `status` is `Proposed` or `Rejected`: rejection is how the
+  sheet tells the matcher never to suggest that page again (a rejected page is answered `rejected` and left alone).
+- **A confirmed match is never overwritten.** `store_listing.confirmed_at` is set when a person links the page (pasting it, or
+  later accepting a proposal). While it is set: proposals for that shop are refused (`409 match_confirmed`), and a fleet token
+  cannot link a different page over it (`409 match_confirmed`; the same page is accepted). Only a person relinking changes it, and
+  that sets `confirmed_at` again and settles the shop's open proposals. A page the fleet linked has no `confirmed_at`: it is read
+  for prices like any listing but is not a choice anyone made. `ListingResponse` gains `confirmed`.
+- **The migration backfills `confirmed_at = added_at` for every existing listing.** Until the fleet link (2026-11-09) only people
+  could link pages, so each existing listing is a match someone chose. Without this the first run would treat them all as open.
+- **The matcher is a pure function (`Matching/CandidateMatcher`).** Rules, in order: (1) two valid barcodes decide it - equal is a
+  match (score 100), different is never a match, whatever the names say; (2) otherwise the names are compared as word sets with the
+  size removed (lower case, accents folded, a plural "s" dropped, filler words ignored); (3) the size rule: sizes read from the
+  names (`ProductSize`: g/kg, ml/cl/l, counts, and "6 x 330ml" multipacks, reduced to a base unit) stated on both sides and
+  different is never a match; equal, the shorter name's words must all appear in the other (a shop adds brand and filler words:
+  "Whole milk 2L" is contained in "Milbona fresh whole milk 2 L") - `name_size`, score 50-90, falling with each extra word (Jaccard
+  similarity); a size missing on either side needs a Jaccard similarity of 0.8 and ranks lower - `name`, score 20-45. A 6-pack is
+  not the same as one big pack. The score is an order for the sheet, not a probability. The same inputs always give the same
+  verdict; there is no model, network or clock in it.
+- **Barcodes are GTINs, kept as 14 digits.** `Gtin.TryNormalize` accepts 8, 12, 13 or 14 digits (spaces and hyphens tolerated) with
+  a correct check digit and pads to 14, so UPC-A and EAN-13 of one product compare equal. `product.barcode` is unique. A product
+  takes one on `POST /api/products` (`barcode`) or `PUT /api/products/{id}/barcode` (empty clears); `GET /api/products` returns
+  it. An invalid candidate barcode is ignored (the names then decide), never trusted.
+- **The store search is brought to the app, not run by it.** tesco.ie, aldi.ie and the Dunnes grocery site refuse the VPS (see
+  the Tesco, Aldi and Dunnes sections), and Lidl's search has no stable machine shape that has been checked, so the server does no
+  searching. `POST /api/products/{id}/candidates` takes `{store, results: [{url, title, barcode?}]}` (up to 50), the results of a
+  search done by the PC reader or by search-to-add (#31), runs each through the matcher and stores the passes. Each result gets a
+  stable outcome code: `proposed`, `no_match`, `url_invalid` (not that shop's product-page shape, the same check as a link),
+  `duplicate`, `already_linked`, `rejected`, `outranked`. Posting a page again updates its proposal rather than adding one.
+- **At most 5 open proposals per product and shop** (`MaxProposalsPerStore`); a stronger one pushes the weakest out, so a noisy
+  search cannot flood the sheet.
+- **Same door as the catalog, no new scope.** `POST .../candidates` and `PUT .../barcode` use the `basket:catalog-add` policy,
+  `GET .../candidates` the `basket:catalog-read` one; people may use all three. Confirming and rejecting have no machine route.
+  A bearer request skips the origin check on the two new write routes only, as on the other catalog writes; the cookie is ignored
+  with a bearer header.
+- **Migration `ProductMatching`, additive:** `product.barcode` (nullable, unique index), `store_listing.confirmed_at` (nullable, the
+  backfill above) and the `match_candidate` table. No column is dropped or retyped. It waits for the owner's go before merge.
+- **Not here:** the match sheet (#10), product images (#30), search-to-add (#31) and the shelf screen (#32). No frontend change.

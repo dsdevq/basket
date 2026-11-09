@@ -2,6 +2,7 @@ using Basket.Api.Auth;
 using Basket.Api.Data;
 using Basket.Api.Infrastructure;
 using Basket.Api.Lists;
+using Basket.Api.Matching;
 using Basket.Api.Prices;
 using Basket.Api.Prices.Ingest;
 using Basket.Api.Prices.Fetching;
@@ -130,6 +131,7 @@ api.MapAuthEndpoints();
 api.MapPasskeyEndpoints();
 api.MapListEndpoints();
 api.MapProductEndpoints();
+api.MapMatchEndpoints();
 api.MapIngestEndpoints();
 api.MapFallback(() => Results.NotFound()).AllowAnonymous();
 

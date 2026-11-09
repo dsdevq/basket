@@ -18,6 +18,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
     public DbSet<StoreListing> StoreListings => Set<StoreListing>();
 
+    public DbSet<MatchCandidate> MatchCandidates => Set<MatchCandidate>();
+
     public DbSet<PriceObservation> PriceObservations => Set<PriceObservation>();
 
     public DbSet<PricePullRun> PricePullRuns => Set<PricePullRun>();
@@ -70,7 +72,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             product.ToTable("product");
             product.HasKey(p => p.Id);
             product.Property(p => p.Name).HasMaxLength(Product.MaxNameLength).IsRequired();
+            product.Property(p => p.Barcode).HasMaxLength(14);
             product.HasOne<AppUser>().WithMany().HasForeignKey(p => p.AddedByUserId).OnDelete(DeleteBehavior.Restrict);
+            product.HasIndex(p => p.Barcode).IsUnique();
         });
 
         builder.Entity<StoreListing>(listing =>
@@ -83,6 +87,20 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             listing.Property(l => l.LastError).HasMaxLength(500);
             listing.HasOne<Product>().WithMany().HasForeignKey(l => l.ProductId).OnDelete(DeleteBehavior.Cascade);
             listing.HasIndex(l => new { l.ProductId, l.Store }).IsUnique();
+        });
+
+        builder.Entity<MatchCandidate>(candidate =>
+        {
+            candidate.ToTable("match_candidate");
+            candidate.HasKey(c => c.Id);
+            candidate.Property(c => c.Store).HasConversion<string>().HasMaxLength(16);
+            candidate.Property(c => c.Url).HasMaxLength(400).IsRequired();
+            candidate.Property(c => c.Title).HasMaxLength(300);
+            candidate.Property(c => c.Barcode).HasMaxLength(14);
+            candidate.Property(c => c.Basis).HasMaxLength(16).IsRequired();
+            candidate.Property(c => c.Status).HasConversion<string>().HasMaxLength(16);
+            candidate.HasOne<Product>().WithMany().HasForeignKey(c => c.ProductId).OnDelete(DeleteBehavior.Cascade);
+            candidate.HasIndex(c => new { c.ProductId, c.Store, c.Url }).IsUnique();
         });
 
         builder.Entity<PriceObservation>(observation =>
