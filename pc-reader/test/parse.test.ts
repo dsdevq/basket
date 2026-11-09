@@ -47,6 +47,10 @@ test('aldi: the photo is the JSON-LD image, else og:image, and only a plain http
   assert.equal(reading(readPage('aldi', ALDI, { status: 200, html: insecure })).imageUrl, undefined);
   const none = html.replace(/"image":\[[^\]]*\],?/, '');
   assert.equal(reading(readPage('aldi', ALDI, { status: 200, html: none })).imageUrl, undefined);
+  const withNewline = html.replace('Protein%20Milk"', 'Protein\\nMilk"');
+  assert.equal(reading(readPage('aldi', ALDI, { status: 200, html: withNewline })).imageUrl, undefined);
+  const withTab = html.replace('Protein%20Milk"', 'Protein\\tMilk"');
+  assert.equal(reading(readPage('aldi', ALDI, { status: 200, html: withTab })).imageUrl, undefined);
   const tooLong = html.replace('Protein%20Milk"', `${'a'.repeat(600)}"`);
   assert.equal(reading(readPage('aldi', ALDI, { status: 200, html: tooLong })).imageUrl, undefined);
 });

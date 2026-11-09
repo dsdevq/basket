@@ -89,7 +89,8 @@ public sealed class IngestImageTests : IClassFixture<BasketFactory>
     [InlineData("javascript:alert(1)")]
     [InlineData("/relative/a.png")]
     [InlineData("https://u:p@img.example/a.png")]
-    public async Task A_photo_address_that_is_not_plain_https_refuses_that_reading_and_keeps_the_stored_photo(string bad)
+    [InlineData("https://img.example/a\nb.png")]
+    public async Task A_photo_address_that_is_not_plain_https_is_ignored_the_price_is_kept_and_the_stored_photo_stays(string bad)
     {
         var relay = await RelayAsync();
         (await PostAsync(relay, new { store = "tesco", url = TescoUrl, price = 2.15m, imageUrl = "https://img.example/ok.png" })).EnsureSuccessStatusCode();
@@ -97,21 +98,23 @@ public sealed class IngestImageTests : IClassFixture<BasketFactory>
         var response = await PostAsync(relay, new { store = "tesco", url = TescoUrl, price = 2.99m, imageUrl = bad }, new { store = "aldi", url = AldiUrl, price = 1.19m });
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        Reasons(await response.Content.ReadFromJsonAsync<JsonElement>()).Should().Equal("image_invalid", "ok");
+        Reasons(await response.Content.ReadFromJsonAsync<JsonElement>()).Should().Equal("ok", "ok");
         (await ImageAsync(TescoUrl)).Should().Be("https://img.example/ok.png");
-        (await _factory.WithDb(db => db.PriceObservations.AnyAsync(o => o.Price == 2.99m))).Should().BeFalse();
+        (await _factory.WithDb(db => db.PriceObservations.AnyAsync(o => o.Price == 2.99m))).Should().BeTrue();
     }
 
     [Fact]
-    public async Task A_photo_address_over_the_cap_is_refused_at_the_cap_it_is_kept()
+    public async Task A_photo_address_over_the_cap_is_ignored_with_the_price_kept_and_at_the_cap_it_is_stored()
     {
         var relay = await RelayAsync();
         var atCap = ("https://img.example/" + new string('a', ImageUrls.MaxLength))[..ImageUrls.MaxLength];
 
-        var tooLong = await PostAsync(relay, new { store = "tesco", url = TescoUrl, price = 2.15m, imageUrl = atCap + "a" });
-        var fits = await PostAsync(relay, new { store = "tesco", url = TescoUrl, price = 2.15m, imageUrl = atCap });
+        var tooLong = await PostAsync(relay, new { store = "tesco", url = TescoUrl, price = 2.10m, imageUrl = atCap + "a" });
+        tooLong.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await ImageAsync(TescoUrl)).Should().BeNull();
+        (await _factory.WithDb(db => db.PriceObservations.AnyAsync(o => o.Price == 2.10m))).Should().BeTrue();
 
-        tooLong.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+        var fits = await PostAsync(relay, new { store = "tesco", url = TescoUrl, price = 2.15m, imageUrl = atCap });
         fits.StatusCode.Should().Be(HttpStatusCode.OK);
         (await ImageAsync(TescoUrl)).Should().Be(atCap);
     }

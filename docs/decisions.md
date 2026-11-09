@@ -438,11 +438,11 @@ product as a card with a photo, so the nightly read keeps each store listing's p
   address replaces it, which is the "refreshed when the store changes it". Relinking a listing to a different page clears
   it with the title and readings (another page is another product).
 - **Ingest takes `imageUrl` as an optional field** on `POST /api/ingest/prices`, for the owner's `bsk_` token and the fleet
-  identity alike (it is the same endpoint and the same validation). Absent or blank is fine. Present but not a plain
-  https address within the cap refuses that one reading with the stable reason `image_invalid` (the others in the batch are
-  kept): a reader that starts sending something else hears about it in the run's message rather than losing photos silently.
-  The price of that choice is that one bad address also loses that night's price for the product; the reader's own check
-  (`toImageUrl`) makes that a reader bug, not a shop quirk.
+  identity alike (it is the same endpoint and the same validation). Absent or blank is fine. An address that is not a plain
+  https address within the cap is ignored exactly as `PriceRecorder` ignores it, and the reading's price, was-price and promo
+  are still recorded: a photo address never costs a price. Any stored photo stays. The reader's own check (`toImageUrl`)
+  uses the same rules as `ImageUrls.TryNormalize` (https only, no login, no control characters, within the cap), so a
+  shop quirk is dropped at the reader rather than sent.
 - **Capture.** Lidl, read by the VPS job: the offer tile's `image` (else the first of its `imageList`), and on a product page
   the JSON-LD `image` (first of the gallery; a string, a list or an object with a `url`), else the page's `og:image`. Aldi
   answers the VPS with "Access Denied", so it is read by the PC reader, not the VPS job: `pc-reader` takes the JSON-LD `image`,
