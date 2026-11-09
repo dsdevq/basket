@@ -31,8 +31,17 @@ export const APP_ROUTES: Routes = [
       {
         path: 'list',
         title: 'Shopping list',
-        data: {title: 'Shopping list'} satisfies PageChromeData,
+        data: {
+          title: 'Shopping list',
+          actions: [{id: 'history', label: 'History', icon: 'History', route: '/history'}],
+        } satisfies PageChromeData,
         loadComponent: () => import('./features/list/list.page').then(m => m.ListPage),
+      },
+      {
+        path: 'history',
+        title: 'History',
+        data: {title: 'History', parent: '/list'} satisfies PageChromeData,
+        loadComponent: () => import('./features/history/history.page').then(m => m.HistoryPage),
       },
       {
         path: 'prices',

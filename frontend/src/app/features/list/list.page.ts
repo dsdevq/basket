@@ -5,6 +5,7 @@ import {FormControl, FormGroup, ReactiveFormsModule} from '@angular/forms';
 import {
   ButtonComponent,
   CheckboxComponent,
+  CmnDialogService,
   CmnDrawerService,
   EmptyStateComponent,
   InputComponent,
@@ -74,6 +75,14 @@ const REFRESH_MS = 15_000;
           }
           @if (store.done().length) {
             <cmn-list-section [heading]="'Ticked · ' + store.done().length" card>
+              <cmn-button
+                [loading]="store.closing()"
+                (clicked)="finish()"
+                cmnListSectionAside
+                variant="primary"
+                icon="CheckCheck"
+                >Done shopping</cmn-button
+              >
               @for (item of store.done(); track item.id) {
                 <ng-container
                   [ngTemplateOutlet]="row"
@@ -135,6 +144,7 @@ const REFRESH_MS = 15_000;
 })
 export class ListPage implements OnInit {
   private readonly drawer = inject(CmnDrawerService);
+  private readonly dialog = inject(CmnDialogService);
   private readonly document = inject(DOCUMENT);
   private readonly destroyRef = inject(DestroyRef);
 
@@ -180,6 +190,26 @@ export class ListPage implements OnInit {
 
   protected remove(item: ListItem): void {
     void this.store.remove(item);
+  }
+
+  /** Done shopping: after a confirm, the ticked items become a trip in the history and the list starts clean. */
+  protected async finish(): Promise<void> {
+    const ticked = this.store.done().length;
+    const left = this.store.toBuy().length;
+    const confirmed = await firstValueFrom(
+      this.dialog.confirm({
+        title: 'Done shopping?',
+        message:
+          (ticked === 1 ? '1 ticked item goes' : `${ticked} ticked items go`) +
+          ' to History' +
+          (left ? `. The ${left} not ticked stay on the list.` : '. The list will be empty.'),
+        confirmLabel: 'Done shopping',
+      }),
+      {defaultValue: false}
+    );
+    if (confirmed) {
+      await this.store.closeTrip();
+    }
   }
 
   protected async more(item: ListItem): Promise<void> {

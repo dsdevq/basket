@@ -22,6 +22,29 @@ const ITEMS = [
   checkedAt: null,
   checkedBy: null,
 }));
+const TRIPS = {
+  trips: [
+    {
+      id: 'trip-2',
+      closedAt: '2026-11-05T12:00:00Z',
+      items: [
+        {text: 'Whole milk 2L', by: 'Anna'},
+        {text: 'Sourdough bread', by: 'Anna'},
+        {text: 'Bananas', by: 'Ben'},
+      ],
+    },
+    {id: 'trip-1', closedAt: '2026-10-29T12:00:00Z', items: [{text: 'Rice', by: 'Ben'}]},
+  ].map(trip => ({
+    ...trip,
+    items: trip.items.map((item, i) => ({
+      id: `${trip.id}-item-${i}`,
+      text: item.text,
+      checkedAt: trip.closedAt,
+      checkedBy: {id: item.by === 'Anna' ? 'u1' : 'u2', name: item.by},
+    })),
+  })),
+  hasMore: false,
+};
 const PRODUCTS = {
   products: [
     {
@@ -204,6 +227,7 @@ export interface Route {
 export async function signedIn(page: Page): Promise<void> {
   await page.route('**/api/session', r => r.fulfill({json: OWNER}));
   await page.route('**/api/list', r => r.fulfill({json: {items: ITEMS}}));
+  await page.route('**/api/trips', r => r.fulfill({json: TRIPS}));
   await page.route('**/api/products', r => r.fulfill({json: PRODUCTS}));
   await page.route('**/api/promotions', r => r.fulfill({json: PROMOTIONS}));
   await page.route('**/api/members', r => r.fulfill({json: MEMBERS}));
@@ -219,6 +243,7 @@ export async function guest(page: Page): Promise<void> {
 
 export const ROUTES: readonly Route[] = [
   {name: 'list', path: '/list', setup: signedIn},
+  {name: 'history', path: '/history', setup: signedIn},
   {name: 'prices', path: '/prices', setup: signedIn},
   {name: 'promotions', path: '/promotions', setup: signedIn},
   {name: 'people', path: '/people', setup: signedIn},
