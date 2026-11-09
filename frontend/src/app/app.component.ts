@@ -3,6 +3,7 @@ import {ChangeDetectionStrategy, Component, inject} from '@angular/core';
 import {toSignal} from '@angular/core/rxjs-interop';
 import {
   NavigationCancel,
+  NavigationCancellationCode,
   NavigationEnd,
   NavigationError,
   Router,
@@ -38,7 +39,9 @@ export class AppComponent {
       filter(
         event =>
           event instanceof NavigationEnd ||
-          event instanceof NavigationCancel ||
+          (event instanceof NavigationCancel &&
+            event.code !== NavigationCancellationCode.Redirect &&
+            event.code !== NavigationCancellationCode.SupersededByNewNavigation) ||
           event instanceof NavigationError
       ),
       map(() => true)
