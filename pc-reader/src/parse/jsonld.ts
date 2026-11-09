@@ -11,13 +11,13 @@ export interface JsonLdProduct {
 /** The server's cap on a photo address (`ImageUrls.MaxLength`). */
 const MAX_IMAGE_URL = 500;
 
-/** A usable photo address: absolute https, no login in it, within the server's cap; anything else is no photo. */
+/** A usable photo address: absolute https, no login or control characters in it, within the server's cap; anything else is no photo. */
 export function toImageUrl(value: unknown): string | undefined {
   if (typeof value !== 'string') {
     return undefined;
   }
   const text = value.trim();
-  if (text.length === 0 || text.length > MAX_IMAGE_URL) {
+  if (text.length === 0 || text.length > MAX_IMAGE_URL || /[\u0000-\u001f\u007f-\u009f]/.test(text)) {
     return undefined;
   }
   try {
