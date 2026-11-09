@@ -115,6 +115,15 @@ export const ROUTES: readonly Route[] = [
   {name: 'people', path: '/people', setup: signedIn},
   {name: 'settings', path: '/settings', setup: signedIn},
   {name: 'more', path: '/more', setup: signedIn},
+  {
+    // A device that last saw an older release: What's new wears its dot.
+    name: 'more-whats-new',
+    path: '/more',
+    setup: async page => {
+      await signedIn(page);
+      await page.addInitScript(() => localStorage.setItem('basket.whatsNew.lastSeen', '0.0.1'));
+    },
+  },
   {name: 'sign-in', path: '/sign-in', setup: guest},
   {name: 'join', path: '/join#invite-token', setup: guest},
   {

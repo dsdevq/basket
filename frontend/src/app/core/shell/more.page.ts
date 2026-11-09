@@ -4,9 +4,12 @@ import {
   ACCOUNT_SIGN_OUT_ID,
   accountMenu,
   type AppLayoutAccount,
+  CmnWhatsNewService,
   type MenuItem,
   MorePageComponent as MoreKit,
   type NavItem,
+  WHATS_NEW_MENU_ID,
+  whatsNewMenuItem,
 } from '@lifekit-hq/ui';
 
 import {SessionStore} from '../auth/session.store';
@@ -28,6 +31,7 @@ import {SessionStore} from '../auth/session.store';
 export class MorePage {
   private readonly session = inject(SessionStore);
   private readonly router = inject(Router);
+  private readonly whatsNew = inject(CmnWhatsNewService);
 
   protected readonly tabRoutes = ['/list', '/prices'];
   protected readonly items = computed<NavItem[]>(() => {
@@ -43,12 +47,19 @@ export class MorePage {
       ? {
           label: user.displayName,
           name: user.displayName,
-          menuItems: accountMenu({settingsRoute: '/settings'}),
+          menuItems: accountMenu({
+            settingsRoute: '/settings',
+            extras: [whatsNewMenuItem(this.whatsNew.hasUnread())],
+          }),
         }
       : undefined;
   });
 
   protected async select(item: MenuItem): Promise<void> {
+    if (item.id === WHATS_NEW_MENU_ID) {
+      this.whatsNew.open();
+      return;
+    }
     if (item.id === ACCOUNT_SIGN_OUT_ID) {
       await this.session.signOut();
       await this.router.navigateByUrl('/sign-in');

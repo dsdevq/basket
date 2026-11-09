@@ -12,8 +12,11 @@ import {
   accountMenu,
   type AppLayoutAccount,
   AppLayoutComponent,
+  CmnWhatsNewService,
   type MenuItem,
   type NavItem,
+  WHATS_NEW_MENU_ID,
+  whatsNewMenuItem,
 } from '@lifekit-hq/ui';
 
 import {SessionStore} from '../auth/session.store';
@@ -52,6 +55,7 @@ const PEOPLE: NavItem = {label: 'People', icon: 'Users', route: '/people'};
 export class AppShellComponent {
   private readonly session = inject(SessionStore);
   private readonly router = inject(Router);
+  private readonly whatsNew = inject(CmnWhatsNewService);
 
   protected readonly update = inject(AppUpdateService);
 
@@ -65,12 +69,19 @@ export class AppShellComponent {
       ? {
           label: user.displayName,
           name: user.displayName,
-          menuItems: accountMenu({settingsRoute: '/settings'}),
+          menuItems: accountMenu({
+            settingsRoute: '/settings',
+            extras: [whatsNewMenuItem(this.whatsNew.hasUnread())],
+          }),
         }
       : undefined;
   });
 
   protected async onMenu(item: MenuItem): Promise<void> {
+    if (item.id === WHATS_NEW_MENU_ID) {
+      this.whatsNew.open();
+      return;
+    }
     if (item.id === ACCOUNT_SIGN_OUT_ID) {
       await this.session.signOut();
       await this.router.navigateByUrl('/sign-in');

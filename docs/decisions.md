@@ -420,3 +420,17 @@ could already create a product; it can now also link a store page to one, with t
 - **Origin check.** A bearer request skips the origin check only for `POST /api/products` and `PUT /api/products/{id}/stores/{store}`
   (previously the path `/api/products` alone). A bearer on any other product route is still judged on its origin, and with the
   bearer the cookie is ignored, as before.
+
+## What's new comes from lifekit-common (2026-11-09)
+
+Owner's goal: the same layout and the same things across the lifekit apps, reused rather than rebuilt per app. Basket adopts
+the What's new feature of `@lifekit-hq/ui` and `@lifekit-hq/tokens` (convention: lifekit-common `docs/WHATS-NEW.md`, the pattern
+finance-sentry first had), bumped to 4.7.1.
+
+- **No app-local copy.** `provideWhatsNew` gets basket's version (`src/app/core/version.ts`, checked against `package.json` and
+  the notes file by a spec) and a `basket.whatsNew.lastSeen` marker. The sheet, the list, the dot and the seen marker are the library's.
+- **Notes.** `src/whats-new/notes.md`, plain second person; `lifekit-whats-new` runs before `start`, `build` and `build:prod`,
+  and `--check` runs in `npm run lint`, so CI fails when the committed `public/whats-new.json` is stale.
+- **Where it shows.** An account-menu item (`whatsNewMenuItem`) in the app shell and on the More page, with the dot until the
+  sheet is opened. A first run on a device counts as seen, so a new person is not greeted with a dot.
+- No database change.
