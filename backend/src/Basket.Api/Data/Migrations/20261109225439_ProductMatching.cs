@@ -17,9 +17,10 @@ namespace Basket.Api.Data.Migrations
                 type: "timestamp with time zone",
                 nullable: true);
 
-            // Every listing so far was pasted by a person (the fleet could not link pages before this change), so each
-            // is already a match someone chose.
-            migrationBuilder.Sql("UPDATE store_listing SET confirmed_at = added_at;");
+            // Only a person could link a page before the fleet could (basket PR 70, merged 2026-11-09T16:35:14Z), so a
+            // listing added before that moment is a match someone chose. A later one cannot be told from a fleet link and
+            // stays unconfirmed (null) until the owner confirms it.
+            migrationBuilder.Sql("UPDATE store_listing SET confirmed_at = added_at WHERE added_at < timestamptz '2026-11-09T16:35:14Z';");
 
             migrationBuilder.AddColumn<string>(
                 name: "barcode",

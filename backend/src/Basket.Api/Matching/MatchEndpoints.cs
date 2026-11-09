@@ -35,7 +35,7 @@ public static class MatchEndpoints
     {
         var products = api.MapGroup("/products");
         // Same two scopes as the rest of the catalog: reading proposals is catalog-read, writing them or a barcode is
-        // catalog-add. Confirming or rejecting a proposal is a person's act and has no route here.
+        // catalog-add. Confirming a proposal is a person's act and has no route here.
         products.MapGet("/{id:guid}/candidates", GetCandidates).RequireAuthorization(Policies.CatalogRead);
         products.MapPost("/{id:guid}/candidates", Propose).RequireAuthorization(Policies.CatalogAdd);
         products.MapPut("/{id:guid}/barcode", SetBarcode).RequireAuthorization(Policies.CatalogAdd);
@@ -115,11 +115,7 @@ public static class MatchEndpoints
                 continue;
             }
 
-            if (existing.TryGetValue(url, out var known) && known.Status == CandidateStatus.Rejected)
-            {
-                outcomes.Add(new ProposeOutcome(url, "rejected"));
-                continue;
-            }
+            existing.TryGetValue(url, out var known);
 
             var title = UserNames.Clean(result.Title, 300);
             var verdict = CandidateMatcher.Evaluate(facts, new CandidateFacts(title, result.Barcode));
@@ -140,7 +136,7 @@ public static class MatchEndpoints
         }
 
         // The open proposals for this shop are the best few of what was already open and what just passed.
-        var open = existing.Values.Where(c => c.Status == CandidateStatus.Proposed).Concat(passed.Where(p => p.IsNew).Select(p => p.Row)).ToList();
+        var open = existing.Values.Concat(passed.Where(p => p.IsNew).Select(p => p.Row)).ToList();
         var keep = open.OrderByDescending(c => c.Score).ThenBy(c => c.ProposedAt).ThenBy(c => c.Url, StringComparer.Ordinal)
             .Take(MaxProposalsPerStore).ToHashSet();
         foreach (var (row, isNew, index) in passed)
@@ -155,7 +151,7 @@ public static class MatchEndpoints
             }
         }
 
-        db.MatchCandidates.RemoveRange(existing.Values.Where(c => c.Status == CandidateStatus.Proposed && !keep.Contains(c)));
+        db.MatchCandidates.RemoveRange(existing.Values.Where(c => !keep.Contains(c)));
         try
         {
             await db.SaveChangesAsync(ct);

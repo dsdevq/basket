@@ -53,17 +53,14 @@ public sealed class StoreListing
 
 public enum CandidateStatus
 {
-    /// <summary>Suggested by the matcher; waiting for a person to confirm or reject it.</summary>
+    /// <summary>Suggested by the matcher; waiting for a person to confirm it.</summary>
     Proposed,
-
-    /// <summary>A person said this is not the same product; it is never proposed again.</summary>
-    Rejected,
 }
 
 /// <summary>
 /// A shop page the matcher thinks may be the equivalent of a product. Proposals live apart from <see cref="StoreListing"/>:
 /// nothing reads prices from them and they change no confirmed match. A person confirming one (the match sheet) writes the
-/// listing; rejecting one flips <see cref="Status"/> so the same page is not suggested again.
+/// listing.
 /// </summary>
 public sealed class MatchCandidate
 {

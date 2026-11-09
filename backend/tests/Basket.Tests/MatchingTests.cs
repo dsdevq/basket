@@ -131,20 +131,6 @@ public sealed class MatchingTests : IClassFixture<BasketFactory>
     }
 
     [Fact]
-    public async Task A_page_a_person_rejected_is_not_proposed_again()
-    {
-        var (_, id) = await WithProductAsync();
-        var fleet = Fleet(FleetScopes.CatalogAdd);
-        (await fleet.PostAsJsonAsync($"/api/products/{id}/candidates", new { store = "lidl", results = new[] { Result(LidlMilk, Milk) } })).EnsureSuccessStatusCode();
-        await _factory.WithDb(db => db.MatchCandidates.Where(c => c.ProductId == id).ExecuteUpdateAsync(s => s.SetProperty(c => c.Status, CandidateStatus.Rejected)));
-
-        var again = await Json(await fleet.PostAsJsonAsync($"/api/products/{id}/candidates", new { store = "lidl", results = new[] { Result(LidlMilk, Milk) } }));
-
-        Outcomes(again).Should().Equal("rejected");
-        (await _factory.WithDb(db => db.MatchCandidates.SingleAsync(c => c.ProductId == id))).Status.Should().Be(CandidateStatus.Rejected);
-    }
-
-    [Fact]
     public async Task Posting_the_same_page_again_updates_its_proposal_instead_of_adding_one()
     {
         var (_, id) = await WithProductAsync();
