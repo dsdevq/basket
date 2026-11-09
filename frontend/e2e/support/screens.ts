@@ -84,6 +84,32 @@ const PASSKEYS = [
   {id: 'k2', name: 'Laptop', createdAt: '2026-11-04T09:00:00Z', backedUp: false},
 ];
 
+const CARDS = [
+  {
+    store: 'lidl',
+    name: 'Lidl',
+    format: 'qr',
+    masked: '•••• 4821',
+    readable: true,
+    updatedAt: '2026-11-05T09:00:00Z',
+  },
+  {
+    store: 'tesco',
+    name: 'Tesco',
+    format: 'code128',
+    masked: '•••• 8923',
+    readable: true,
+    updatedAt: '2026-11-05T09:00:00Z',
+  },
+];
+const TESCO_CARD = {
+  store: 'tesco',
+  name: 'Tesco',
+  format: 'code128',
+  number: '634004012345678923',
+  updatedAt: '2026-11-05T09:00:00Z',
+};
+
 const INGEST_TOKENS = [{id: 't1', label: 'Home PC', createdAt: '2026-11-05T09:00:00Z'}];
 
 export interface Route {
@@ -98,6 +124,8 @@ export async function signedIn(page: Page): Promise<void> {
   await page.route('**/api/session', r => r.fulfill({json: OWNER}));
   await page.route('**/api/list', r => r.fulfill({json: {items: ITEMS}}));
   await page.route('**/api/products', r => r.fulfill({json: PRODUCTS}));
+  await page.route('**/api/cards', r => r.fulfill({json: {cards: CARDS}}));
+  await page.route('**/api/cards/tesco', r => r.fulfill({json: TESCO_CARD}));
   await page.route('**/api/members', r => r.fulfill({json: MEMBERS}));
   await page.route('**/api/invites', r => r.fulfill({json: INVITES}));
   await page.route('**/api/passkeys', r => r.fulfill({json: PASSKEYS}));
@@ -112,6 +140,8 @@ export async function guest(page: Page): Promise<void> {
 export const ROUTES: readonly Route[] = [
   {name: 'list', path: '/list', setup: signedIn},
   {name: 'prices', path: '/prices', setup: signedIn},
+  {name: 'cards', path: '/cards', setup: signedIn},
+  {name: 'card', path: '/cards/tesco', setup: signedIn},
   {name: 'people', path: '/people', setup: signedIn},
   {name: 'settings', path: '/settings', setup: signedIn},
   {name: 'more', path: '/more', setup: signedIn},

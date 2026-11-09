@@ -420,3 +420,65 @@ could already create a product; it can now also link a store page to one, with t
 - **Origin check.** A bearer request skips the origin check only for `POST /api/products` and `PUT /api/products/{id}/stores/{store}`
   (previously the path `/api/products` alone). A bearer on any other product route is still judged on its origin, and with the
   bearer the cookie is ignored, as before.
+
+## Loyalty cards as barcodes at the till (2026-11-10, issue #46, epic #27)
+
+Owner's words: "I shop in 4 different stores. Lidl, aldi, tesco, dunnes. I want to have one app where I could sort things out."
+The four chains' loyalty card numbers are stored once and each is shown as a scannable code on the phone, so the phone replaces
+the wallet. Borrowed pattern: **Stocard's card list and add-card form** (a list of cards, the number typed once, the code format
+chosen from a short list) and **the Lidl Plus card screen** (one card, the code as wide as the screen on a white ground, the
+number under it).
+
+- **One card per shop, shared by the household (Q3).** `loyalty_card` has a unique index on `store`, so "added once" is the
+  database's rule, not the client's. `PUT /api/cards/{store}` adds the card or replaces the one there (201 / 200); two people
+  adding the same shop in one moment get the second as `409 card_exists`. `DELETE` removes it. The shop is one of the four
+  names (`Stores`); anything else is `404 unknown_store`. People only: the fleet identity's token is not accepted on `/api/cards`
+  (the default policy takes the cookie alone), and a test pins that.
+- **Encrypted with Data Protection, the mechanism Q5 chose for secrets.** The number is `Protect`ed with ASP.NET Data Protection
+  (purpose `basket.loyalty-card.number.v1`, the app's existing key ring on the `/keys` volume) before it reaches the database;
+  the column holds only the protected text and a test reads it back raw. Consequences, stated so they are not a surprise: the
+  keys are unencrypted on that volume (as already recorded for the cookie), so whoever can read the volume and the database can
+  read the numbers; and if the key ring is lost, the numbers are unreadable. basket then says "Cannot be read. Add it again."
+  on the card (`readable: false`, number `null`) rather than showing garbage, and adding the card again replaces it.
+- **Never logged, never cached.** The number travels in a request body and a response body, never in a path or query, and the
+  request log line carries only method, path and status. A refusal (`number_invalid`) states the rule and never repeats the
+  input. Card responses carry `Cache-Control: no-store`. A test registers a log sink, exercises every card route (including
+  refusals) and asserts neither the number nor its protected form appears in any rendered log event.
+- **The list hides the number; one route returns it.** `GET /api/cards` returns each card with the number masked to its last
+  four characters. `GET /api/cards/{store}` returns it whole, and is called only when a card is opened for the till.
+- **The code is chosen per card, with a default per chain.** The shop's own card decides what scans, so the default follows the
+  chain and the owner can change it per card (Stocard does the same): Code 128, EAN-13 or QR code.
+  - **Lidl: QR code.** The Lidl Plus card is a QR code in the app, scanned at the Irish till (Lidl Ireland's pages). What goes
+    in the field is the text behind that QR code, not a printed number.
+  - **Tesco Clubcard and Dunnes ValueClub: Code 128.** These are long digit strings, and Code 128 draws any of them. The
+    web checks made for this change found no official statement of either card's symbology, so this is a default and not a
+    verified fact: the first time the owner opens a card on a real till, a failed scan means switching the code in the sheet.
+  - **Aldi: Code 128, as a placeholder.** Aldi Ireland has no points scheme (an Irish Examiner column names it as the exception
+    among the main retailers); the only card found is its Savings Card, for topping up with deposit return vouchers. basket
+    stores whatever number the owner gives for Aldi and does not claim what it is. Raised with firstmate to confirm with the owner.
+  - **EAN-13** is offered for cards that carry one. It is the only format with a rule that can be wrong by typing: 13 digits with
+    a valid check digit, checked on the server (the number is refused, never "fixed").
+  - **Normalisation.** Spaces and dashes typed for readability are dropped for the linear codes (a Clubcard number is printed in
+    groups); a QR text is kept as typed, trimmed. Code 128 takes 4 to 48 printable ASCII characters; QR up to 300.
+- **Drawn client-side by a maintained library, not by hand.** `bwip-js` 4.11.4 (MIT, released 2026-08), through its `browser`
+  entry (the package root has no condition TypeScript resolves). The number never leaves the phone to be drawn. The canvas
+  carries its own white ground and quiet zone, so the code scans the same in the dark theme and no colour is set in CSS. bwip-js
+  is imported on first use: the initial bundle is unchanged (1.40 MB raw), the extra lazy chunk is 184 kB over the wire and
+  the service worker prefetches it like any page chunk. Module size is 4 px (10 for QR) so a phone scales the picture down and
+  never up. A number the format cannot draw shows an error and no code; it is never drawn wrong.
+- **Where it lives: a third tab, and one screen per card.** `Cards` joins List and Prices in the tab bar (at the till it must be
+  one tap). `/cards` is a list of the four shops (name, masked number and code, or "Not added yet"); a row opens the code or,
+  for a shop with no card, the add sheet. `/cards/:store` is the till screen: the code on a white ground at the page's width,
+  the number in groups of four under it, then "Change number or code" and "Remove card" (with a confirmation). Both are on
+  `cmn-page` (`list` and `detail` kinds) with lifekit-common components only; no token, template or colour was added, and the
+  drift check passes. It is a page in the shell, not a takeover of the whole screen, and it does not raise the brightness or
+  hold the screen awake (not asked for).
+- **Gates.** `cards` and `card` are in `e2e/support/screens.ts`, so the screen check, the route scan and the 390 / 1280
+  baselines all cover them. The Linux baselines for the two new screens, and for More and every other screen that now has a
+  Cards tab, are rendered by the "Update screen baselines" workflow on CI (`update-baselines` label), not from a local run.
+- **One migration, additive: `20261109232031_LoyaltyCard`.** It creates `loyalty_card` (and its two indexes) and nothing else;
+  it touches no existing table. Needs the owner's go before merge, and it sorts after `IngestToken`, the latest on main when
+  this was written. Other ships' migrations must order after whichever merges first.
+- **Out of scope.** The Lidl Plus token connection and receipts (their own tasks). Scanning a card with the camera to add it
+  (Stocard has it): `BarcodeDetector` is missing on iOS Safari, and the number is typed once per shop. Whether the Lidl Plus
+  QR text is static or rotates is not verified here: a rotating one would not scan from a stored copy.

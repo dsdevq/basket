@@ -31,6 +31,9 @@ public sealed class BasketFactory : WebApplicationFactory<Program>
 
     public FakeTimeProvider Clock { get; } = new(DateTimeOffset.UtcNow);
 
+    /// <summary>What every test host has logged so far; see <see cref="LogCapture"/>.</summary>
+    public LogCapture Logs => LogCapture.Shared;
+
     public int AuthRequestsPerMinute { get; init; } = 1000;
 
     public string? Bootstrap { get; init; } = BootstrapToken;
@@ -84,6 +87,7 @@ public sealed class BasketFactory : WebApplicationFactory<Program>
 
         builder.ConfigureTestServices(services =>
         {
+            services.AddSingleton<Serilog.Core.ILogEventSink>(Logs);
             services.RemoveAll<TimeProvider>();
             services.AddSingleton<TimeProvider>(Clock);
             if (FleetAgentEnabled)

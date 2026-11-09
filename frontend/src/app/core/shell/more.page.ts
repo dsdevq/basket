@@ -29,13 +29,14 @@ export class MorePage {
   private readonly session = inject(SessionStore);
   private readonly router = inject(Router);
 
-  protected readonly tabRoutes = ['/list', '/prices'];
+  protected readonly tabRoutes = ['/list', '/prices', '/cards'];
   protected readonly items = computed<NavItem[]>(() => {
     const list: NavItem = {label: 'List', icon: 'ShoppingBasket', route: '/list'};
     const prices: NavItem = {label: 'Prices', icon: 'Tag', route: '/prices'};
+    const cards: NavItem = {label: 'Cards', icon: 'WalletCards', route: '/cards'};
     return this.session.isOwner()
-      ? [list, prices, {label: 'People', icon: 'Users', route: '/people'}]
-      : [list, prices];
+      ? [list, prices, cards, {label: 'People', icon: 'Users', route: '/people'}]
+      : [list, prices, cards];
   });
   protected readonly account = computed<AppLayoutAccount | undefined>(() => {
     const user = this.session.user();
