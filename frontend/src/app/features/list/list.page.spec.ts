@@ -68,6 +68,14 @@ async function render(items: ListItem[]): Promise<Harness> {
   return {fixture, api, drawer, host: fixture.nativeElement as HTMLElement};
 }
 
+function swipeButton(host: HTMLElement, name: string): HTMLButtonElement {
+  const button = host.querySelector<HTMLButtonElement>(`button[aria-label="${name}"]`);
+  if (!button) {
+    throw new Error(`No swipe action named "${name}"`);
+  }
+  return button;
+}
+
 describe('ListPage', () => {
   afterEach(() => {
     TestBed.resetTestingModule();
@@ -156,5 +164,39 @@ describe('ListPage', () => {
     await settle(fixture);
 
     expect(api.remove).not.toHaveBeenCalled();
+  });
+
+  it('ticks an item from its swipe action', async () => {
+    const {fixture, api, host} = await render([item('1', 'Spinach')]);
+    api.setChecked.mockResolvedValue(item('1', 'Spinach', {checked: true, checkedBy: ANNA}));
+
+    swipeButton(host, 'Tick Spinach').click();
+    await settle(fixture);
+
+    expect(api.setChecked).toHaveBeenCalledWith('1', true);
+  });
+
+  it('offers Untick on a ticked item and unticks it from the swipe action', async () => {
+    const {fixture, api, host} = await render([
+      item('1', 'Butter', {checked: true, checkedBy: ANNA, checkedAt: '2026-11-03T11:00:00Z'}),
+    ]);
+    api.setChecked.mockResolvedValue(item('1', 'Butter'));
+
+    swipeButton(host, 'Untick Butter').click();
+    await settle(fixture);
+
+    expect(api.setChecked).toHaveBeenCalledWith('1', false);
+  });
+
+  it('deletes an item straight from its swipe action, without the sheet', async () => {
+    const {fixture, api, drawer, host} = await render([item('1', 'Spinach')]);
+
+    swipeButton(host, 'Delete Spinach').click();
+    await settle(fixture);
+    fixture.detectChanges();
+
+    expect(drawer.open).not.toHaveBeenCalled();
+    expect(api.remove).toHaveBeenCalledWith('1');
+    expect(host.textContent).not.toContain('Spinach');
   });
 });
