@@ -227,6 +227,12 @@ public sealed class PromotionRuleTests
     }
 
     [Theory]
+    [InlineData("Coke 330ml 6 pack", "Coke 330ml")]
+    [InlineData("Heinz Beans 415g x 4", "Heinz Beans 415g")]
+    public void An_ambiguous_shop_name_is_not_replaced_by_the_household_name(string shopName, string householdName) =>
+        PackSizes.Read(shopName, householdName).Should().BeNull();
+
+    [Theory]
     [InlineData(2.00, 0.5, 4.00)] // €2 for 500 g
     [InlineData(1.99, 1.98, 1.01)] // 1.99 / 1.98 = 1.0050505, to the cent
     [InlineData(4.00, 0.65, 6.15)] // 6.1538

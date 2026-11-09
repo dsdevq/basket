@@ -49,14 +49,23 @@ public static partial class PackSizes
     private const string Units = @"kg|ml|cl|ltrs?|litres?|liters?|l|g";
     private const decimal MaxQuantity = 100_000m;
 
-    /// <summary>The first of <paramref name="texts"/> that holds a size, with where it came from (its index).</summary>
+    /// <summary>
+    /// The first of <paramref name="texts"/> that holds a size, with where it came from (its index). A text that carries a
+    /// size signal but is ambiguous ends the search: a later text is never read in its place.
+    /// </summary>
     public static (PackSize Size, int Source)? Read(params string?[] texts)
     {
         for (var i = 0; i < texts.Length; i++)
         {
-            if (Parse(texts[i]) is { } size)
+            var (size, ambiguous) = Inspect(texts[i]);
+            if (ambiguous)
             {
-                return (size, i);
+                return null;
+            }
+
+            if (size is { } found)
+            {
+                return (found, i);
             }
         }
 
@@ -68,33 +77,35 @@ public static partial class PackSizes
     /// piece count ("pack of 6", "12 pack", "each"). A weight or volume next to a separate pack count ("415g x 4",
     /// "330ml 6 pack") is ambiguous, so it gives <c>null</c>.
     /// </summary>
-    public static PackSize? Parse(string? text)
+    public static PackSize? Parse(string? text) => Inspect(text).Size;
+
+    private static (PackSize? Size, bool Ambiguous) Inspect(string? text)
     {
         if (string.IsNullOrWhiteSpace(text))
         {
-            return null;
+            return (null, false);
         }
 
         if (Multipack().Match(text) is { Success: true } multi
             && Measure(multi.Groups["qty"].Value, multi.Groups["unit"].Value) is { } part
             && int.Parse(multi.Groups["count"].Value, CultureInfo.InvariantCulture) is var count and > 0)
         {
-            return Valid(new PackSize(part.Quantity * count, part.Kind));
+            return (Valid(new PackSize(part.Quantity * count, part.Kind)), false);
         }
 
         if (Single().Match(text) is { Success: true } single
             && Measure(single.Groups["qty"].Value, single.Groups["unit"].Value) is { } measured)
         {
-            return PackOf().IsMatch(text) || MeasureThenCount().IsMatch(text) ? null : Valid(measured);
+            return PackOf().IsMatch(text) || MeasureThenCount().IsMatch(text) ? (null, true) : (Valid(measured), false);
         }
 
         if (PackOf().Match(text) is { Success: true } pack)
         {
             var value = pack.Groups["n"].Success ? pack.Groups["n"].Value : pack.Groups["m"].Value;
-            return Valid(new PackSize(decimal.Parse(value, CultureInfo.InvariantCulture), UnitKind.Piece));
+            return (Valid(new PackSize(decimal.Parse(value, CultureInfo.InvariantCulture), UnitKind.Piece)), false);
         }
 
-        return Each().IsMatch(text) ? new PackSize(1, UnitKind.Piece) : null;
+        return (Each().IsMatch(text) ? new PackSize(1, UnitKind.Piece) : null, false);
     }
 
     private static PackSize? Valid(PackSize size) => size.Quantity > 0 && size.Quantity <= MaxQuantity ? size : null;
