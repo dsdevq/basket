@@ -40,6 +40,65 @@ internal static partial class PageData
         return null;
     }
 
+    /// <summary>
+    /// The category path of a page, read from its schema.org BreadcrumbList: the crumbs between the shop's front page and the
+    /// product itself, joined with <see cref="Basket.Api.Data.StoreListing.CategorySeparator"/> ("Chilled Food &gt; Milk").
+    /// The leading "Home" crumb is dropped, and so is the last crumb when it is the product (its name, or its address, is the
+    /// page's). Null when the page has no breadcrumb or nothing is left of it.
+    /// </summary>
+    public static string? BreadcrumbCategory(string html, string? productName = null)
+    {
+        foreach (Match block in JsonLdBlock().Matches(html))
+        {
+            JsonDocument document;
+            try
+            {
+                document = JsonDocument.Parse(block.Groups["json"].Value);
+            }
+            catch (JsonException)
+            {
+                continue;
+            }
+
+            var root = document.RootElement;
+            var candidates = root.ValueKind == JsonValueKind.Array ? root.EnumerateArray().ToArray() : [root];
+            foreach (var candidate in candidates)
+            {
+                if (candidate.ValueKind != JsonValueKind.Object
+                    || String(candidate, "@type") != "BreadcrumbList"
+                    || !candidate.TryGetProperty("itemListElement", out var list)
+                    || list.ValueKind != JsonValueKind.Array)
+                {
+                    continue;
+                }
+
+                var crumbs = list.EnumerateArray()
+                    .Select(e => (Name: Clean(String(e, "name") ?? String(e, "item", "name")), Item: String(e, "item") ?? String(e, "item", "@id")))
+                    .Where(c => c.Name is not null)
+                    .ToList();
+                if (crumbs.Count > 0 && IsFrontPage(crumbs[0].Item, crumbs[0].Name!))
+                {
+                    crumbs.RemoveAt(0);
+                }
+
+                if (crumbs.Count > 0 && productName is not null
+                    && string.Equals(crumbs[^1].Name, productName, StringComparison.OrdinalIgnoreCase))
+                {
+                    crumbs.RemoveAt(crumbs.Count - 1);
+                }
+
+                var path = string.Join(Basket.Api.Data.StoreListing.CategorySeparator, crumbs.Select(c => c.Name));
+                return path.Length == 0 ? null : path;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool IsFrontPage(string? item, string name) =>
+        string.Equals(name, "Home", StringComparison.OrdinalIgnoreCase)
+        || (Uri.TryCreate(item, UriKind.Absolute, out var uri) && uri.AbsolutePath == "/");
+
     /// <summary>The first Offer of a Product (the shops use either one object or a list).</summary>
     public static JsonElement? FirstOffer(JsonElement product)
     {

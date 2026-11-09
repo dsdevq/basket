@@ -17,6 +17,8 @@ export interface Reading {
   inStock?: boolean;
   /** The product photo's address (https, at most 500 characters); the server stores the address, never the picture. */
   imageUrl?: string;
+  /** The page's breadcrumb as a path, outermost first, " > " between ("Chilled Food > Milk"). */
+  category?: string;
 }
 
 export interface WorkItem {

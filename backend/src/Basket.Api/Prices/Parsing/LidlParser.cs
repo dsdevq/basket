@@ -80,8 +80,9 @@ public static class LidlParser
         var price = offer is { } o ? PageData.Money(o, "price") : null;
         var availability = offer is { } a ? PageData.String(a, "availability") : null;
 
+        var name = PageData.Clean(PageData.String(product, "name"));
         return new PriceQuote(
-            PageData.Clean(PageData.String(product, "name")),
+            name,
             price,
             WasPrice: null,
             LoyaltyPrice: null,
@@ -90,6 +91,7 @@ public static class LidlParser
             ValidFrom: null,
             ValidUntil: null,
             InStock: price is not null && availability is not null && availability.EndsWith("InStock", StringComparison.Ordinal),
-            ImageUrl: PageData.ImageUrl(product.TryGetProperty("image", out var image) ? image : null) ?? PageData.OgImage(html));
+            ImageUrl: PageData.ImageUrl(product.TryGetProperty("image", out var image) ? image : null) ?? PageData.OgImage(html),
+            Category: PageData.BreadcrumbCategory(html, name));
     }
 }

@@ -16,7 +16,7 @@ function reading(result: ParseResult) {
 
 test('aldi: the recorded product page gives its price, title and stock', () => {
   const r = reading(readPage('aldi', ALDI, { status: 200, html: fixture('aldi-product-page.html') }));
-  assert.deepEqual(r, { store: 'aldi', url: ALDI, title: 'CLONBAWN Protein Milk', price: 1.49, inStock: true, imageUrl: 'https://dm.emea.cms.aldi.cx/is/image/aldiprodeu/product/jpg/scaleWidth/300/d458166c-11f4-413b-be01-a553ebe074ce/Protein%20Milk' });
+  assert.deepEqual(r, { store: 'aldi', url: ALDI, title: 'CLONBAWN Protein Milk', price: 1.49, inStock: true, category: 'Chilled Food > Milk', imageUrl: 'https://dm.emea.cms.aldi.cx/is/image/aldiprodeu/product/jpg/scaleWidth/300/d458166c-11f4-413b-be01-a553ebe074ce/Protein%20Milk' });
 });
 
 test('aldi: an on-offer page carries the was price and the discount badge', () => {
@@ -57,7 +57,7 @@ test('aldi: the photo is the JSON-LD image, else og:image, and only a plain http
 
 test('tesco: the price, title and stock come from the JSON-LD offer, and offer wording in the text is not read', () => {
   const r = reading(readPage('tesco', TESCO, { status: 200, html: fixture('tesco-product-page.html') }));
-  assert.deepEqual(r, { store: 'tesco', url: TESCO, title: 'Tesco Fresh Whole Milk 2 Litre', price: 2.15, inStock: true });
+  assert.deepEqual(r, { store: 'tesco', url: TESCO, title: 'Tesco Fresh Whole Milk 2 Litre', price: 2.15, inStock: true, category: 'Fresh Food > Milk' });
 });
 
 test('tesco: a plain product has only its price', () => {
@@ -98,7 +98,7 @@ test('tesco: offers in a div and list carousel or the footer do not leak into th
 
 test('dunnes: the price, title and stock come from the JSON-LD offer, and the old price and carousel in the text are not read', () => {
   const r = reading(readPage('dunnes', DUNNES, { status: 200, html: fixture('dunnes-product-page.html') }));
-  assert.deepEqual(r, { store: 'dunnes', url: DUNNES, title: 'Dunnes Stores Irish Whole Milk 2L', price: 2.2, inStock: true });
+  assert.deepEqual(r, { store: 'dunnes', url: DUNNES, title: 'Dunnes Stores Irish Whole Milk 2L', price: 2.2, inStock: true, category: 'Dairy & Eggs > Milk' });
 });
 
 test('dunnes: a sold-out product without a price is a valid out-of-stock reading', () => {
@@ -113,4 +113,20 @@ test('dunnes: Cloudflare\'s "Just a moment..." challenge, with or without its 40
   const renamed = challenge.replace('Just a moment...', 'Performing security verification');
   assert.match(detectBlock({ status: 200, html: renamed }) ?? '', /challenge/);
   assert.match(detectBlock({ status: 200, html: '<title>Dunnes</title><script src="https://challenges.cloudflare.com/x.js"></script>' }) ?? '', /challenge/);
+});
+
+test('dunnes: the category comes from the breadcrumb nav, and the carousel list is not mistaken for it', () => {
+  const r = reading(readPage('dunnes', DUNNES, { status: 200, html: fixture('dunnes-product-page.html') }));
+  assert.equal(r.category, 'Dairy & Eggs > Milk');
+});
+
+test('a page with no breadcrumb has no category, and an absent one is left out of the reading', () => {
+  const r = reading(readPage('tesco', TESCO, { status: 200, html: fixture('tesco-product-page-plain.html') }));
+  assert.equal('category' in r, false);
+});
+
+test('a breadcrumb that is only the front page and the product leaves no category', () => {
+  const html = fixture('tesco-product-page.html').replace(/"itemListElement":\[.*?\]\}/s, '"itemListElement":[{"name":"Home","item":"https://www.tesco.ie/"},{"name":"Tesco Fresh Whole Milk 2 Litre","item":"https://www.tesco.ie/groceries/en-IE/products/254317390"}]}');
+  const r = reading(readPage('tesco', TESCO, { status: 200, html }));
+  assert.equal('category' in r, false);
 });

@@ -675,3 +675,32 @@ a planned store or the shelf. Patterns borrowed: AnyList and OurGroceries ("clea
 - **Screens.** The new route is in `frontend/e2e/support/screens.ts` (the route scan, screen check and baselines read it) and the
   list mock has a ticked item, so the List baselines change too. Linux baselines are drawn on CI only, by the "Update screen
   baselines" workflow dispatched on the branch.
+
+## Each store page keeps its category from the shop's breadcrumb (2026-11-09, issue #41, epic #25)
+
+Owner's ask: "in lidl all the products are almost in the same position - first there is fruit section then meat... I wanted to see
+it sorted according to what goes after another. So i get predictable list by what is closest to me." A product's category is the
+unit that walk order will sort by; this change only keeps it. The sort is not built here.
+
+- **Borrowed pattern, named.** The category follows the **product photo field** (`StoreListing.ImageUrl`, issue #30) exactly:
+  an optional, nullable field on the reading (`category` on `POST /api/ingest/prices`, `PriceQuote.Category` for the nightly Lidl
+  job), written by `PriceRecorder`, returned on the listing, `?? listing.Category` so **a reading without one never clears a
+  stored one**, and cleared only when a different page is linked (a different page is a different product).
+- **It lives on the store listing, not the product.** Each shop files the same thing under its own aisles ("Chilled Food > Milk" at
+  Aldi, something else at Tesco), and the walk is one shop's walk, so a product has a category per shop it is linked to.
+- **A path, not one word.** The value is the breadcrumb between the shop's front page and the product, outermost first, joined with
+  " > " ("Chilled Food > Milk"), at most 200 characters. The front page crumb ("Home", or a link to `/`) and the last crumb (the
+  product itself, by name or by address) are dropped, as is Aldi's catalogue root "Products". Keeping the whole path lets the later
+  sort choose its depth (aisle or shelf) without another read.
+- **Where it is read.** PC reader, from the page it already loads: the schema.org `BreadcrumbList` JSON-LD, else a `nav` whose
+  label says breadcrumb (Aldi, Tesco, Dunnes). Server, Lidl: the `BreadcrumbList` of the product page. Lidl's offer tiles carry
+  only "Food" or "NonFood", which is too coarse, and a listed product is deliberately not opened for its price, so a Lidl
+  listing **with no category yet** opens its own page once (the pull job passes `ListingToCheck.NeedsCategory`); once a category
+  is stored the offer page alone is enough again, so the nightly request count returns to what it was. A page that cannot be read
+  costs the category only, never the price.
+- **Not verified live.** No shop was read for this change (the brief forbids it), and tesco.ie and dunnesstoresgrocery.com have
+  not answered the author's PC so far. Aldi's fixture is a recorded breadcrumb; the Lidl, Tesco and Dunnes fixtures are
+  hand-written from the schema.org shape and say so. A shop whose page has neither markup simply leaves the field empty.
+- **One additive migration, waiting for the owner's go:** `StoreListingCategory` (one nullable `varchar(200)` column on
+  `store_listing`; no rewrite, no backfill). It will sit beside `StoreListingImageUrl` from the Shelf change; the two are
+  independent and either can land first, but the model snapshot of the second to land needs a regenerate.

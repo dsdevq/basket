@@ -9,7 +9,7 @@ public sealed record AddProductRequest(string? Name);
 
 public sealed record LinkStoreRequest(string? Url);
 
-public sealed record ListingResponse(string Url, string? Title, DateTimeOffset? CheckedAt, string? Error);
+public sealed record ListingResponse(string Url, string? Title, DateTimeOffset? CheckedAt, string? Error, string? Category);
 
 /// <summary>
 /// One dated reading. <see cref="State"/>: <c>current</c> (usable today), <c>upcoming</c> (the offer starts later),
@@ -84,7 +84,7 @@ public static class ProductEndpoints
                     Slug(store),
                     store.DisplayName(),
                     store.ReadBy(),
-                    listing is null ? null : new ListingResponse(listing.Url, listing.Title, listing.LastCheckedAt, listing.LastError),
+                    listing is null ? null : new ListingResponse(listing.Url, listing.Title, listing.LastCheckedAt, listing.LastError, listing.Category),
                     listing is not null && latest.TryGetValue(listing.Id, out var observation) ? ToPrice(observation, today) : null,
                     LastPaid(store, paid.GetValueOrDefault((product.Id, store))));
             }).ToList())).ToList();
@@ -212,6 +212,7 @@ public static class ProductEndpoints
             // A different page is a different product: forget what the old one said.
             listing.Title = null;
             listing.ImageUrl = null;
+            listing.Category = null;
             listing.LastCheckedAt = null;
             listing.LastError = null;
             await db.PriceObservations.Where(o => o.ListingId == listing.Id).ExecuteDeleteAsync(ct);
@@ -219,7 +220,7 @@ public static class ProductEndpoints
 
         listing.Url = url.ToString();
         await db.SaveChangesAsync(ct);
-        return Results.Ok(new ListingResponse(listing.Url, listing.Title, listing.LastCheckedAt, listing.LastError));
+        return Results.Ok(new ListingResponse(listing.Url, listing.Title, listing.LastCheckedAt, listing.LastError, listing.Category));
     }
 
     private static async Task<IResult> UnlinkStore(Guid id, string store, AppDbContext db, CancellationToken ct) =>

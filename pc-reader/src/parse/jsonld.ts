@@ -130,6 +130,97 @@ export function toMoney(value: unknown): number | undefined {
   return amount > 0 ? amount : undefined;
 }
 
+export const CATEGORY_SEPARATOR = ' > ';
+const MAX_CATEGORY = 200;
+
+/**
+ * The category path of a product page: the crumbs of its schema.org BreadcrumbList (or, without one, of a breadcrumb `nav`)
+ * between the shop's front page and the product, joined with " > ". The front page ("Home", or a link to `/`) is dropped,
+ * and so is the last crumb when it is the product (its name, or its address, is the page's). `rootNames` are further
+ * leading crumbs that only name the whole catalogue (Aldi's "Products"). Undefined when no breadcrumb is left.
+ */
+export function readCategory(html: string, url: string, productName?: string, rootNames: readonly string[] = []): string | undefined {
+  const root = parse(html);
+  let crumbs: Crumb[] | undefined;
+  for (const script of root.querySelectorAll('script[type="application/ld+json"]')) {
+    try {
+      crumbs = findBreadcrumbs(JSON.parse(script.textContent));
+    } catch {
+      continue;
+    }
+    if (crumbs) {
+      break;
+    }
+  }
+  crumbs ??= root
+    .querySelectorAll('nav[aria-label*="readcrumb" i] li, [class*="readcrumb" i] li')
+    .map((li): Crumb => ({ name: li.text.replace(/\s+/g, ' ').trim(), href: li.querySelector('a')?.getAttribute('href') ?? undefined }));
+  crumbs = crumbs.filter((c) => c.name);
+  if (crumbs.length > 0 && isFrontPage(crumbs[0]!)) {
+    crumbs.shift();
+  }
+  const roots = rootNames.map((n) => n.toLowerCase());
+  while (crumbs.length > 0 && roots.includes(crumbs[0]!.name.toLowerCase())) {
+    crumbs.shift();
+  }
+  const last = crumbs[crumbs.length - 1];
+  if (last && (last.name.toLowerCase() === productName?.toLowerCase() || samePath(last.href, url))) {
+    crumbs.pop();
+  }
+  const path = crumbs.map((c) => c.name).join(CATEGORY_SEPARATOR);
+  return path ? path.slice(0, MAX_CATEGORY) : undefined;
+}
+
+interface Crumb {
+  name: string;
+  href?: string;
+}
+
+function findBreadcrumbs(node: unknown): Crumb[] | undefined {
+  if (Array.isArray(node)) {
+    return node.map(findBreadcrumbs).find((hit) => hit);
+  }
+  if (!isRecord(node)) {
+    return undefined;
+  }
+  if (node['@graph']) {
+    const hit = findBreadcrumbs(node['@graph']);
+    if (hit) {
+      return hit;
+    }
+  }
+  const items = node['itemListElement'];
+  if (node['@type'] !== 'BreadcrumbList' || !Array.isArray(items)) {
+    return undefined;
+  }
+  return items.filter(isRecord).map((entry): Crumb => {
+    const item = entry['item'];
+    const name = typeof entry['name'] === 'string' ? entry['name'] : isRecord(item) && typeof item['name'] === 'string' ? item['name'] : '';
+    const href = typeof item === 'string' ? item : isRecord(item) && typeof item['@id'] === 'string' ? item['@id'] : undefined;
+    return { name: name.replace(/\s+/g, ' ').trim(), href };
+  });
+}
+
+function isFrontPage(crumb: Crumb): boolean {
+  return crumb.name.toLowerCase() === 'home' || pathOf(crumb.href) === '/';
+}
+
+function pathOf(href: string | undefined): string | undefined {
+  if (!href) {
+    return undefined;
+  }
+  try {
+    return new URL(href, 'https://placeholder.invalid').pathname;
+  } catch {
+    return undefined;
+  }
+}
+
+function samePath(href: string | undefined, url: string): boolean {
+  const path = pathOf(href);
+  return path !== undefined && path !== '/' && path === pathOf(url);
+}
+
 /**
  * A product page read from its schema.org JSON-LD Product offer alone: price and stock from the offer, the name from the
  * page's first `h1` (the JSON-LD name when there is none). Nothing is read from the visible text, so a carousel or footer
@@ -152,6 +243,10 @@ export function parseJsonLdOnly(store: StoreId, html: string, url: string): Pars
   }
   if (ld?.inStock !== undefined) {
     reading.inStock = ld.inStock;
+  }
+  const category = readCategory(html, url, title);
+  if (category) {
+    reading.category = category;
   }
   return { kind: 'reading', reading };
 }
