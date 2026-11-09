@@ -434,3 +434,16 @@ finance-sentry first had), bumped to 4.7.1.
 - **Where it shows.** An account-menu item (`whatsNewMenuItem`) in the app shell and on the More page, with the dot until the
   sheet is opened. A first run on a device counts as seen, so a new person is not greeted with a dot.
 - No database change.
+
+## Swipe actions on list rows (2026-11-09)
+
+Owner's goal: ticking and removing a list item should be one gesture on a phone (issue #63).
+
+- **Borrowed pattern: Apple HIG Lists and tables, swipe actions**, through the `cmn-list-item-row` swipe slot in lifekit-common
+  (`@lifekit-hq/ui` 4.7.1, bumped with the rest of `@lifekit-hq/*`). Tick (or Untick on a ticked line) is the leading action,
+  Delete the trailing one.
+- **The visible controls stay.** The checkbox and the "More" button remain the keyboard and screen-reader path (the revealed
+  actions are buttons and focus slides the row open); the swipe is a shortcut, never the only way.
+- **Delete skips the sheet.** The sheet's Delete button was already the confirmation; a swipe reveals a labelled Delete that must
+  be pressed, so it is the same two deliberate steps. The store still rolls the row back if the server refuses.
+- No server change, no migration.

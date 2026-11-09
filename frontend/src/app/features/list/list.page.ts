@@ -106,6 +106,14 @@ const REFRESH_MS = 15_000;
         [label]="item.text"
         [sublabel]="item.addedBy.name"
         [dimmed]="item.checked"
+        [swipeLeading]="{
+          label: item.checked ? 'Untick' : 'Tick',
+          icon: item.checked ? 'Undo' : 'Check',
+          tone: 'positive',
+        }"
+        [swipeTrailing]="{label: 'Delete', icon: 'Trash2', tone: 'danger'}"
+        (swipeLeadingAction)="toggle(item, !item.checked)"
+        (swipeTrailingAction)="remove(item)"
         class="[&_.truncate]:overflow-visible [&_.truncate]:whitespace-normal [&_.truncate]:break-words"
       >
         <cmn-checkbox
@@ -167,6 +175,10 @@ export class ListPage implements OnInit {
     void this.store.toggle(item, checked);
   }
 
+  protected remove(item: ListItem): void {
+    void this.store.remove(item);
+  }
+
   protected async more(item: ListItem): Promise<void> {
     const ref = this.drawer.open<ItemAction, {item: ListItem}>(ItemActionsSheetComponent, {
       title: item.text,
@@ -174,7 +186,7 @@ export class ListPage implements OnInit {
       mode: 'sheet',
     });
     if ((await firstValueFrom(ref.afterClosed(), {defaultValue: undefined})) === 'delete') {
-      await this.store.remove(item);
+      this.remove(item);
     }
   }
 }
