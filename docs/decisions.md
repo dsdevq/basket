@@ -697,7 +697,8 @@ unit that walk order will sort by; this change only keeps it. The sort is not bu
   only "Food" or "NonFood", which is too coarse, and a listed product is deliberately not opened for its price, so a Lidl
   listing **with no category yet** opens its own page once (the pull job passes `ListingToCheck.NeedsCategory`); once a category
   is stored the offer page alone is enough again, so the nightly request count returns to what it was. A page that cannot be read
-  costs the category only, never the price.
+  costs the category only, never the price; a refusal (`FetchStatus.Blocked`) on that page still ends the store's pull, as it does
+  everywhere else.
 - **Not verified live.** No shop was read for this change (the brief forbids it), and tesco.ie and dunnesstoresgrocery.com have
   not answered the author's PC so far. Aldi's fixture is a recorded breadcrumb; the Lidl, Tesco and Dunnes fixtures are
   hand-written from the schema.org shape and say so. A shop whose page has neither markup simply leaves the field empty.
