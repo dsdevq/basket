@@ -55,12 +55,12 @@ public static class ProductEndpoints
     public static void MapProductEndpoints(this IEndpointRouteBuilder api)
     {
         var products = api.MapGroup("/products");
-        // The only two routes the fleet identity may call (scopes basket:catalog-read / basket:catalog-add); the rest
-        // of the group, like every other endpoint, takes a signed-in person only.
+        // The only three routes the fleet identity may call (scopes basket:catalog-read, and basket:catalog-add for the
+        // add and the store-page link); the rest of the group, like every other endpoint, takes a signed-in person only.
         products.MapGet("/", GetProducts).RequireAuthorization(Policies.CatalogRead);
         products.MapPost("/", AddProduct).RequireAuthorization(Policies.CatalogAdd);
         products.MapDelete("/{id:guid}", DeleteProduct);
-        products.MapPut("/{id:guid}/stores/{store}", LinkStore);
+        products.MapPut("/{id:guid}/stores/{store}", LinkStore).RequireAuthorization(Policies.CatalogAdd);
         products.MapDelete("/{id:guid}/stores/{store}", UnlinkStore);
     }
 

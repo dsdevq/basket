@@ -242,6 +242,86 @@ public sealed class FleetAgentTests : IClassFixture<BasketFactory>
         (await _factory.WithDb(db => db.Products.CountAsync())).Should().Be(1);
     }
 
+    // ---- linking a store page ------------------------------------------------------------------------------------
+
+    private static string LinkPath(Guid id, string store = "tesco") => $"/api/products/{id}/stores/{store}";
+
+    [Fact]
+    public async Task A_fleet_token_with_the_catalog_add_scope_links_a_store_page_without_an_origin_header()
+    {
+        var owner = await SeedAsync();
+        var created = await Fleet(Token(FleetScopes.CatalogAdd)).PostAsJsonAsync("/api/products", new { name = "Bread" });
+        var id = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+
+        var response = await Fleet(Token(FleetScopes.CatalogAdd)).PutAsJsonAsync(LinkPath(id), new { url = TescoUrl + "?utm=x" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var stored = await _factory.WithDb(db => db.StoreListings.SingleAsync(l => l.ProductId == id));
+        stored.Store.Should().Be(Store.Tesco);
+        stored.Url.Should().Be(TescoUrl);
+        (await owner.GetStringAsync("/api/products")).Should().Contain(TescoUrl);
+    }
+
+    [Fact]
+    public async Task Linking_keeps_the_same_checks_for_the_fleet_as_for_a_person()
+    {
+        await SeedAsync();
+        var id = await _factory.WithDb(db => db.Products.Select(p => p.Id).FirstAsync());
+        var client = Fleet(Token(FleetScopes.CatalogAdd));
+
+        (await client.PutAsJsonAsync(LinkPath(id), new { url = "https://example.com/x" })).StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await client.PutAsJsonAsync(LinkPath(id, "supervalu"), new { url = TescoUrl })).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await client.PutAsJsonAsync(LinkPath(Guid.NewGuid()), new { url = TescoUrl })).StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Theory]
+    [InlineData(FleetScopes.PriceIngest)]
+    [InlineData(FleetScopes.CatalogRead)]
+    public async Task Linking_a_store_page_needs_the_catalog_add_scope(string scope)
+    {
+        await SeedAsync();
+        var id = await _factory.WithDb(db => db.Products.Select(p => p.Id).FirstAsync());
+
+        var response = await Fleet(Token(scope)).PutAsJsonAsync(LinkPath(id, "aldi"), new { url = "https://www.aldi.ie/product/actileaf-uht-coconut-milk-000000000000423109" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await _factory.WithDb(db => db.StoreListings.CountAsync(l => l.Store == Store.Aldi))).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task A_fleet_token_cannot_delete_a_product_or_unlink_a_store_page()
+    {
+        await SeedAsync();
+        var id = await _factory.WithDb(db => db.Products.Select(p => p.Id).FirstAsync());
+        var client = Fleet(Token(FleetScopes.PriceIngest, FleetScopes.CatalogRead, FleetScopes.CatalogAdd));
+
+        foreach (var path in new[] { $"/api/products/{id}", LinkPath(id) })
+        {
+            ((int)(await client.DeleteAsync(path)).StatusCode).Should().BeOneOf(new[] { 401, 403 }, path);
+            var withOrigin = new HttpRequestMessage(HttpMethod.Delete, path);
+            withOrigin.Headers.Add("Origin", BasketFactory.Origin);
+            ((int)(await client.SendAsync(withOrigin)).StatusCode).Should().BeOneOf(new[] { 401, 403 }, path);
+        }
+
+        (await _factory.WithDb(db => db.Products.CountAsync(p => p.Id == id))).Should().Be(1);
+        (await _factory.WithDb(db => db.StoreListings.CountAsync(l => l.ProductId == id))).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task A_bearer_link_request_cannot_be_carried_by_the_cookie()
+    {
+        var (owner, _) = await _factory.OwnerAsync();
+        await SeedAsync();
+        var id = await _factory.WithDb(db => db.Products.Select(p => p.Id).FirstAsync());
+
+        var request = new HttpRequestMessage(HttpMethod.Put, LinkPath(id, "aldi")) { Content = JsonContent.Create(new { url = "https://www.aldi.ie/product/actileaf-uht-coconut-milk-000000000000423109" }) };
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", "not.a.jwt");
+        var response = await owner.SendAsync(request);
+
+        ((int)response.StatusCode).Should().BeOneOf(401, 403);
+        (await _factory.WithDb(db => db.StoreListings.CountAsync(l => l.Store == Store.Aldi))).Should().Be(0);
+    }
+
     // ---- everything else stays people-only ----------------------------------------------------------------------
 
     [Theory]
@@ -249,7 +329,6 @@ public sealed class FleetAgentTests : IClassFixture<BasketFactory>
     [InlineData("POST", "/api/list/items")]
     [InlineData("DELETE", "/api/list/items/00000000-0000-0000-0000-000000000001")]
     [InlineData("DELETE", "/api/products/00000000-0000-0000-0000-000000000001")]
-    [InlineData("PUT", "/api/products/00000000-0000-0000-0000-000000000001/stores/lidl")]
     [InlineData("DELETE", "/api/products/00000000-0000-0000-0000-000000000001/stores/lidl")]
     [InlineData("GET", "/api/invites")]
     [InlineData("POST", "/api/invites")]
@@ -327,6 +406,18 @@ public sealed class FleetAgentTests : IClassFixture<BasketFactory>
         (await owner.PostAsJsonAsync("/api/products", new { name = "Eggs" })).StatusCode.Should().Be(HttpStatusCode.Created);
         var added = await _factory.WithDb(db => db.Products.SingleAsync(p => p.Name == "Eggs"));
         added.AddedByUserId.Should().Be(await _factory.WithDb(db => db.Users.Select(u => u.Id).FirstAsync()));
+    }
+
+    [Fact]
+    public async Task A_person_still_links_a_store_page_as_before()
+    {
+        var owner = await SeedAsync();
+        var id = await _factory.WithDb(db => db.Products.Select(p => p.Id).FirstAsync());
+
+        var response = await owner.PutAsJsonAsync(LinkPath(id, "aldi"), new { url = "https://www.aldi.ie/product/actileaf-uht-coconut-milk-000000000000423109" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await _factory.WithDb(db => db.StoreListings.CountAsync(l => l.Store == Store.Aldi))).Should().Be(1);
     }
 
     // ---- the path is off until configured -----------------------------------------------------------------------
