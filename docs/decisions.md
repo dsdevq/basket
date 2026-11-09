@@ -298,6 +298,8 @@ change borrows one named pattern; the audit is the 2026-11-07 phone UX audit (39
   settles and no `reloading` flag is needed. Failure and offline stay with the error empty state's "Try again"; the pull
   is not the only way to reload, since the page also re-reads every 15 seconds and on returning to the tab. More is a kit
   menu with nothing to fetch, and People and Settings are pushed screens, so none of them registers a reload.
+- **The crash screen's heading and button changed only because `lifekit-chrome-check drift` required it after the 4.7.1 bump.**
+  The heading moved from 24px to 28px (the type ramp) and the button from an 8px radius to a pill (the radius scale); nothing else about it changed.
 - **Sign-in leads with the explanation and one primary action (Carbon Empty states; HIG Onboarding).** A `cmn-empty-state`
   (icon, "The shopping list for the two of you", "Sign in with the passkey on this phone. There is no password.", the
   passkey button in its `cta` slot) in the middle of the screen, the invite hint under it. The join and unreachable
