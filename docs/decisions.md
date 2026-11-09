@@ -298,6 +298,8 @@ change borrows one named pattern; the audit is the 2026-11-07 phone UX audit (39
   settles and no `reloading` flag is needed. Failure and offline stay with the error empty state's "Try again"; the pull
   is not the only way to reload, since the page also re-reads every 15 seconds and on returning to the tab. More is a kit
   menu with nothing to fetch, and People and Settings are pushed screens, so none of them registers a reload.
+  `PricesStore.load` drops a response that a later load or a local remove has overtaken (as `ListStore.load` does), so a
+  slow pull cannot bring a deleted product back.
 - **The crash screen's heading and button changed only because `lifekit-chrome-check drift` required it after the 4.7.1 bump.**
   The heading moved from 24px to 28px (the type ramp) and the button from an 8px radius to a pill (the radius scale); nothing else about it changed.
 - **Sign-in leads with the explanation and one primary action (Carbon Empty states; HIG Onboarding).** A `cmn-empty-state`
@@ -309,7 +311,7 @@ change borrows one named pattern; the audit is the 2026-11-07 phone UX audit (39
   date), line two is the reading (seen date, last paid, a failed read). A shop with no price yet ("Waiting for the next PC
   read") has one line saying why, plus the last-paid line when there is one. The row keeps the library's `cmn-list-item-row`; the line break is a `\n` shown with `pre-line`.
 - **Out of scope here:** the offline shell / service worker (own task) and every library-side item (44px hit areas,
-  skeleton before auth, swipe rows, pull-to-refresh, tab-bar text, startup image) stay with lifekit-common. The Linux
+  skeleton before auth, swipe rows, tab-bar text, startup image) stay with lifekit-common. The Linux
   baselines for List, Prices and Sign-in change with this and are re-rendered by the "Update screen baselines" workflow on
   CI, not committed from a local run.
 
