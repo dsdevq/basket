@@ -2,6 +2,7 @@ import {signal} from '@angular/core';
 import {TestBed} from '@angular/core/testing';
 import {provideRouter} from '@angular/router';
 import {AppUpdateService} from '@lifekit-hq/core/pwa';
+import {provideWhatsNew} from '@lifekit-hq/ui';
 
 import {SessionStore} from '../auth/session.store';
 import {AppShellComponent} from './app-shell.component';
@@ -14,6 +15,7 @@ describe('AppShellComponent', () => {
     TestBed.configureTestingModule({
       providers: [
         provideRouter([]),
+        provideWhatsNew({version: '1.0.0', load: () => new Promise(() => undefined)}),
         {provide: AppUpdateService, useValue: {updateReady, reload}},
         {provide: SessionStore, useValue: {isOwner: signal(false), user: signal(null)}},
       ],

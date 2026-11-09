@@ -69,7 +69,7 @@ export function showCrashScreen(doc: Document, error: unknown): void {
 
   const heading = doc.createElement('h1');
   heading.textContent = 'Something went wrong';
-  heading.style.cssText = 'margin:0;font-size:24px';
+  heading.style.cssText = 'margin:0;font-size:20px';
   const detail = doc.createElement('p');
   detail.textContent = `Error: ${errorNameOf(error)}`;
   detail.style.margin = '0';
@@ -79,7 +79,7 @@ export function showCrashScreen(doc: Document, error: unknown): void {
   const reload = doc.createElement('button');
   reload.type = 'button';
   reload.textContent = 'Reload';
-  reload.style.cssText = 'font:inherit;padding:12px 24px;border-radius:8px';
+  reload.style.cssText = 'font:inherit;padding:12px 24px;border-radius:9999px';
   reload.addEventListener('click', () => doc.defaultView?.location.reload());
 
   panel.append(heading, detail, hint, reload);
