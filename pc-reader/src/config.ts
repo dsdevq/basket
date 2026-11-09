@@ -97,7 +97,7 @@ function authFrom(get: Settings, envFile: string): Auth {
       issuer: parsed.href.replace(/\/+$/, ''),
       clientId,
       clientSecret,
-      resource: get('BASKET_FLEET_RESOURCE') ?? DEFAULT_FLEET_RESOURCE,
+      resource: DEFAULT_FLEET_RESOURCE,
     };
   }
   const token = get('BASKET_INGEST_TOKEN');

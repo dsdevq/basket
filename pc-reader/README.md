@@ -38,7 +38,6 @@ Files you fill in (`.env.local`, `urls.local.json`) are ignored by git. The secr
 | `BASKET_FLEET_CLIENT_ID` | env or `.env.local` | The fleet identity's client id (the `fleet-agent` application). With the next two, replaces the `bsk_` token. |
 | `BASKET_FLEET_CLIENT_SECRET` | env or `.env.local` | Its secret. Never logged, never in the repo. |
 | `BASKET_FLEET_ISSUER` | env or `.env.local` | The identity service's issuer address, e.g. `http://127.0.0.1:3001/oidc`; the reader posts to `<issuer>/token`. `http` only for `localhost`/`127.0.0.1`. Setting only some of the three is an error naming the rest. |
-| `BASKET_FLEET_RESOURCE` | env or `.env.local` | The API resource the token is for. Default `https://fleet.lifekit.internal/api`, the audience basket checks. |
 | `BASKET_INGEST_TOKEN` | env or `.env.local` | The `bsk_...` token, used when no fleet setting is present. Never logged. The environment wins over the file. |
 | `BASKET_READER_URLS` | env or `.env.local` | The URL file (fallback list). Default `pc-reader/urls.local.json`. |
 | `BASKET_READER_PROFILE` | env or `.env.local` | Chrome profile directory. Default `~/.local/state/basket-pc-reader/profile`: a profile of the reader's own, never your everyday one. `npm run profile` opens the same directory by hand (below). |

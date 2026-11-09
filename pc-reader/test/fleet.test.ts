@@ -82,7 +82,6 @@ test('config: the fleet identity from the environment; a half-set identity names
   const none = () => { throw new Error('missing'); };
   const base = { BASKET_API_ORIGIN: 'https://basket.example.com', BASKET_FLEET_CLIENT_ID: 'cid', BASKET_FLEET_CLIENT_SECRET: 'sec', BASKET_FLEET_ISSUER: 'https://id.example.com/oidc/' };
   assert.deepEqual(loadConfig(base, none).auth, { kind: 'fleet', issuer: 'https://id.example.com/oidc', clientId: 'cid', clientSecret: 'sec', resource: 'https://fleet.lifekit.internal/api' });
-  assert.equal((loadConfig({ ...base, BASKET_FLEET_RESOURCE: 'https://other/api', BASKET_INGEST_TOKEN: 'bsk_x' }, none).auth as { resource: string }).resource, 'https://other/api');
   assert.equal(loadConfig({ ...base, BASKET_INGEST_TOKEN: 'bsk_x' }, none).auth.kind, 'fleet');
   assert.throws(() => loadConfig({ BASKET_API_ORIGIN: base.BASKET_API_ORIGIN, BASKET_FLEET_CLIENT_ID: 'cid' }, none), /BASKET_FLEET_CLIENT_SECRET, BASKET_FLEET_ISSUER/);
   assert.throws(() => loadConfig({ ...base, BASKET_FLEET_ISSUER: 'http://id.example.com/oidc' }, none), /BASKET_FLEET_ISSUER must be https/);
