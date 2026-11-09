@@ -65,7 +65,8 @@ public static partial class PackSizes
 
     /// <summary>
     /// A multipack ("6 x 330ml", "4x125g") counts all its parts; otherwise the first weight or volume wins ("1L"), then a
-    /// piece count ("pack of 6", "12 pack", "each").
+    /// piece count ("pack of 6", "12 pack", "each"). A weight or volume next to a separate pack count ("415g x 4",
+    /// "330ml 6 pack") is ambiguous, so it gives <c>null</c>.
     /// </summary>
     public static PackSize? Parse(string? text)
     {
@@ -84,7 +85,7 @@ public static partial class PackSizes
         if (Single().Match(text) is { Success: true } single
             && Measure(single.Groups["qty"].Value, single.Groups["unit"].Value) is { } measured)
         {
-            return Valid(measured);
+            return PackOf().IsMatch(text) || MeasureThenCount().IsMatch(text) ? null : Valid(measured);
         }
 
         if (PackOf().Match(text) is { Success: true } pack)
@@ -122,6 +123,9 @@ public static partial class PackSizes
 
     [GeneratedRegex($@"(?<![\w.,])(?<qty>{Number})\s*(?<unit>{Units})\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex Single();
+
+    [GeneratedRegex($@"(?<![\w.,]){Number}\s*(?:{Units})\s*[x×]\s*\d{{1,3}}\b(?!\s*(?:{Units})\b)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex MeasureThenCount();
 
     [GeneratedRegex(@"\bpack\s+of\s+(?<n>\d{1,3})\b|(?<![\w.,])(?<m>\d{1,3})\s*-?\s*(?:pack|pk|pcs?|pieces?|count|ct)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex PackOf();

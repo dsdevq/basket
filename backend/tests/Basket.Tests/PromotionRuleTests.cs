@@ -210,6 +210,9 @@ public sealed class PromotionRuleTests
     [Theory]
     [InlineData("VITASIA 10 Chicken Breast Skewers")]
     [InlineData("Cranberry Sauce")]
+    [InlineData("Heinz Beans 415g x 4")] // a measure beside a separate pack count: 0.415 kg or 1.66 kg?
+    [InlineData("Coca-Cola 330ml 6 pack")]
+    [InlineData("Coca-Cola 330ml pack of 6")]
     [InlineData("")]
     [InlineData(null)]
     public void A_name_with_no_size_has_none_it_is_never_guessed(string? name) =>
