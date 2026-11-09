@@ -40,7 +40,7 @@ const REFRESH_MS = 15_000;
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <cmn-page kind="list" fill>
+    <cmn-page kind="list" fill [reload]="reload">
       @switch (store.status()) {
         @case ('loading') {
           <cmn-skeleton shape="section" />
@@ -137,6 +137,9 @@ export class ListPage implements OnInit {
   private readonly drawer = inject(CmnDrawerService);
   private readonly document = inject(DOCUMENT);
   private readonly destroyRef = inject(DestroyRef);
+
+  /** Pull to refresh on this tab root: the shell's pull gesture calls it and waits for the promise. */
+  protected readonly reload = (): Promise<void> => this.store.load();
 
   protected readonly store = inject(ListStore);
 

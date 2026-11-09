@@ -292,7 +292,12 @@ change borrows one named pattern; the audit is the 2026-11-07 phone UX audit (39
   cannot project into it.
 - **No promise of a gesture that does not exist (HIG Writing).** The list load error no longer says "Pull down to try
   again". It says "Check your connection and try again", which is what the error state's "Try again" button already does.
-  Reword again when the library's pull-to-refresh lands.
+  The library's pull to refresh has landed, and the copy stays as it is: the wording describes the button, not the gesture.
+- **Pull to refresh on the List and Prices tab roots (Apple HIG Refreshing content; lifekit-common `cmn-page [reload]`).**
+  Both pages bind `[reload]` to `store.load()`, which returns a promise, so the shell's indicator stays until the fetch
+  settles and no `reloading` flag is needed. Failure and offline stay with the error empty state's "Try again"; the pull
+  is not the only way to reload, since the page also re-reads every 15 seconds and on returning to the tab. More is a kit
+  menu with nothing to fetch, and People and Settings are pushed screens, so none of them registers a reload.
 - **Sign-in leads with the explanation and one primary action (Carbon Empty states; HIG Onboarding).** A `cmn-empty-state`
   (icon, "The shopping list for the two of you", "Sign in with the passkey on this phone. There is no password.", the
   passkey button in its `cta` slot) in the middle of the screen, the invite hint under it. The join and unreachable
