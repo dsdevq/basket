@@ -163,7 +163,8 @@ planning record so this repo carries its own reasons; the M1 section holds the c
   `playwright-core` to drive the PC's installed Chrome and `node-html-parser`. The parsers take a page's HTML and know
   nothing of the browser, so they are tested against saved pages (`pc-reader/test/fixtures`, recorded or marked
   hand-written). It posts through the same `POST /api/ingest/prices` as any client; nothing server-side changed.
-- **The work list is a local file the owner keeps.** The endpoint tells a token holder nothing about what is tracked, so
+- **The work list is a local file the owner keeps** (for a `bsk_` token; with the fleet identity it comes from the catalog,
+  see "The PC reader signs in as the fleet"). The endpoint tells a token holder nothing about what is tracked, so
   the reader reads `{store, url}` entries from `pc-reader/urls.local.json` (ignored by git), checked against the same
   product-page shape the server accepts. A page not linked in basket comes back `unknown_listing`. A server-provided work
   list (a token-scoped read endpoint) would widen what the token can learn and is the owner's separate decision.

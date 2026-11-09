@@ -152,8 +152,8 @@ npm run typecheck
 no personal data. Parsers (`src/parse/`) take a page's HTML and know nothing about the browser; `src/browser.ts` is the
 only file that touches Chrome.
 
-To run it by hand against a local basket: start the dev stack as in the root README, make a token in the dev app's
-Settings, and point `BASKET_API_ORIGIN` at `http://localhost:3310`.
+To run it by hand against a local basket: start the dev stack as in the root README, make a `bsk_` token in the dev app's
+Settings (or use the fleet identity), and point `BASKET_API_ORIGIN` at `http://localhost:3310`.
 
 ## Running it on a schedule (not set up)
 
