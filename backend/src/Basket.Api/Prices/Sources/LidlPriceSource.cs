@@ -51,11 +51,16 @@ public sealed class LidlPriceSource(IPageFetcher fetcher, IOptions<PricesOptions
             if (Stores.LidlProductId(listing.Url) is { } id && offers.TryGetValue(id, out var offer))
             {
                 // The offer tile has no breadcrumb. A product that has no category yet opens its own page once for it; after that
-                // the offer page alone is enough again. A page that cannot be read costs the category only, never the price.
+                // the offer page alone is enough again. A page that cannot be read costs the category only, never the price; a refusal still ends the pull.
                 if (listing.NeedsCategory)
                 {
-                    var category = await ReadCategoryAsync(listing.Url, ct);
-                    offer = offer with { Category = category };
+                    var categoryPage = await fetcher.GetAsync(listing.Url, ct);
+                    if (categoryPage.Status == FetchStatus.Blocked)
+                    {
+                        return StorePulls.Blocked(listings, categoryPage.Detail!);
+                    }
+
+                    offer = offer with { Category = categoryPage.Status == FetchStatus.Ok ? ReadCategory(categoryPage.Body!) : null };
                 }
 
                 results[listing.ListingId] = ListingPull.Priced(offer);
@@ -83,17 +88,11 @@ public sealed class LidlPriceSource(IPageFetcher fetcher, IOptions<PricesOptions
         return StorePulls.Summarize(listings, results, hint);
     }
 
-    private async Task<string?> ReadCategoryAsync(Uri url, CancellationToken ct)
+    private static string? ReadCategory(string html)
     {
-        var page = await fetcher.GetAsync(url, ct);
-        if (page.Status != FetchStatus.Ok)
-        {
-            return null;
-        }
-
         try
         {
-            return LidlParser.ParseProductPage(page.Body!).Category;
+            return LidlParser.ParseProductPage(html).Category;
         }
         catch (ParseException)
         {

@@ -69,6 +69,22 @@ public sealed class PriceSourceTests
     }
 
     [Fact]
+    public async Task Lidl_stops_the_pull_when_a_listed_products_own_page_is_refused_for_its_category()
+    {
+        var fetcher = new FakeFetcher()
+            .Serve(OffersPage, Fixtures.Read("lidl-offers-page.html"))
+            .Serve(SkewersUrl, new FetchResult(FetchStatus.Blocked, null, "www.lidl.ie answered HTTP 403"));
+        var skewers = Listing(SkewersUrl) with { NeedsCategory = true };
+        var other = Listing(AubergineUrl) with { NeedsCategory = true };
+
+        var pull = await Lidl(fetcher, OffersPage).PullAsync([skewers, other], CancellationToken.None);
+
+        pull.Outcome.Should().Be(PullOutcome.Blocked);
+        pull.Message.Should().Contain("403");
+        fetcher.Requested.Should().Equal(OffersPage, SkewersUrl);
+    }
+
+    [Fact]
     public async Task Lidl_reads_the_product_page_of_anything_the_offer_pages_do_not_list()
     {
         var fetcher = new FakeFetcher()
