@@ -495,6 +495,9 @@ price can be set side by side.
    6`, `9 pack`, `each`. Weights become kilograms, volumes litres, counts pieces, and the unit price is `pack price / size`, rounded
    to the cent away from zero. A size taken from the product name rather than the shop's title is marked, since the shop may sell a
    different pack. **No size found: no unit price and no rank** (flag "no pack size"), never a guessed one; the pack price is shown.
+   **An ambiguous text gives no size either**: a weight or volume beside a separate pack count ("Heinz Beans 415g x 4",
+   "Coca-Cola 330ml 6 pack") could be one pack or several, so it reads as no size, and the search stops there: the product name
+   is not consulted in its place.
 3. **Rank within one product across the shops, cheapest first.** A kilo of mince is not a litre of milk, so the ranking key is the unit
    price of the *same* product in each shop, and equal unit prices share a place. A product is listed when at least one shop has a
    promo on it, and its ordinary shelf prices elsewhere are ranked beside the promos, so "Aldi's plain price beats Lidl's 2 for 3"
