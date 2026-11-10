@@ -41,6 +41,9 @@ public sealed record PromoProduct(
     IReadOnlyList<PromoOffer> Offers,
     IReadOnlyList<PromoGap> Gaps);
 
+/// <summary>The offers of one product, ranked where they can be (see <see cref="PromotionBuilder.Compare"/>), and the shops with a gap.</summary>
+public sealed record ProductComparison(string? Unit, int Ranked, IReadOnlyList<PromoOffer> Offers, IReadOnlyList<PromoGap> Gaps);
+
 public sealed record PromotionsResponse(DateOnly AsOf, int StaleAfterDays, IReadOnlyList<PromoProduct> Products);
 
 /// <summary>
@@ -69,49 +72,62 @@ public static class PromotionBuilder
         var result = new List<PromoProduct>();
         foreach (var product in products.OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase))
         {
-            var offers = new List<PromoOffer>();
-            var gaps = new List<PromoGap>();
-            foreach (var store in Stores.All)
+            var comparison = Compare(product, listings, latest, today);
+            if (comparison.Offers.Any(o => o.IsPromo))
             {
-                var listing = listings[product.Id].FirstOrDefault(l => l.Store == store);
-                if (listing is null)
-                {
-                    continue;
-                }
-
-                if (!latest.TryGetValue(listing.Id, out var observation))
-                {
-                    gaps.Add(new PromoGap(Slug(store), store.DisplayName(), "not_read", null));
-                    continue;
-                }
-
-                var state = PriceStates.Of(observation, today);
-                if (state != PriceStates.Current)
-                {
-                    gaps.Add(Gap(store, state, observation));
-                    continue;
-                }
-
-                var offer = Offer(store, product, listing, observation, today);
-                if (offer is null)
-                {
-                    gaps.Add(new PromoGap(Slug(store), store.DisplayName(), "no_price", null));
-                    continue;
-                }
-
-                offers.Add(offer);
+                result.Add(new PromoProduct(product.Id, product.Name, comparison.Unit, comparison.Ranked, comparison.Offers, comparison.Gaps));
             }
+        }
 
-            if (!offers.Any(o => o.IsPromo))
+        return new PromotionsResponse(today, StaleAfterDays, result);
+    }
+
+    /// <summary>
+    /// One product across its linked shops: every usable reading as a normalised, ranked offer, and every linked shop with
+    /// nothing usable today as a gap. The Promotions view lists only the products that have a promo; the plan reads every
+    /// product on the list through the same rule, so the two never disagree about a price.
+    /// </summary>
+    public static ProductComparison Compare(
+        Product product,
+        ILookup<Guid, StoreListing> listings,
+        IReadOnlyDictionary<Guid, PriceObservation> latest,
+        DateOnly today)
+    {
+        var offers = new List<PromoOffer>();
+        var gaps = new List<PromoGap>();
+        foreach (var store in Stores.All)
+        {
+            var listing = listings[product.Id].FirstOrDefault(l => l.Store == store);
+            if (listing is null)
             {
                 continue;
             }
 
-            var (ranked, unit, count) = Rank(offers);
-            result.Add(new PromoProduct(product.Id, product.Name, unit, count, ranked, gaps));
+            if (!latest.TryGetValue(listing.Id, out var observation))
+            {
+                gaps.Add(new PromoGap(Slug(store), store.DisplayName(), "not_read", null));
+                continue;
+            }
+
+            var state = PriceStates.Of(observation, today);
+            if (state != PriceStates.Current)
+            {
+                gaps.Add(Gap(store, state, observation));
+                continue;
+            }
+
+            var offer = Offer(store, product, listing, observation, today);
+            if (offer is null)
+            {
+                gaps.Add(new PromoGap(Slug(store), store.DisplayName(), "no_price", null));
+                continue;
+            }
+
+            offers.Add(offer);
         }
 
-        return new PromotionsResponse(today, StaleAfterDays, result);
+        var (ranked, unit, count) = Rank(offers);
+        return new ProductComparison(unit, count, ranked, gaps);
     }
 
     private static PromoGap Gap(Store store, string state, PriceObservation observation) => state switch
