@@ -20,7 +20,6 @@ public static class CardNumbers
     public static string FormatName(CardFormat format) => format switch
     {
         CardFormat.Code128 => "code128",
-        CardFormat.Ean13 => "ean13",
         CardFormat.Qr => "qr",
         _ => throw new ArgumentOutOfRangeException(nameof(format)),
     };
@@ -57,10 +56,6 @@ public static class CardNumbers
                 var text = raw.Trim();
                 return text.Length <= MaxQrLength && !text.Any(char.IsControl) ? text : null;
 
-            case CardFormat.Ean13:
-                var digits = Compact(raw);
-                return digits.Length == 13 && digits.All(char.IsAsciiDigit) && HasValidCheckDigit(digits) ? digits : null;
-
             default:
                 var compact = Compact(raw);
                 return compact.Length is >= 4 and <= MaxCode128Length && compact.All(c => c is >= '!' and <= '~') ? compact : null;
@@ -71,17 +66,6 @@ public static class CardNumbers
     public static string Mask(string number) => number.Length <= 4 ? new string('•', number.Length) : "•••• " + number[^4..];
 
     private static string Compact(string raw) => string.Concat(raw.Where(c => !char.IsWhiteSpace(c) && c != '-'));
-
-    private static bool HasValidCheckDigit(string digits)
-    {
-        var sum = 0;
-        for (var i = 0; i < 12; i++)
-        {
-            sum += (digits[i] - '0') * (i % 2 == 0 ? 1 : 3);
-        }
-
-        return (10 - (sum % 10)) % 10 == digits[12] - '0';
-    }
 }
 
 /// <summary>Encrypts and decrypts card numbers with the app's Data Protection keys (the same keys as the cookie).</summary>

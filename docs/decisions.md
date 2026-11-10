@@ -447,7 +447,7 @@ number under it).
 - **The list hides the number; one route returns it.** `GET /api/cards` returns each card with the number masked to its last
   four characters. `GET /api/cards/{store}` returns it whole, and is called only when a card is opened for the till.
 - **The code is chosen per card, with a default per chain.** The shop's own card decides what scans, so the default follows the
-  chain and the owner can change it per card (Stocard does the same): Code 128, EAN-13 or QR code.
+  chain and the owner can change it per card (Stocard does the same): Code 128 or QR code.
   - **Lidl: QR code.** The Lidl Plus card is a QR code in the app, scanned at the Irish till (Lidl Ireland's pages). What goes
     in the field is the text behind that QR code, not a printed number.
   - **Tesco Clubcard and Dunnes ValueClub: Code 128.** These are long digit strings, and Code 128 draws any of them. The
@@ -456,8 +456,6 @@ number under it).
   - **Aldi: Code 128, as a placeholder.** Aldi Ireland has no points scheme (an Irish Examiner column names it as the exception
     among the main retailers); the only card found is its Savings Card, for topping up with deposit return vouchers. basket
     stores whatever number the owner gives for Aldi and does not claim what it is. Raised with firstmate to confirm with the owner.
-  - **EAN-13** is offered for cards that carry one. It is the only format with a rule that can be wrong by typing: 13 digits with
-    a valid check digit, checked on the server (the number is refused, never "fixed").
   - **Normalisation.** Spaces and dashes typed for readability are dropped for the linear codes (a Clubcard number is printed in
     groups); a QR text is kept as typed, trimmed. Code 128 takes 4 to 48 printable ASCII characters; QR up to 300.
 - **Drawn client-side by a maintained library, not by hand.** `bwip-js` 4.11.4 (MIT, released 2026-08), through its `browser`
@@ -468,14 +466,20 @@ number under it).
   never up. A number the format cannot draw shows an error and no code; it is never drawn wrong.
 - **Where it lives: a third tab, and one screen per card.** `Cards` joins List and Prices in the tab bar (at the till it must be
   one tap). `/cards` is a list of the four shops (name, masked number and code, or "Not added yet"); a row opens the code or,
-  for a shop with no card, the add sheet. `/cards/:store` is the till screen: the code on a white ground at the page's width,
-  the number in groups of four under it, then "Change number or code" and "Remove card" (with a confirmation). Both are on
-  `cmn-page` (`list` and `detail` kinds) with lifekit-common components only; no token, template or colour was added, and the
-  drift check passes. It is a page in the shell, not a takeover of the whole screen, and it does not raise the brightness or
-  hold the screen awake (not asked for).
-- **Gates.** `cards` and `card` are in `e2e/support/screens.ts`, so the screen check, the route scan and the 390 / 1280
-  baselines all cover them. The Linux baselines for the two new screens, and for More and every other screen that now has a
-  Cards tab, are rendered by the "Update screen baselines" workflow on CI (`update-baselines` label), not from a local run.
+  for a shop with no card, the add sheet. `/cards/:store` shows the card: the code and the number in groups of four as a preview,
+  then "Show at till", "Change number or code" and "Remove card" (with a confirmation). Both are on `cmn-page` (`list` and
+  `detail` kinds) with lifekit-common components only; no token, template or colour was added, and the drift check passes.
+- **"Show at till" is full-screen.** The owner asked for the code as a full-screen barcode, so the button opens the code in
+  `CmnDialogService` with `size: 'full'` and `phone: 'full-screen'`: on a phone (below `md`) it covers the whole viewport with
+  the code on a white ground, the number under it and a close button in the header; from `md` up it is the library's near-full
+  dialog (95% of the viewport) over the page. The dialog gives the keyboard path (focus moves in, Escape closes, focus returns to
+  the button) and the screen-reader path (`role="dialog"` named "<shop> card at the till"); the code's canvas stays `role="img"`
+  labelled "<shop> card <format>", which never reads the number out. It does not raise the brightness or hold the screen awake
+  (not asked for).
+- **Gates.** `cards`, `card` and `card-till` (the card page with the till dialog open, brought up by `reveal` in
+  `e2e/support/screens.ts`) are covered by the screen check, the route scan and the 390 / 1280 baselines. The Linux baselines
+  for the new screens, and for More and every other screen that now has a Cards tab, are rendered by the "Update screen
+  baselines" workflow on CI (`update-baselines` label), not from a local run.
 - **One migration, additive: `20261109232031_LoyaltyCard`.** It creates `loyalty_card` (and its two indexes) and nothing else;
   it touches no existing table. Needs the owner's go before merge, and it sorts after `IngestToken`, the latest on main when
   this was written. Other ships' migrations must order after whichever merges first.

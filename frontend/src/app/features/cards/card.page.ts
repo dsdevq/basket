@@ -24,11 +24,12 @@ import {HttpStatus, statusOf} from '../../core/http-status';
 import {BarcodeComponent} from './barcode.component';
 import {CardFormSheetComponent} from './card-form.sheet';
 import {CardsApi} from './cards.api';
-import {type Card, CHAINS, FORMAT_LABELS} from './cards.model';
+import {type Card, CHAINS, FORMAT_LABELS, groupedNumber} from './cards.model';
+import {TillDialogComponent} from './till.dialog';
 
 /**
- * One card, shown for the till: the code as wide as the screen allows on a white ground, the number under it
- * (the Lidl Plus and Stocard card screens). Changing the number or removing the card are the two buttons below.
+ * One card: the code and the number as a preview, "Show at till" to put the code on the whole screen, and the
+ * buttons to change the number or remove the card (the Lidl Plus and Stocard card screens).
  */
 @Component({
   selector: 'bk-card-page',
@@ -91,6 +92,16 @@ import {type Card, CHAINS, FORMAT_LABELS} from './cards.model';
           }
         </section>
         <div class="flex w-full max-w-md flex-col gap-cmn-3">
+          @if (shown.number) {
+            <cmn-button
+              (clicked)="showAtTill(shown)"
+              class="block [&_button]:w-full"
+              variant="primary"
+              size="lg"
+              icon="Maximize2"
+              >Show at till</cmn-button
+            >
+          }
           <cmn-button
             (clicked)="change(shown)"
             class="block [&_button]:w-full"
@@ -133,11 +144,7 @@ export class CardPage implements OnInit {
     return card ? FORMAT_LABELS[card.format] : '';
   });
 
-  /** Digits in groups of four, as printed on cards; anything else (a QR text) as it is. */
-  protected readonly spoken = computed(() => {
-    const number = this.card()?.number ?? '';
-    return /^\d+$/.test(number) ? (number.match(/.{1,4}/g) ?? []).join(' ') : number;
-  });
+  protected readonly spoken = computed(() => groupedNumber(this.card()?.number ?? ''));
 
   public ngOnInit(): void {
     void this.load();
@@ -165,6 +172,19 @@ export class CardPage implements OnInit {
 
   protected async back(): Promise<void> {
     await this.router.navigate(['/cards']);
+  }
+
+  protected showAtTill(card: Card): void {
+    if (card.number === null) {
+      return;
+    }
+    this.dialog.open(TillDialogComponent, {
+      data: {card: {...card, number: card.number}},
+      title: `${card.name} card`,
+      ariaLabel: `${card.name} card at the till`,
+      size: 'full',
+      phone: 'full-screen',
+    });
   }
 
   protected async change(card: Card): Promise<void> {

@@ -27,20 +27,24 @@ describe('BarcodeComponent', () => {
   });
 
   it('draws the number in its format on its own canvas', async () => {
-    const {host} = await render('4006381333931', 'ean13');
+    const {host} = await render('634004012345678923', 'code128');
 
     expect(draw).toHaveBeenCalledTimes(1);
-    expect(draw).toHaveBeenCalledWith(host.querySelector('canvas'), '4006381333931', 'ean13');
+    expect(draw).toHaveBeenCalledWith(
+      host.querySelector('canvas'),
+      '634004012345678923',
+      'code128'
+    );
   });
 
   it('names the picture without reading the number out', async () => {
-    const {fixture, host} = await render('4006381333931', 'ean13');
-    fixture.componentRef.setInput('label', 'Tesco card EAN-13');
+    const {fixture, host} = await render('634004012345678923', 'code128');
+    fixture.componentRef.setInput('label', 'Tesco card Code 128');
     fixture.detectChanges();
 
     const canvas = host.querySelector('canvas');
     expect(canvas?.getAttribute('role')).toBe('img');
-    expect(canvas?.getAttribute('aria-label')).toBe('Tesco card EAN-13');
+    expect(canvas?.getAttribute('aria-label')).toBe('Tesco card Code 128');
   });
 
   it('redraws when the number changes', async () => {
@@ -55,9 +59,9 @@ describe('BarcodeComponent', () => {
   });
 
   it('says so when the number does not fit the code', async () => {
-    draw.mockRejectedValue(new Error('bwipp.ean13badLength'));
+    draw.mockRejectedValue(new Error('bwipp.qrcodeNoValidSymbol'));
 
-    const {failed} = await render('123', 'ean13');
+    const {failed} = await render('x'.repeat(5000), 'qr');
 
     expect(failed).toHaveBeenCalledOnce();
   });
@@ -87,7 +91,6 @@ describe('BarcodeRenderer', () => {
 
   it.each([
     ['code128', '634004012345678923'],
-    ['ean13', '4006381333931'],
     ['qr', 'LIDLPLUS-0001'],
   ] as const)('draws a %s code', async (format, text) => {
     const canvas = canvasWithStubContext();
@@ -98,7 +101,7 @@ describe('BarcodeRenderer', () => {
     expect(canvas.height).toBeGreaterThan(0);
   });
 
-  it('refuses an EAN-13 number of the wrong length', async () => {
-    await expect(renderer.draw(canvasWithStubContext(), '4006381', 'ean13')).rejects.toThrow();
+  it('refuses a text longer than a QR code can hold (2331 bytes at level M)', async () => {
+    await expect(renderer.draw(canvasWithStubContext(), 'x'.repeat(5000), 'qr')).rejects.toThrow();
   });
 });

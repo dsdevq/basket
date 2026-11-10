@@ -8,6 +8,7 @@ import {BarcodeRenderer} from './barcode.component';
 import {CardPage} from './card.page';
 import {CardsApi} from './cards.api';
 import type {Card} from './cards.model';
+import {TillDialogComponent} from './till.dialog';
 
 const TESCO: Card = {
   store: 'tesco',
@@ -25,13 +26,14 @@ async function render(
   const toast = {error: vi.fn(), success: vi.fn()};
   const confirm = vi.fn().mockReturnValue(of(options.confirm ?? true));
   const open = vi.fn().mockReturnValue({afterClosed: () => of(options.saved)});
+  const openDialog = vi.fn();
   TestBed.configureTestingModule({
     providers: [
       {provide: CardsApi, useValue: api},
       {provide: BarcodeRenderer, useValue: {draw: vi.fn().mockResolvedValue(undefined)}},
       {provide: Router, useValue: {navigate}},
       {provide: ToastService, useValue: toast},
-      {provide: CmnDialogService, useValue: {confirm}},
+      {provide: CmnDialogService, useValue: {confirm, open: openDialog}},
       {provide: CmnDrawerService, useValue: {open}},
     ],
   });
@@ -49,7 +51,7 @@ async function render(
     await fixture.whenStable();
     fixture.detectChanges();
   };
-  return {host, navigate, toast, confirm, open, button, settle};
+  return {host, navigate, toast, confirm, open, openDialog, button, settle};
 }
 
 describe('CardPage', () => {
@@ -65,6 +67,23 @@ describe('CardPage', () => {
       '6340 0401 2345 6789 23'
     );
     expect(host.textContent).toContain('Code 128');
+  });
+
+  it('puts the code on the whole screen from "Show at till"', async () => {
+    const {openDialog, button} = await render({get: vi.fn().mockResolvedValue(TESCO)});
+
+    button('Show at till').click();
+
+    expect(openDialog).toHaveBeenCalledOnce();
+    const [component, config] = openDialog.mock.calls[0];
+    expect(component).toBe(TillDialogComponent);
+    expect(config).toMatchObject({
+      data: {card: TESCO},
+      title: 'Tesco card',
+      size: 'full',
+      phone: 'full-screen',
+    });
+    expect(config.ariaLabel).not.toContain(TESCO.number);
   });
 
   it('shows a QR text as it is', async () => {
@@ -111,6 +130,7 @@ describe('CardPage', () => {
 
     expect(host.textContent).toContain('can no longer read this card number');
     expect(host.querySelector('bk-barcode')).toBeNull();
+    expect(host.textContent).not.toContain('Show at till');
   });
 
   it('shows the changed card after the sheet saves it', async () => {

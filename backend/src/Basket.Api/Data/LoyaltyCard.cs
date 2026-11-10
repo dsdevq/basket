@@ -31,6 +31,5 @@ public sealed class LoyaltyCard
 public enum CardFormat
 {
     Code128,
-    Ean13,
     Qr,
 }

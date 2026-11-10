@@ -1,7 +1,7 @@
 import type {StoreId} from '../prices/prices.model';
 
-/** How a card is drawn as a code: the two linear barcodes shops print, and the QR code Lidl Plus shows. */
-export type CardFormat = 'code128' | 'ean13' | 'qr';
+/** How a card is drawn as a code: the linear barcode shops print, and the QR code Lidl Plus shows. */
+export type CardFormat = 'code128' | 'qr';
 
 /** A card in the list. The number is hidden down to its last four characters. */
 export interface CardSummary {
@@ -46,6 +46,10 @@ export const CHAINS: readonly Chain[] = [
 
 export const FORMAT_LABELS: Readonly<Record<CardFormat, string>> = {
   code128: 'Code 128',
-  ean13: 'EAN-13',
   qr: 'QR code',
 };
+
+/** Digits in groups of four, as printed on cards; anything else (a QR text) as it is. */
+export function groupedNumber(number: string): string {
+  return /^\d+$/.test(number) ? (number.match(/.{1,4}/g) ?? []).join(' ') : number;
+}

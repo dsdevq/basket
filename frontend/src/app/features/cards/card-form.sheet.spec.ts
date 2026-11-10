@@ -65,13 +65,13 @@ describe('CardFormSheetComponent', () => {
 
   it('starts from the saved card when one is changed', async () => {
     const save = vi.fn().mockResolvedValue(SAVED);
-    const existing: Card = {...SAVED, format: 'ean13', number: '4006381333931'};
+    const existing: Card = {...SAVED, format: 'qr', number: 'LIDLPLUS-0001'};
     const {host, submit} = render({save}, {chain: TESCO, existing});
 
-    expect((host.querySelector('input') as HTMLInputElement).value).toBe('4006381333931');
-    await submit('4006381333931');
+    expect((host.querySelector('input') as HTMLInputElement).value).toBe('LIDLPLUS-0001');
+    await submit('LIDLPLUS-0001');
 
-    expect(save).toHaveBeenCalledWith('tesco', '4006381333931', 'ean13');
+    expect(save).toHaveBeenCalledWith('tesco', 'LIDLPLUS-0001', 'qr');
     expect(host.textContent).toContain('Save card');
   });
 
@@ -91,7 +91,7 @@ describe('CardFormSheetComponent', () => {
       status: 400,
       error: {
         error: 'number_invalid',
-        message: 'An EAN-13 code is 13 digits ending in a valid check digit.',
+        message: 'Enter the card number: 4 to 48 letters or digits, no spaces needed.',
       },
     });
     const save = vi.fn().mockRejectedValue(refusal);
@@ -100,7 +100,7 @@ describe('CardFormSheetComponent', () => {
     await submit('1234');
 
     expect(ref.close).not.toHaveBeenCalled();
-    expect(host.textContent).toContain('An EAN-13 code is 13 digits');
+    expect(host.textContent).toContain('Enter the card number: 4 to 48');
     expect(host.textContent).not.toContain('1234');
   });
 

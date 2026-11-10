@@ -118,6 +118,8 @@ export interface Route {
   readonly path: string;
   /** Mocks the API as the person who reaches this route sees it. */
   readonly setup: (page: Page) => Promise<void>;
+  /** Brings up what the route shows only after a tap (a full-screen dialog), once the page has loaded. */
+  readonly reveal?: (page: Page) => Promise<void>;
 }
 
 export async function signedIn(page: Page): Promise<void> {
@@ -142,6 +144,15 @@ export const ROUTES: readonly Route[] = [
   {name: 'prices', path: '/prices', setup: signedIn},
   {name: 'cards', path: '/cards', setup: signedIn},
   {name: 'card', path: '/cards/tesco', setup: signedIn},
+  {
+    name: 'card-till',
+    path: '/cards/tesco',
+    setup: signedIn,
+    reveal: async page => {
+      await page.getByRole('button', {name: 'Show at till'}).click();
+      await page.locator('cmn-dialog-container canvas[role=img]').waitFor();
+    },
+  },
   {name: 'people', path: '/people', setup: signedIn},
   {name: 'settings', path: '/settings', setup: signedIn},
   {name: 'more', path: '/more', setup: signedIn},

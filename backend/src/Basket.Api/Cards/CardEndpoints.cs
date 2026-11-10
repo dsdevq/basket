@@ -85,7 +85,7 @@ public static class CardEndpoints
         if (request.Format is not null && !CardNumbers.TryParseFormat(request.Format, out format))
         {
             return Results.Json(
-                new { error = "format_unknown", message = "Choose Code 128, EAN-13 or QR code." }, statusCode: 400);
+                new { error = "format_unknown", message = "Choose Code 128 or QR code." }, statusCode: 400);
         }
 
         // The message never repeats what was typed: a refused number is still a card number.
@@ -141,7 +141,6 @@ public static class CardEndpoints
 
     private static string NumberHint(CardFormat format) => format switch
     {
-        CardFormat.Ean13 => "An EAN-13 code is 13 digits ending in a valid check digit. Check the number or choose Code 128.",
         CardFormat.Qr => $"Enter the text the QR code holds, up to {CardNumbers.MaxQrLength} characters.",
         _ => $"Enter the card number: 4 to {CardNumbers.MaxCode128Length} letters or digits, no spaces needed.",
     };

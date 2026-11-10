@@ -12,15 +12,14 @@ import {
 
 import type {CardFormat} from './cards.model';
 
-/** bwip-js's names for the three codes basket draws. */
+/** bwip-js's names for the two codes basket draws. */
 const SYMBOLOGY: Readonly<Record<CardFormat, string>> = {
   code128: 'code128',
-  ean13: 'ean13',
   qr: 'qrcode',
 };
 
 /** Pixels per module: large enough that a phone scales the picture down, never up, so the edges stay sharp. */
-const SCALE: Readonly<Record<CardFormat, number>> = {code128: 4, ean13: 4, qr: 10};
+const SCALE: Readonly<Record<CardFormat, number>> = {code128: 4, qr: 10};
 
 /** Bar height in millimetres (bwip-js units) for the linear codes: tall, so a till scanner finds it at any angle. */
 const BAR_HEIGHT = 30;
@@ -32,7 +31,7 @@ const BAR_HEIGHT = 30;
  */
 @Injectable({providedIn: 'root'})
 export class BarcodeRenderer {
-  /** Throws when the text cannot be drawn as `format` (a bad length or check digit). */
+  /** Throws when the text cannot be drawn as `format` (a number the symbology cannot hold). */
   public async draw(canvas: HTMLCanvasElement, text: string, format: CardFormat): Promise<void> {
     const bwip = await import('bwip-js/browser');
     bwip.toCanvas(canvas, {

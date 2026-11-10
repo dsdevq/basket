@@ -64,8 +64,8 @@ public sealed class CardTests : IClassFixture<BasketFactory>
         lidl.GetProperty("format").GetString().Should().Be("qr");
         var aldi = await Body(await owner.PutAsJsonAsync("/api/cards/aldi", new { number = "9876543210" }));
         aldi.GetProperty("format").GetString().Should().Be("code128");
-        var dunnes = await Body(await owner.PutAsJsonAsync("/api/cards/dunnes", new { number = "4006381333931", format = "ean13" }));
-        dunnes.GetProperty("format").GetString().Should().Be("ean13");
+        var dunnes = await Body(await owner.PutAsJsonAsync("/api/cards/dunnes", new { number = "4006381333931", format = "qr" }));
+        dunnes.GetProperty("format").GetString().Should().Be("qr");
 
         var list = (await Body(await owner.GetAsync("/api/cards"))).GetProperty("cards").EnumerateArray().ToArray();
         list.Select(c => c.GetProperty("store").GetString()).Should().Equal("lidl", "aldi", "dunnes");
@@ -107,7 +107,7 @@ public sealed class CardTests : IClassFixture<BasketFactory>
         await owner.PutAsJsonAsync("/api/cards/tesco", new { number = secret });
         await owner.GetAsync("/api/cards/tesco");
         await owner.GetAsync("/api/cards");
-        await owner.PutAsJsonAsync("/api/cards/tesco", new { number = secret + "x", format = "ean13" });
+        await owner.PutAsJsonAsync("/api/cards/tesco", new { number = secret + "é", format = "code128" });
         await owner.PutAsJsonAsync("/api/cards/tesco", new { number = secret, format = "nonsense" });
         var protectedValue = await _factory.WithDb(db => db.LoyaltyCards.AsNoTracking().Select(c => c.NumberProtected).SingleAsync());
 
@@ -132,8 +132,8 @@ public sealed class CardTests : IClassFixture<BasketFactory>
     [InlineData("tesco", "", null)]
     [InlineData("tesco", "   ", null)]
     [InlineData("tesco", "abc", null)]
-    [InlineData("tesco", "1234 5678 9012", "ean13")]
-    [InlineData("tesco", "4006381333932", "ean13")]
+    [InlineData("tesco", "héllo123", "code128")]
+    [InlineData("tesco", "4006381333931", "ean13")]
     [InlineData("tesco", "4006381333931", "pdf417")]
     public async Task A_number_that_cannot_be_drawn_is_refused_without_repeating_it(string store, string number, string? format)
     {
@@ -236,10 +236,6 @@ public sealed class CardTests : IClassFixture<BasketFactory>
     [InlineData(CardFormat.Code128, "ABC123", "ABC123")]
     [InlineData(CardFormat.Code128, "abc", null)]
     [InlineData(CardFormat.Code128, "héllo123", null)]
-    [InlineData(CardFormat.Ean13, "4006381333931", "4006381333931")]
-    [InlineData(CardFormat.Ean13, "4 006381 333931", "4006381333931")]
-    [InlineData(CardFormat.Ean13, "4006381333930", null)]
-    [InlineData(CardFormat.Ean13, "400638133393", null)]
     [InlineData(CardFormat.Qr, "  some text with spaces  ", "some text with spaces")]
     [InlineData(CardFormat.Qr, "line\nbreak", null)]
     public void Numbers_are_normalized_for_the_code_they_will_be_drawn_as(CardFormat format, string raw, string? expected) =>
