@@ -745,4 +745,4 @@ prices, and a fifth tab would leave six slots with More on a 390 px bar).
   foreign key and the partial index). It rewrites no row and needs no backfill; `Down` drops all four. It is dated after
   `20261110110000_Trips`.
 - **Not in this change** (recorded as follow-ups): matching of free text to products (#9), search-to-add (#31), the match sheet
-  (#10), reading photos from the shops (#30), trip close and history, the compare sheet and the shop plan.
+  (#10), reading photos from the shops (#30), the compare sheet and the shop plan.
