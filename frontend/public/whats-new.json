@@ -39,6 +39,10 @@
         {
           "text": "Once Lidl Plus is connected, your Lidl receipts come in every night as past trips in History, with the day and the total. The things on them join the Shelf, and each remembers the last price you paid.",
           "owner": false
+        },
+        {
+          "text": "The Plan tab now has a By shop view: your whole list priced at each of the four shops, what each shop lacks, and the cheapest way to split it between shops. Card prices and offers count, every price shows the day it was seen, and old or missing prices are marked, never guessed.",
+          "owner": false
         }
       ],
       "changes": []

@@ -7,10 +7,17 @@ namespace Basket.Api.Plan;
 public static class PlanEndpoints
 {
     /// <summary>Signed-in people only, like every route that is not named as a machine route.</summary>
-    public static void MapPlanEndpoints(this IEndpointRouteBuilder api) =>
-        api.MapGet("/plan", GetPlan);
+    public static void MapPlanEndpoints(this IEndpointRouteBuilder api)
+    {
+        api.MapGet("/plan", async (AppDbContext db, TimeProvider clock, CancellationToken ct) =>
+            Results.Ok(await Load(db, clock, ct)));
 
-    private static async Task<IResult> GetPlan(AppDbContext db, TimeProvider clock, CancellationToken ct)
+        // The same plan, summed per shop: it reads the plan above, so a price is the same number on both screens.
+        api.MapGet("/plan/by-shop", async (AppDbContext db, TimeProvider clock, CancellationToken ct) =>
+            Results.Ok(ByShopBuilder.Build(await Load(db, clock, ct))));
+    }
+
+    private static async Task<PlanResponse> Load(AppDbContext db, TimeProvider clock, CancellationToken ct)
     {
         var today = PriceRecorder.DublinDay(clock.GetUtcNow());
         var lines = await db.ListItems.AsNoTracking().Where(i => !i.IsChecked).OrderBy(i => i.AddedAt).ToListAsync(ct);
@@ -29,6 +36,6 @@ public static class PlanEndpoints
             .GroupBy(p => (p.ProductId, p.Store))
             .ToDictionary(g => g.Key, g => g.OrderByDescending(p => p.PaidOn).First());
 
-        return Results.Ok(PlanBuilder.Build(lines, products, listingRows.ToLookup(l => l.ProductId), latest, today, paid));
+        return PlanBuilder.Build(lines, products, listingRows.ToLookup(l => l.ProductId), latest, today, paid);
     }
 }

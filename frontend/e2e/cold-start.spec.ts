@@ -11,6 +11,7 @@ const PAGES = [
   '/history',
   '/shelf',
   '/plan',
+  '/plan/by-shop',
   '/prices',
   '/promotions',
   '/cards',

@@ -52,8 +52,17 @@ export const APP_ROUTES: Routes = [
       {
         path: 'plan',
         title: 'Plan',
-        data: {title: 'Plan'} satisfies PageChromeData,
+        data: {
+          title: 'Plan',
+          actions: [{id: 'by-shop', label: 'By shop', icon: 'Scale', route: '/plan/by-shop'}],
+        } satisfies PageChromeData,
         loadComponent: () => import('./features/plan/plan.page').then(m => m.PlanPage),
+      },
+      {
+        path: 'plan/by-shop',
+        title: 'By shop',
+        data: {title: 'By shop', parent: '/plan'} satisfies PageChromeData,
+        loadComponent: () => import('./features/plan/by-shop.page').then(m => m.ByShopPage),
       },
       {
         path: 'prices',

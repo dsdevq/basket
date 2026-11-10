@@ -4,6 +4,7 @@ import {euro, shortDate, STORE_NAMES} from '../prices/price-format';
 import type {StoreId} from '../prices/prices.model';
 import type {
   PlanBlocker,
+  PlanBlockReason,
   PlanCoverage,
   PlanFlag,
   PlanItem,
@@ -168,6 +169,19 @@ export function verdict(coverage: PlanCoverage, lineCount: number): Verdict {
     pills: [{label: blocked, tone: 'warning'}],
     caveat: 'None of the lines has a fresh price at any shop.',
   };
+}
+
+/** The short reason a shop cannot price a line: the shop's own state for it, that it has no page for the product, or that the line is typed by hand. */
+export function missingTag(reason: PlanBlockReason): string {
+  switch (reason) {
+    case 'unmatched':
+    case 'not_comparable':
+      return flagText(reason, 0).tag;
+    case 'not_linked':
+      return 'No page there';
+    default:
+      return stateWord(reason);
+  }
 }
 
 /** The short reason beside a line the closest shop cannot price: the line's own flag when no shop can, else that shop's state for it. */

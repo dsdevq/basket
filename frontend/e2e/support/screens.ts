@@ -521,6 +521,239 @@ const PLAN_EMPTY = {
   coverage: {singleStore: false, store: null, coveredBy: [], closestStore: null, blockers: []},
 };
 
+type ByShopMissing = {itemId: string; text: string; reason: string};
+
+/** One shop's total in GET /api/plan/by-shop: nothing priced unless the case says so. */
+function byShopStore(
+  store: PlanShop,
+  over: {
+    priced?: number;
+    total?: number;
+    complete?: boolean;
+    cheapest?: boolean;
+    oldestSeenOn?: string | null;
+    promoLines?: number;
+    packsDiffer?: number;
+    cards?: string[];
+    missing?: ByShopMissing[];
+  } = {}
+) {
+  return {
+    store,
+    storeName: PLAN_SHOP_NAMES[store],
+    priced: 0,
+    total: 0,
+    complete: false,
+    cheapest: false,
+    oldestSeenOn: null,
+    promoLines: 0,
+    packsDiffer: 0,
+    cards: [],
+    missing: [],
+    ...over,
+  };
+}
+
+function byShopLine(
+  text: string,
+  price: number,
+  over: {
+    deal?: string;
+    isPromo?: boolean;
+    card?: string;
+    packSize?: string;
+    unit?: string;
+    unitPrice?: number;
+    observedOn?: string;
+  } = {}
+) {
+  return {
+    itemId: `plan-${text}`,
+    text,
+    price,
+    deal: 'Shelf price',
+    isPromo: false,
+    card: null,
+    packSize: null,
+    unit: null,
+    unitPrice: null,
+    observedOn: '2026-11-06',
+    ...over,
+  };
+}
+
+const absent = (text: string, reason: string): ByShopMissing => ({
+  itemId: `plan-${text}`,
+  text,
+  reason,
+});
+
+/** The Plan list priced per shop: no shop has every line, Lidl and Aldi have some, and the split places three of five. */
+const BY_SHOP = {
+  asOf: '2026-11-06',
+  staleAfterDays: 3,
+  lineCount: 5,
+  stores: [
+    byShopStore('lidl', {
+      priced: 1,
+      total: 0.99,
+      oldestSeenOn: '2026-11-05',
+      promoLines: 1,
+      cards: ['Lidl Plus'],
+      missing: [
+        absent('Kerrygold butter 227g', 'not_linked'),
+        absent('Brennans sliced pan 800g', 'not_linked'),
+        absent('Free-range eggs, a dozen', 'not_linked'),
+        absent('Bananas', 'unmatched'),
+      ],
+    }),
+    byShopStore('aldi', {
+      priced: 1,
+      total: 2.91,
+      oldestSeenOn: '2026-11-06',
+      missing: [
+        absent('Whole milk 2L', 'not_linked'),
+        absent('Brennans sliced pan 800g', 'not_linked'),
+        absent('Free-range eggs, a dozen', 'upcoming'),
+        absent('Bananas', 'unmatched'),
+      ],
+    }),
+    byShopStore('tesco', {
+      priced: 1,
+      total: 1.89,
+      oldestSeenOn: '2026-11-06',
+      packsDiffer: 1,
+      missing: [
+        absent('Kerrygold butter 227g', 'out_of_stock'),
+        absent('Brennans sliced pan 800g', 'stale'),
+        absent('Free-range eggs, a dozen', 'not_linked'),
+        absent('Bananas', 'unmatched'),
+      ],
+    }),
+    byShopStore('dunnes', {
+      missing: [
+        absent('Whole milk 2L', 'not_linked'),
+        absent('Kerrygold butter 227g', 'not_linked'),
+        absent('Brennans sliced pan 800g', 'not_linked'),
+        absent('Free-range eggs, a dozen', 'not_linked'),
+        absent('Bananas', 'unmatched'),
+      ],
+    }),
+  ],
+  split: {
+    total: 3.9,
+    complete: false,
+    versusCheapest: null,
+    groups: [
+      {
+        store: 'lidl',
+        storeName: 'Lidl',
+        total: 0.99,
+        lines: [
+          byShopLine('Whole milk 2L', 0.99, {
+            deal: 'Lidl Plus price',
+            isPromo: true,
+            card: 'Lidl Plus',
+            packSize: '2 L',
+            unit: 'l',
+            unitPrice: 0.5,
+            observedOn: '2026-11-05',
+          }),
+        ],
+      },
+      {
+        store: 'aldi',
+        storeName: 'Aldi',
+        total: 2.91,
+        lines: [
+          byShopLine('Kerrygold butter 227g', 2.91, {
+            packSize: '227 g',
+            unit: 'kg',
+            unitPrice: 12.82,
+          }),
+        ],
+      },
+    ],
+    unplaced: [
+      {itemId: 'plan-Brennans sliced pan 800g', text: 'Brennans sliced pan 800g', reason: 'stale'},
+      {
+        itemId: 'plan-Free-range eggs, a dozen',
+        text: 'Free-range eggs, a dozen',
+        reason: 'no_price',
+      },
+      {itemId: 'plan-Bananas', text: 'Bananas', reason: 'unmatched'},
+    ],
+  },
+};
+
+/** The happy case: Aldi prices both lines for least, and splitting saves a little more. */
+const BY_SHOP_COMPLETE = {
+  asOf: '2026-11-06',
+  staleAfterDays: 3,
+  lineCount: 2,
+  stores: [
+    byShopStore('lidl', {
+      priced: 2,
+      total: 3.7,
+      complete: true,
+      oldestSeenOn: '2026-11-05',
+    }),
+    byShopStore('aldi', {
+      priced: 2,
+      total: 3.5,
+      complete: true,
+      cheapest: true,
+      oldestSeenOn: '2026-11-06',
+    }),
+    byShopStore('tesco', {
+      priced: 1,
+      total: 1.85,
+      oldestSeenOn: '2026-11-06',
+      missing: [absent('Whole milk 2L', 'stale')],
+    }),
+    byShopStore('dunnes', {
+      missing: [
+        absent('Whole milk 2L', 'not_linked'),
+        absent('Brennans sliced pan 800g', 'not_linked'),
+      ],
+    }),
+  ],
+  split: {
+    total: 3.4,
+    complete: true,
+    versusCheapest: -0.1,
+    groups: [
+      {
+        store: 'aldi',
+        storeName: 'Aldi',
+        total: 1.1,
+        lines: [byShopLine('Whole milk 2L', 1.1, {packSize: '2 L', unit: 'l', unitPrice: 0.55})],
+      },
+      {
+        store: 'lidl',
+        storeName: 'Lidl',
+        total: 2.3,
+        lines: [
+          byShopLine('Brennans sliced pan 800g', 2.3, {
+            packSize: '800 g',
+            unit: 'kg',
+            unitPrice: 2.88,
+            observedOn: '2026-11-05',
+          }),
+        ],
+      },
+    ],
+    unplaced: [],
+  },
+};
+const BY_SHOP_EMPTY = {
+  asOf: '2026-11-06',
+  staleAfterDays: 3,
+  lineCount: 0,
+  stores: [byShopStore('lidl'), byShopStore('aldi'), byShopStore('tesco'), byShopStore('dunnes')],
+  split: {total: 0, complete: false, versusCheapest: null, groups: [], unplaced: []},
+};
+
 const MEMBERS = [
   {id: 'u1', displayName: 'Anna', role: 'owner', createdAt: '2026-11-01T09:00:00Z'},
   {id: 'u2', displayName: 'Ben', role: 'member', createdAt: '2026-11-02T09:00:00Z'},
@@ -585,6 +818,7 @@ export async function signedIn(page: Page): Promise<void> {
   await page.route('**/api/products', r => r.fulfill({json: PRODUCTS}));
   await page.route('**/api/promotions', r => r.fulfill({json: PROMOTIONS}));
   await page.route('**/api/plan', r => r.fulfill({json: PLAN}));
+  await page.route('**/api/plan/by-shop', r => r.fulfill({json: BY_SHOP}));
   await page.route('**/api/cards', r => r.fulfill({json: {cards: CARDS}}));
   await page.route('**/api/cards/tesco', r => r.fulfill({json: TESCO_CARD}));
   await page.route('**/api/members', r => r.fulfill({json: MEMBERS}));
@@ -618,6 +852,23 @@ export const ROUTES: readonly Route[] = [
     setup: async page => {
       await signedIn(page);
       await page.route('**/api/plan', r => r.fulfill({json: PLAN_EMPTY}));
+    },
+  },
+  {name: 'by-shop', path: '/plan/by-shop', setup: signedIn},
+  {
+    name: 'by-shop-complete',
+    path: '/plan/by-shop',
+    setup: async page => {
+      await signedIn(page);
+      await page.route('**/api/plan/by-shop', r => r.fulfill({json: BY_SHOP_COMPLETE}));
+    },
+  },
+  {
+    name: 'by-shop-empty',
+    path: '/plan/by-shop',
+    setup: async page => {
+      await signedIn(page);
+      await page.route('**/api/plan/by-shop', r => r.fulfill({json: BY_SHOP_EMPTY}));
     },
   },
   {name: 'prices', path: '/prices', setup: signedIn},

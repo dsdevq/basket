@@ -328,6 +328,7 @@ public sealed class FleetAgentTests : IClassFixture<BasketFactory>
     [InlineData("GET", "/api/list")]
     [InlineData("GET", "/api/promotions")]
     [InlineData("GET", "/api/plan")]
+    [InlineData("GET", "/api/plan/by-shop")]
     [InlineData("POST", "/api/list/items")]
     [InlineData("DELETE", "/api/list/items/00000000-0000-0000-0000-000000000001")]
     [InlineData("POST", "/api/list/close")]
