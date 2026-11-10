@@ -7,4 +7,4 @@
 - You can sign in with a passkey, and add more passkeys from Settings.
 - You can invite people to your household from the People page. (owner)
 - You can open What's new from the account menu or the More page to see what changed.
-- You can pick the look of the app, Lifekit or Carbon, in Settings under Appearance. Lifekit is the default.
+- The app now uses the Lifekit look. You can change the look in Settings under Appearance.
