@@ -40,6 +40,9 @@ public sealed class BasketFactory : WebApplicationFactory<Program>
     /// <summary>Runs on its own connection just before a new loyalty card is written, so a test can cause the moment the insert meets.</summary>
     public Func<Task>? BeforeCardInsert { get; set; }
 
+    /// <summary>Runs on its own connection just before a new paid price is written, so a test can make another pull get there first.</summary>
+    public Func<Task>? BeforePaidPriceInsert { get; set; }
+
     /// <summary>Lidl's sign-in service, as a test sets it up: what it answers and which tokens it was asked about.</summary>
     public FakeLidlPlusAuth Lidl { get; } = new();
 
@@ -101,7 +104,7 @@ public sealed class BasketFactory : WebApplicationFactory<Program>
         builder.ConfigureTestServices(services =>
         {
             services.AddSingleton<Serilog.Core.ILogEventSink>(Logs);
-            services.ConfigureDbContext<AppDbContext>(options => options.AddInterceptors(new CardInsertHook(this)));
+            services.ConfigureDbContext<AppDbContext>(options => options.AddInterceptors(new SaveHooks(this)));
             services.RemoveAll<ILidlPlusAuth>();
             services.AddSingleton<ILidlPlusAuth>(Lidl);
             services.RemoveAll<ILidlPlusTickets>();
@@ -206,16 +209,22 @@ public sealed class BasketFactory : WebApplicationFactory<Program>
     }
 }
 
-file sealed class CardInsertHook(BasketFactory factory) : SaveChangesInterceptor
+file sealed class SaveHooks(BasketFactory factory) : SaveChangesInterceptor
 {
     public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
         DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
     {
-        var inserting = eventData.Context!.ChangeTracker.Entries<LoyaltyCard>().Any(e => e.State == EntityState.Added);
-        if (inserting && factory.BeforeCardInsert is { } hook)
+        var entries = eventData.Context!.ChangeTracker;
+        if (entries.Entries<LoyaltyCard>().Any(e => e.State == EntityState.Added) && factory.BeforeCardInsert is { } cardHook)
         {
             factory.BeforeCardInsert = null;
-            await hook();
+            await cardHook();
+        }
+
+        if (entries.Entries<PaidPrice>().Any(e => e.State == EntityState.Added) && factory.BeforePaidPriceInsert is { } paidHook)
+        {
+            factory.BeforePaidPriceInsert = null;
+            await paidHook();
         }
 
         return result;

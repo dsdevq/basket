@@ -374,6 +374,10 @@ namespace Basket.Api.Data.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<DateTimeOffset?>("PaidAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("paid_at");
+
                     b.Property<DateOnly>("PaidOn")
                         .HasColumnType("date")
                         .HasColumnName("paid_on");
@@ -395,7 +399,8 @@ namespace Basket.Api.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ProductId", "Store", "PaidOn");
+                    b.HasIndex("ProductId", "Store", "PaidOn")
+                        .IsUnique();
 
                     b.ToTable("paid_price", (string)null);
                 });

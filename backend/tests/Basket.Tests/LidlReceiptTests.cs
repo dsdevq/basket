@@ -18,7 +18,6 @@ namespace Basket.Tests;
 /// </summary>
 public sealed class LidlReceiptTests
 {
-    private const string Pull = "/api/lidl-plus/receipts/pull";
     private const string Token = "A1B2C3D4E5F60718293A4B5C6D7E8F90-1";
 
     private static readonly DateTimeOffset Monday = new(2026, 11, 2, 18, 30, 0, TimeSpan.Zero);
@@ -30,11 +29,10 @@ public sealed class LidlReceiptTests
         return owner;
     }
 
-    private static async Task<JsonElement> PulledAsync(HttpClient owner)
+    private static async Task<ReceiptImportResult> PullAsync(BasketFactory factory)
     {
-        var response = await owner.PostAsync(Pull, null);
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-        return await response.Content.ReadFromJsonAsync<JsonElement>();
+        await using var scope = factory.Services.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<LidlReceiptImport>().PullAsync(CancellationToken.None);
     }
 
     private static async Task<JsonElement> TripsAsync(HttpClient client, string query = "") =>
@@ -56,9 +54,9 @@ public sealed class LidlReceiptTests
         var owner = await ConnectedOwnerAsync(factory);
         factory.Receipts.Add(Weekly("R-1", Monday));
 
-        var result = await PulledAsync(owner);
+        var result = await PullAsync(factory);
 
-        result.GetProperty("receipts").GetInt32().Should().Be(1);
+        result.Receipts.Should().Be(1);
         var trips = (await TripsAsync(owner)).GetProperty("trips").EnumerateArray().ToArray();
         var trip = trips.Should().ContainSingle().Subject;
         trip.GetProperty("closedAt").GetDateTimeOffset().Should().Be(Monday);
@@ -75,12 +73,12 @@ public sealed class LidlReceiptTests
         await using var factory = new BasketFactory();
         var owner = await ConnectedOwnerAsync(factory);
         factory.Receipts.Add(Weekly("R-1", Monday));
-        await PulledAsync(owner);
+        await PullAsync(factory);
         factory.Receipts.Opened.Clear();
 
-        var again = await PulledAsync(owner);
+        var again = await PullAsync(factory);
 
-        again.GetProperty("receipts").GetInt32().Should().Be(0);
+        again.Receipts.Should().Be(0);
         factory.Receipts.Opened.Should().BeEmpty();
         (await TripsAsync(owner)).GetProperty("trips").GetArrayLength().Should().Be(1);
     }
@@ -91,10 +89,10 @@ public sealed class LidlReceiptTests
         await using var factory = new BasketFactory();
         var owner = await ConnectedOwnerAsync(factory);
         factory.Receipts.Add(Weekly("R-1", Monday));
-        await PulledAsync(owner);
+        await PullAsync(factory);
         factory.Receipts.Add(Weekly("R-2", Monday.AddDays(7)));
 
-        (await PulledAsync(owner)).GetProperty("receipts").GetInt32().Should().Be(1);
+        (await PullAsync(factory)).Receipts.Should().Be(1);
 
         var trips = (await TripsAsync(owner)).GetProperty("trips").EnumerateArray().ToArray();
         trips.Select(t => t.GetProperty("closedAt").GetDateTimeOffset()).Should().Equal(Monday.AddDays(7), Monday);
@@ -116,9 +114,9 @@ public sealed class LidlReceiptTests
         });
         factory.Receipts.Add(Weekly("R-1", Monday));
 
-        var result = await PulledAsync(owner);
+        var result = await PullAsync(factory);
 
-        result.GetProperty("products").GetInt32().Should().Be(1);
+        result.Products.Should().Be(1);
         var products = await ProductsAsync(owner);
         products.Select(p => p.GetProperty("name").GetString()).Should().BeEquivalentTo("whole MILK 2l", "Brown bread");
         var trip = (await TripsAsync(owner)).GetProperty("trips")[0];
@@ -140,7 +138,7 @@ public sealed class LidlReceiptTests
         await using var factory = new BasketFactory();
         var owner = await ConnectedOwnerAsync(factory);
         factory.Receipts.Add(Weekly("R-1", Monday, milk: 1.29m)).Add(Weekly("R-2", Monday.AddDays(7), milk: 1.39m));
-        await PulledAsync(owner);
+        await PullAsync(factory);
 
         var milk = (await ProductsAsync(owner)).Single(p => p.GetProperty("name").GetString() == "Whole milk 2L");
         var paid = LidlOf(milk).GetProperty("lastPaid");
@@ -184,7 +182,7 @@ public sealed class LidlReceiptTests
         await using var factory = new BasketFactory();
         var owner = await ConnectedOwnerAsync(factory);
         factory.Receipts.Add(Weekly("R-1", Monday));
-        await PulledAsync(owner);
+        await PullAsync(factory);
         var bread = (await ProductsAsync(owner)).Single(p => p.GetProperty("name").GetString() == "Brown bread").GetProperty("id").GetGuid();
 
         (await owner.PostAsJsonAsync("/api/list/items", new { productId = bread, store = "lidl" })).StatusCode.Should().Be(HttpStatusCode.Created);
@@ -200,7 +198,7 @@ public sealed class LidlReceiptTests
         await using var factory = new BasketFactory();
         var owner = await ConnectedOwnerAsync(factory);
         factory.Receipts.Add(Weekly("R-1", Monday));
-        await PulledAsync(owner);
+        await PullAsync(factory);
         var trip = (await TripsAsync(owner)).GetProperty("trips")[0].GetProperty("id").GetGuid();
 
         var reload = await owner.PostAsync($"/api/trips/{trip}/reload", null);
@@ -225,7 +223,7 @@ public sealed class LidlReceiptTests
             Line("Free sample", 0m),
             Line("   ", 1m)));
 
-        await PulledAsync(owner);
+        await PullAsync(factory);
 
         var products = await ProductsAsync(owner);
         products.Select(p => p.GetProperty("name").GetString()).Should().BeEquivalentTo("Bananas", "Cola 1.5L");
@@ -243,7 +241,7 @@ public sealed class LidlReceiptTests
             .Add(Receipt("R-1", Monday, 2.60m, Line("Yoghurt", 1.30m), Line("Yoghurt", 1.30m)))
             .Add(Receipt("R-2", Monday.AddHours(2), 1.45m, Line("Yoghurt", 1.45m)));
 
-        await PulledAsync(owner);
+        await PullAsync(factory);
 
         var trips = (await TripsAsync(owner)).GetProperty("trips").EnumerateArray().ToArray();
         trips.Should().HaveCount(2);
@@ -260,11 +258,11 @@ public sealed class LidlReceiptTests
     public async Task The_day_a_price_was_paid_is_the_Dublin_day_of_the_receipt()
     {
         await using var factory = new BasketFactory();
-        var owner = await ConnectedOwnerAsync(factory);
+        await ConnectedOwnerAsync(factory);
         // 23:30 UTC on 2 June is 00:30 on 3 June in Dublin (summer time).
         factory.Receipts.Add(Receipt("R-1", new DateTimeOffset(2026, 6, 2, 23, 30, 0, TimeSpan.Zero), 1m, Line("Butter", 1m)));
 
-        await PulledAsync(owner);
+        await PullAsync(factory);
 
         await factory.WithDb(async db =>
         {
@@ -283,17 +281,17 @@ public sealed class LidlReceiptTests
             factory.Receipts.Add(Receipt($"R-{i:00}", Monday.AddDays(-i), 1m, Line($"Item {i}", 1m)));
         }
 
-        var first = await PulledAsync(owner);
+        var first = await PullAsync(factory);
 
-        first.GetProperty("receipts").GetInt32().Should().Be(30);
-        first.GetProperty("waiting").GetInt32().Should().Be(5);
+        first.Receipts.Should().Be(30);
+        first.Waiting.Should().Be(5);
         var newest = (await TripsAsync(owner)).GetProperty("trips").EnumerateArray().Select(t => t.GetProperty("closedAt").GetDateTimeOffset()).Max();
         newest.Should().Be(Monday, "the newest receipts are the ones taken first");
 
-        var second = await PulledAsync(owner);
+        var second = await PullAsync(factory);
 
-        second.GetProperty("receipts").GetInt32().Should().Be(5);
-        second.GetProperty("waiting").GetInt32().Should().Be(0);
+        second.Receipts.Should().Be(5);
+        second.Waiting.Should().Be(0);
         (await factory.WithDb(db => db.Trips.CountAsync())).Should().Be(35);
     }
 
@@ -301,19 +299,19 @@ public sealed class LidlReceiptTests
     public async Task When_Lidl_stops_answering_what_was_filed_stays_and_the_rest_is_taken_next_time()
     {
         await using var factory = new BasketFactory();
-        var owner = await ConnectedOwnerAsync(factory);
+        await ConnectedOwnerAsync(factory);
         factory.Receipts.Add(Weekly("R-1", Monday)).Add(Weekly("R-2", Monday.AddDays(1))).Add(Weekly("R-3", Monday.AddDays(2)));
         factory.Receipts.OpenFailsFor = "R-2";
 
-        var failed = await owner.PostAsync(Pull, null);
+        var failed = await PullAsync(factory);
 
-        failed.StatusCode.Should().Be(HttpStatusCode.BadGateway);
-        (await failed.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("error").GetString().Should().Be("lidl_unavailable");
+        failed.Outcome.Should().Be(ReceiptImportOutcome.Unavailable);
+        failed.Waiting.Should().Be(2, "the receipt Lidl failed on and the older one behind it");
         var filedFirst = await factory.WithDb(db => db.Trips.Select(t => t.ExternalId!).ToListAsync());
         filedFirst.Should().NotContain("R-2");
 
         factory.Receipts.OpenFailsFor = null;
-        await PulledAsync(owner);
+        await PullAsync(factory);
 
         (await factory.WithDb(db => db.Trips.Select(t => t.ExternalId!).ToListAsync())).Should().BeEquivalentTo("R-1", "R-2", "R-3");
     }
@@ -322,44 +320,43 @@ public sealed class LidlReceiptTests
     public async Task A_list_that_stops_part_way_files_the_receipts_read_so_far()
     {
         await using var factory = new BasketFactory();
-        var owner = await ConnectedOwnerAsync(factory);
+        await ConnectedOwnerAsync(factory);
         for (var i = 0; i < 12; i++)
         {
             factory.Receipts.Add(Receipt($"R-{i:00}", Monday.AddDays(-i), 1m, Line($"Item {i}", 1m)));
         }
 
         factory.Receipts.ListFailsFromPage = 2;
-        (await owner.PostAsync(Pull, null)).StatusCode.Should().Be(HttpStatusCode.BadGateway);
+        (await PullAsync(factory)).Outcome.Should().Be(ReceiptImportOutcome.Unavailable);
         (await factory.WithDb(db => db.Trips.CountAsync())).Should().Be(10);
 
         factory.Receipts.ListFailsFromPage = null;
-        (await PulledAsync(owner)).GetProperty("receipts").GetInt32().Should().Be(2);
+        (await PullAsync(factory)).Receipts.Should().Be(2);
     }
 
     [Fact]
     public async Task A_receipt_basket_cannot_read_is_skipped_and_tried_again_while_the_others_are_filed()
     {
         await using var factory = new BasketFactory();
-        var owner = await ConnectedOwnerAsync(factory);
+        await ConnectedOwnerAsync(factory);
         factory.Receipts.Add(Weekly("R-1", Monday)).Add(Weekly("R-2", Monday.AddDays(1))).MakeUnreadable("R-1");
 
-        var result = await PulledAsync(owner);
+        var result = await PullAsync(factory);
 
-        result.GetProperty("receipts").GetInt32().Should().Be(1);
-        result.GetProperty("skipped").GetInt32().Should().Be(1);
+        result.Receipts.Should().Be(1);
+        result.Skipped.Should().Be(1);
         (await factory.WithDb(db => db.Trips.Select(t => t.ExternalId!).ToListAsync())).Should().Equal("R-2");
     }
 
     [Fact]
-    public async Task Without_a_connection_a_pull_is_refused_and_nothing_is_asked_of_Lidl()
+    public async Task Without_a_connection_a_pull_does_nothing_and_nothing_is_asked_of_Lidl()
     {
         await using var factory = new BasketFactory();
         var (owner, _) = await factory.OwnerAsync();
 
-        var response = await owner.PostAsync(Pull, null);
+        var result = await PullAsync(factory);
 
-        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
-        (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("error").GetString().Should().Be("not_connected");
+        result.Outcome.Should().Be(ReceiptImportOutcome.NotConnected);
         factory.Receipts.ListCalls.Should().Be(0);
     }
 
@@ -367,13 +364,12 @@ public sealed class LidlReceiptTests
     public async Task A_token_Lidl_refuses_ends_the_pull_and_asks_for_a_new_one()
     {
         await using var factory = new BasketFactory();
-        var owner = await ConnectedOwnerAsync(factory);
+        await ConnectedOwnerAsync(factory);
         factory.Lidl.Then(LidlAuthResult.Rejected);
 
-        var response = await owner.PostAsync(Pull, null);
+        var result = await PullAsync(factory);
 
-        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
-        (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("error").GetString().Should().Be("needs_new_token");
+        result.Outcome.Should().Be(ReceiptImportOutcome.NeedsNewToken);
         factory.Receipts.ListCalls.Should().Be(0);
     }
 
@@ -384,23 +380,138 @@ public sealed class LidlReceiptTests
         var owner = await ConnectedOwnerAsync(factory);
         factory.Lidl.Then(LidlAuthResult.Unavailable);
 
-        var response = await owner.PostAsync(Pull, null);
+        var result = await PullAsync(factory);
 
-        response.StatusCode.Should().Be(HttpStatusCode.BadGateway);
+        result.Outcome.Should().Be(ReceiptImportOutcome.Unavailable);
         factory.Receipts.ListCalls.Should().Be(0);
         (await owner.GetFromJsonAsync<JsonElement>("/api/lidl-plus/connection")).GetProperty("state").GetString().Should().Be("connected");
     }
 
     [Fact]
-    public async Task Only_the_owner_can_pull_receipts()
+    public async Task A_receipt_Lidl_keeps_refusing_never_holds_back_the_older_ones_and_never_uses_up_the_limit()
     {
         await using var factory = new BasketFactory();
-        var (owner, _) = await factory.OwnerAsync();
-        var (member, _) = await factory.MemberAsync(owner);
+        await ConnectedOwnerAsync(factory);
+        for (var i = 0; i < 40; i++)
+        {
+            factory.Receipts.Add(Receipt($"R-{i:00}", Monday.AddDays(-i), 1m, Line($"Item {i}", 1m)));
+        }
 
-        (await member.PostAsync(Pull, null)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
-        (await factory.NewBrowser().PostAsync(Pull, null)).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-        factory.Receipts.ListCalls.Should().Be(0);
+        for (var i = 0; i < 5; i++)
+        {
+            factory.Receipts.MakeUnreadable($"R-{i:00}");
+        }
+
+        var result = await PullAsync(factory);
+
+        result.Outcome.Should().Be(ReceiptImportOutcome.Done);
+        result.Receipts.Should().Be(30, "the five receipts basket cannot read are not counted against the limit of thirty");
+        result.Skipped.Should().Be(5);
+        result.Waiting.Should().Be(5);
+        (await factory.WithDb(db => db.Trips.Select(t => t.ExternalId!).ToListAsync())).Should().NotContain(["R-00", "R-01", "R-02", "R-03", "R-04"]).And.Contain("R-05").And.Contain("R-34");
+    }
+
+    [Fact]
+    public async Task Two_products_whose_names_differ_only_by_letter_case_do_not_stop_a_pull_and_the_first_added_is_used()
+    {
+        await using var factory = new BasketFactory();
+        await ConnectedOwnerAsync(factory);
+        var first = await factory.WithDb(async db =>
+        {
+            var by = await db.Users.Select(u => u.Id).FirstAsync();
+            var older = new Product { Id = Guid.NewGuid(), Name = "Whole milk 2L", AddedAt = DateTimeOffset.UtcNow.AddDays(-2), AddedByUserId = by };
+            var newer = new Product { Id = Guid.NewGuid(), Name = "WHOLE MILK 2L", AddedAt = DateTimeOffset.UtcNow.AddDays(-1), AddedByUserId = by };
+            db.Products.AddRange(newer, older);
+            await db.SaveChangesAsync();
+            return older.Id;
+        });
+        factory.Receipts.Add(Weekly("R-1", Monday));
+
+        var result = await PullAsync(factory);
+
+        result.Outcome.Should().Be(ReceiptImportOutcome.Done);
+        result.Receipts.Should().Be(1);
+        await factory.WithDb(async db =>
+        {
+            (await db.TripItems.AsNoTracking().SingleAsync(i => i.Text == "Whole milk 2L")).ProductId.Should().Be(first);
+            return 0;
+        });
+    }
+
+    [Fact]
+    public async Task A_receipt_found_later_that_was_printed_earlier_in_the_day_does_not_replace_the_later_price()
+    {
+        await using var factory = new BasketFactory();
+        await ConnectedOwnerAsync(factory);
+        factory.Receipts.Add(Receipt("R-late", Monday, 1.39m, Line("Yoghurt", 1.39m)));
+        await PullAsync(factory);
+        factory.Receipts.Add(Receipt("R-early", Monday.AddHours(-8), 1.29m, Line("Yoghurt", 1.29m)));
+
+        (await PullAsync(factory)).Receipts.Should().Be(1);
+
+        await factory.WithDb(async db =>
+        {
+            var paid = await db.PaidPrices.AsNoTracking().ToListAsync();
+            paid.Should().ContainSingle().Which.Price.Should().Be(1.39m, "the receipt printed last is the price that stays, whatever order they were found in");
+            (await db.Trips.CountAsync()).Should().Be(2);
+            return 0;
+        });
+    }
+
+    [Fact]
+    public async Task A_receipt_found_later_that_was_printed_later_in_the_day_replaces_the_earlier_price()
+    {
+        await using var factory = new BasketFactory();
+        await ConnectedOwnerAsync(factory);
+        factory.Receipts.Add(Receipt("R-early", Monday.AddHours(-8), 1.29m, Line("Yoghurt", 1.29m)));
+        await PullAsync(factory);
+        factory.Receipts.Add(Receipt("R-late", Monday, 1.39m, Line("Yoghurt", 1.39m)));
+
+        await PullAsync(factory);
+
+        (await factory.WithDb(db => db.PaidPrices.AsNoTracking().ToListAsync())).Should().ContainSingle().Which.Price.Should().Be(1.39m);
+    }
+
+    [Theory]
+    [InlineData(3, 9.99)]
+    [InlineData(-3, 1.45)]
+    public async Task A_pull_that_loses_the_race_for_a_days_price_files_its_receipt_and_the_latest_receipt_keeps_the_price(int otherHoursAfter, double expected)
+    {
+        await using var factory = new BasketFactory();
+        await ConnectedOwnerAsync(factory);
+        var product = await factory.WithDb(async db =>
+        {
+            var by = await db.Users.Select(u => u.Id).FirstAsync();
+            var yoghurt = new Product { Id = Guid.NewGuid(), Name = "Yoghurt", AddedAt = DateTimeOffset.UtcNow, AddedByUserId = by };
+            db.Products.Add(yoghurt);
+            await db.SaveChangesAsync();
+            return yoghurt.Id;
+        });
+        factory.Receipts.Add(Receipt("R-1", Monday, 1.45m, Line("Yoghurt", 1.45m)));
+        factory.BeforePaidPriceInsert = () => factory.WithDb(async db =>
+        {
+            db.PaidPrices.Add(new PaidPrice
+            {
+                Id = Guid.NewGuid(),
+                ProductId = product,
+                Store = Store.Lidl,
+                PaidOn = new DateOnly(2026, 11, 2),
+                PaidAt = Monday.AddHours(otherHoursAfter),
+                Price = 9.99m,
+            });
+            await db.SaveChangesAsync();
+            return 0;
+        });
+
+        var result = await PullAsync(factory);
+
+        result.Receipts.Should().Be(1);
+        await factory.WithDb(async db =>
+        {
+            (await db.Trips.Select(t => t.ExternalId).ToListAsync()).Should().Equal("R-1");
+            (await db.PaidPrices.AsNoTracking().ToListAsync()).Should().ContainSingle().Which.Price.Should().Be((decimal)expected);
+            return 0;
+        });
     }
 
     [Fact]
@@ -446,11 +557,11 @@ public sealed class LidlReceiptTests
     public async Task The_access_token_never_reaches_a_log()
     {
         await using var factory = new BasketFactory();
-        var owner = await ConnectedOwnerAsync(factory);
+        await ConnectedOwnerAsync(factory);
         factory.Lidl.Then(FakeLidlPlusAuth.Accepts(access: "ACCESS-UNIQUE-0f3a9c1d"));
         factory.Receipts.Add(Weekly("R-1", Monday));
 
-        await PulledAsync(owner);
+        await PullAsync(factory);
 
         factory.Receipts.Tokens.Should().Contain("ACCESS-UNIQUE-0f3a9c1d");
         factory.Logs.Lines.Should().NotContain(line => line.Contains("ACCESS-UNIQUE-0f3a9c1d", StringComparison.Ordinal));

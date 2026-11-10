@@ -6,15 +6,15 @@ using Microsoft.Extensions.Options;
 
 namespace Basket.Api.LidlPlus;
 
-/// <summary>How Lidl answered a receipts request. Anything that is not a clean answer is <see cref="Unavailable"/>; the token is never blamed here.</summary>
+/// <summary>How Lidl answered a receipts request. Lidl being unable or unwilling to answer at all is <see cref="Unavailable"/>; the token is never blamed here.</summary>
 public enum LidlTicketsOutcome
 {
     Ok,
 
-    /// <summary>Lidl could not be asked, refused the request, or answered in a way basket cannot read as a list.</summary>
+    /// <summary>Lidl could not be asked, is down or throttling, turned the access token away, or answered in a way basket cannot read as a list.</summary>
     Unavailable,
 
-    /// <summary>One receipt came back in a shape basket cannot read (no date, no lines). It is skipped, the rest are still read.</summary>
+    /// <summary>One receipt is refused (not found, forbidden) or came back in a shape basket cannot read (no date, no lines). It is skipped, the rest are still read.</summary>
     Unreadable,
 }
 
@@ -56,7 +56,7 @@ public sealed class LidlPlusTicketsClient(HttpClient http, IOptions<LidlPlusOpti
 {
     public async Task<LidlReceiptPage> ListAsync(string accessToken, int page, CancellationToken ct)
     {
-        var body = await GetBodyAsync($"api/v2/{Country}/tickets?pageNumber={page.ToString(CultureInfo.InvariantCulture)}&onlyFavorite=false", accessToken, ct);
+        var (body, _) = await GetBodyAsync($"api/v2/{Country}/tickets?pageNumber={page.ToString(CultureInfo.InvariantCulture)}&onlyFavorite=false", accessToken, ct);
         if (body is null)
         {
             return LidlReceiptPage.Unavailable;
@@ -87,10 +87,10 @@ public sealed class LidlPlusTicketsClient(HttpClient http, IOptions<LidlPlusOpti
 
     public async Task<LidlReceiptResult> GetAsync(string accessToken, string id, CancellationToken ct)
     {
-        var body = await GetBodyAsync($"api/v2/{Country}/tickets/{Uri.EscapeDataString(id)}", accessToken, ct);
+        var (body, lidlStopped) = await GetBodyAsync($"api/v2/{Country}/tickets/{Uri.EscapeDataString(id)}", accessToken, ct);
         if (body is null)
         {
-            return LidlReceiptResult.Unavailable;
+            return lidlStopped ? LidlReceiptResult.Unavailable : LidlReceiptResult.Unreadable;
         }
 
         try
@@ -135,8 +135,11 @@ public sealed class LidlPlusTicketsClient(HttpClient http, IOptions<LidlPlusOpti
         return new LidlReceiptResult(LidlTicketsOutcome.Ok, new LidlReceipt(id, date, Amount(root, "totalAmount"), lines));
     }
 
-    /// <summary>The body of a successful answer, or null for anything else (refused, throttled, down, unreachable).</summary>
-    private async Task<string?> GetBodyAsync(string path, string accessToken, CancellationToken ct)
+    /// <summary>
+    /// The body of a successful answer, or none. <c>LidlStopped</c> says why there is none: Lidl is down, throttling, unreachable or
+    /// turned the access token away, so asking for more is pointless; otherwise it refused this one request (not found, forbidden).
+    /// </summary>
+    private async Task<(string? Body, bool LidlStopped)> GetBodyAsync(string path, string accessToken, CancellationToken ct)
     {
         var settings = options.Value;
         using var request = new HttpRequestMessage(HttpMethod.Get, path);
@@ -149,11 +152,16 @@ public sealed class LidlPlusTicketsClient(HttpClient http, IOptions<LidlPlusOpti
         try
         {
             using var response = await http.SendAsync(request, ct);
-            return response.StatusCode == HttpStatusCode.OK ? await response.Content.ReadAsStringAsync(ct) : null;
+            if (response.StatusCode == HttpStatusCode.OK)
+            {
+                return (await response.Content.ReadAsStringAsync(ct), false);
+            }
+
+            return (null, response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.TooManyRequests or >= HttpStatusCode.InternalServerError);
         }
         catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException && !ct.IsCancellationRequested)
         {
-            return null;
+            return (null, true);
         }
     }
 

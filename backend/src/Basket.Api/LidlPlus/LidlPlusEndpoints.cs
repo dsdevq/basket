@@ -21,9 +21,6 @@ public static class LidlPlusEndpoints
         connection.MapPut("/", Connect);
         connection.MapPost("/check", Check);
         connection.MapDelete("/", Disconnect);
-
-        api.MapGroup("/lidl-plus/receipts").RequireAuthorization(Policies.Owner).AddEndpointFilter(NoStore)
-            .MapPost("/pull", PullReceipts);
     }
 
     private static async ValueTask<object?> NoStore(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
@@ -76,33 +73,6 @@ public static class LidlPlusEndpoints
         }
 
         return Results.Ok(Respond(await service.StatusAsync(ct)));
-    }
-
-    /// <summary>Pulls the receipts now instead of waiting for the night: new ones are filed as trips, their products join the shelf.</summary>
-    private static async Task<IResult> PullReceipts(LidlReceiptImport import, CancellationToken ct)
-    {
-        var result = await import.PullAsync(ct);
-        var counts = new { receipts = result.Receipts, products = result.Products, skipped = result.Skipped, waiting = result.Waiting };
-        return result.Outcome switch
-        {
-            ReceiptImportOutcome.Done => Results.Ok(counts),
-            ReceiptImportOutcome.NotConnected => Results.Json(new { error = "not_connected", message = "Lidl Plus is not connected." }, statusCode: 404),
-            ReceiptImportOutcome.NeedsNewToken => Results.Json(
-                new { error = "needs_new_token", message = "Lidl no longer accepts the saved token. Paste a new one first." },
-                statusCode: 409),
-            ReceiptImportOutcome.NoOwner => Results.Json(
-                new { error = "no_owner", message = "There is no owner to record the products against yet." },
-                statusCode: 409),
-            _ => Results.Json(
-                new
-                {
-                    error = "lidl_unavailable",
-                    message = "Could not reach Lidl just now. Receipts filed before that stay; try again in a minute.",
-                    result.Receipts,
-                    result.Products,
-                },
-                statusCode: 502),
-        };
     }
 
     private static async Task<IResult> Disconnect(LidlPlusConnectionService service, CancellationToken ct) =>

@@ -133,12 +133,34 @@ public sealed class LidlPlusTicketsClientTests
     [InlineData(HttpStatusCode.NotFound)]
     [InlineData(HttpStatusCode.TooManyRequests)]
     [InlineData(HttpStatusCode.InternalServerError)]
-    public async Task Any_answer_but_a_clean_one_is_unavailable(HttpStatusCode status)
+    public async Task Any_answer_but_a_clean_one_makes_the_list_unavailable(HttpStatusCode status)
     {
         var (client, _) = Client(_ => Json(status, "{}"));
 
         (await client.ListAsync(Access, 1, CancellationToken.None)).Outcome.Should().Be(LidlTicketsOutcome.Unavailable);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.Unauthorized)]
+    [InlineData(HttpStatusCode.TooManyRequests)]
+    [InlineData(HttpStatusCode.InternalServerError)]
+    [InlineData(HttpStatusCode.ServiceUnavailable)]
+    public async Task A_receipt_Lidl_cannot_serve_just_now_is_unavailable(HttpStatusCode status)
+    {
+        var (client, _) = Client(_ => Json(status, "{}"));
+
         (await client.GetAsync(Access, "R", CancellationToken.None)).Outcome.Should().Be(LidlTicketsOutcome.Unavailable);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.Forbidden)]
+    [InlineData(HttpStatusCode.NotFound)]
+    [InlineData(HttpStatusCode.BadRequest)]
+    public async Task A_receipt_Lidl_refuses_on_its_own_is_unreadable_so_the_others_are_still_read(HttpStatusCode status)
+    {
+        var (client, _) = Client(_ => Json(status, "{}"));
+
+        (await client.GetAsync(Access, "R", CancellationToken.None)).Outcome.Should().Be(LidlTicketsOutcome.Unreadable);
     }
 
     [Theory]

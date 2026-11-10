@@ -26,8 +26,8 @@ public enum ReceiptImportOutcome
 
 /// <param name="Receipts">Receipts filed as trips by this pull.</param>
 /// <param name="Products">Products added to the shelf by this pull.</param>
-/// <param name="Skipped">Receipts basket could not read, left for the next pull.</param>
-/// <param name="Waiting">New receipts left unopened because the pull's limit was reached; the next pull takes them.</param>
+/// <param name="Skipped">Receipts Lidl refused or basket could not read, left for the next pull. They do not use up the pull's limit.</param>
+/// <param name="Waiting">New receipts left unopened because the pull's limit was reached or Lidl stopped answering; the next pull takes them.</param>
 public sealed record ReceiptImportResult(ReceiptImportOutcome Outcome, int Receipts, int Products, int Skipped, int Waiting)
 {
     public static ReceiptImportResult Stopped(ReceiptImportOutcome outcome) => new(outcome, 0, 0, 0, 0);
@@ -92,16 +92,16 @@ public sealed class LidlReceiptImport(
             .ToHashSet(StringComparer.Ordinal);
 
         // The list is newest first. Every page is read (a page of filed receipts says nothing about the older ones, which a
-        // capped earlier pull may have left), but only receipts not yet filed are opened, and only up to the limit.
+        // capped earlier pull may have left); only receipts not yet filed are opened, until the limit of readable ones is reached.
         var pending = new List<string>();
-        var waiting = 0;
+        var seen = new HashSet<string>(StringComparer.Ordinal);
         for (var page = 1; page <= settings.MaxReceiptPages; page++)
         {
             var list = await tickets.ListAsync(accessToken, page, ct);
             if (list.Outcome != LidlTicketsOutcome.Ok)
             {
                 log.LogWarning("Lidl Plus receipts list page {Page} could not be read; nothing more is pulled this time", page);
-                return await FileAsync(pending, waiting, ReceiptImportOutcome.Unavailable, accessToken, owner, ct);
+                return await FileAsync(pending, ReceiptImportOutcome.Unavailable, accessToken, owner, ct);
             }
 
             if (list.Receipts.Count == 0)
@@ -109,27 +109,16 @@ public sealed class LidlReceiptImport(
                 break;
             }
 
-            foreach (var id in list.Receipts.Select(r => r.Id).Where(id => !filed.Contains(id) && !pending.Contains(id)))
-            {
-                if (pending.Count < settings.MaxNewReceiptsPerPull)
-                {
-                    pending.Add(id);
-                }
-                else
-                {
-                    waiting++;
-                }
-            }
+            pending.AddRange(list.Receipts.Select(r => r.Id).Where(id => !filed.Contains(id) && seen.Add(id)));
 
             await PauseAsync(ct);
         }
 
-        return await FileAsync(pending, waiting, ReceiptImportOutcome.Done, accessToken, owner, ct);
+        return await FileAsync(pending, ReceiptImportOutcome.Done, accessToken, owner, ct);
     }
 
     private async Task<ReceiptImportResult> FileAsync(
         IReadOnlyList<string> pending,
-        int waiting,
         ReceiptImportOutcome outcome,
         string accessToken,
         Guid owner,
@@ -137,14 +126,21 @@ public sealed class LidlReceiptImport(
     {
         var receipts = new List<LidlReceipt>();
         var skipped = 0;
-        foreach (var id in pending)
+        var waiting = 0;
+        for (var i = 0; i < pending.Count; i++)
         {
+            if (receipts.Count >= options.Value.MaxNewReceiptsPerPull)
+            {
+                waiting = pending.Count - i;
+                break;
+            }
+
             await PauseAsync(ct);
-            var result = await tickets.GetAsync(accessToken, id, ct);
+            var result = await tickets.GetAsync(accessToken, pending[i], ct);
             if (result.Outcome == LidlTicketsOutcome.Unavailable)
             {
                 outcome = ReceiptImportOutcome.Unavailable;
-                waiting += pending.Count - receipts.Count - skipped;
+                waiting = pending.Count - i;
                 break;
             }
 
@@ -159,11 +155,15 @@ public sealed class LidlReceiptImport(
             }
         }
 
-        // Oldest first, so when two receipts of one day bought the same product the later one is the price that stays.
-        var products = await db.Products.AsNoTracking().ToDictionaryAsync(p => p.Name, StringComparer.OrdinalIgnoreCase, ct);
+        var products = new Dictionary<string, Product>(StringComparer.OrdinalIgnoreCase);
+        foreach (var product in await db.Products.AsNoTracking().OrderBy(p => p.AddedAt).ThenBy(p => p.Id).ToListAsync(ct))
+        {
+            products.TryAdd(product.Name, product);
+        }
+
         var added = 0;
         var productsAdded = 0;
-        foreach (var receipt in receipts.OrderBy(r => r.Date))
+        foreach (var receipt in receipts)
         {
             var (filedNow, newProducts) = await FileReceiptAsync(receipt, products, owner, ct);
             added += filedNow ? 1 : 0;
@@ -180,9 +180,46 @@ public sealed class LidlReceiptImport(
         return new ReceiptImportResult(outcome, added, productsAdded, skipped, waiting);
     }
 
-    /// <summary>Files one receipt (trip, lines, new products, paid prices) in a single save, so it is there whole or not at all.</summary>
+    /// <summary>
+    /// Files one receipt (trip, lines, new products, paid prices) in a single save, so it is there whole or not at all. A save that
+    /// loses a race to another pull is looked at again: if that pull filed this receipt its copy stands, if it only took the day's
+    /// paid price, the receipt is built again against what is there now.
+    /// </summary>
     private async Task<(bool Filed, int NewProducts)> FileReceiptAsync(
         LidlReceipt receipt,
+        Dictionary<string, Product> products,
+        Guid owner,
+        CancellationToken ct)
+    {
+        var externalId = PriceRecorder.Truncate(receipt.Id, 64);
+        for (var attempt = 0; ; attempt++)
+        {
+            var newProducts = await StageReceiptAsync(receipt, externalId, products, owner, ct);
+            try
+            {
+                await db.SaveChangesAsync(ct);
+                return (true, newProducts.Count);
+            }
+            catch (DbUpdateException ex) when (ListEndpoints.IsUniqueViolation(ex))
+            {
+                // The products made for this receipt are not in the database.
+                db.ChangeTracker.Clear();
+                foreach (var product in newProducts)
+                {
+                    products.Remove(product.Name);
+                }
+
+                if (attempt == 1 || await db.Trips.AnyAsync(t => t.Source == TripSources.LidlPlus && t.ExternalId == externalId, ct))
+                {
+                    return (false, 0);
+                }
+            }
+        }
+    }
+
+    private async Task<List<Product>> StageReceiptAsync(
+        LidlReceipt receipt,
+        string? externalId,
         Dictionary<string, Product> products,
         Guid owner,
         CancellationToken ct)
@@ -193,7 +230,7 @@ public sealed class LidlReceiptImport(
             Id = Guid.NewGuid(),
             ClosedAt = receipt.Date,
             Source = TripSources.LidlPlus,
-            ExternalId = PriceRecorder.Truncate(receipt.Id, 64),
+            ExternalId = externalId,
             Total = receipt.Total is { } total and >= 0 and < 100_000_000m ? Math.Round(total, 2) : null,
         };
         var paidOn = PriceRecorder.DublinDay(receipt.Date);
@@ -254,30 +291,19 @@ public sealed class LidlReceiptImport(
         {
             if (sameDay.TryGetValue(productId, out var existing))
             {
-                existing.Price = price;
+                if (existing.PaidAt is not { } at || receipt.Date > at)
+                {
+                    existing.Price = price;
+                    existing.PaidAt = receipt.Date;
+                }
             }
             else
             {
-                db.PaidPrices.Add(new PaidPrice { Id = Guid.NewGuid(), ProductId = productId, Store = Store.Lidl, PaidOn = paidOn, Price = price });
+                db.PaidPrices.Add(new PaidPrice { Id = Guid.NewGuid(), ProductId = productId, Store = Store.Lidl, PaidOn = paidOn, Price = price, PaidAt = receipt.Date });
             }
         }
 
-        try
-        {
-            await db.SaveChangesAsync(ct);
-            return (true, newProducts.Count);
-        }
-        catch (DbUpdateException ex) when (ListEndpoints.IsUniqueViolation(ex))
-        {
-            // Another pull filed this receipt first; its copy stands. The products made for this one are not in the database.
-            db.ChangeTracker.Clear();
-            foreach (var product in newProducts)
-            {
-                products.Remove(product.Name);
-            }
-
-            return (false, 0);
-        }
+        return newProducts;
     }
 
     /// <summary>A line that was bought: it has a name and came to money. Deposits returned, refunds and discount lines are negative or zero and are not.</summary>

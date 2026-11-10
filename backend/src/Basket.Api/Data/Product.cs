@@ -118,8 +118,8 @@ public sealed class PricePullRun
 }
 
 /// <summary>
-/// A price the household really paid, with its date. Filled from Lidl Plus receipts once the owner has done the
-/// one-off login (milestone 4); until then the table stays empty and the page says "not yet connected".
+/// A price the household really paid, with its date. Filled from Lidl Plus receipts once the owner has connected Lidl Plus; one row
+/// per product, shop and day.
 /// </summary>
 public sealed class PaidPrice
 {
@@ -130,6 +130,9 @@ public sealed class PaidPrice
     public Store Store { get; set; }
 
     public DateOnly PaidOn { get; set; }
+
+    /// <summary>When the receipt behind this price was printed; of the receipts of one day, the latest keeps its price.</summary>
+    public DateTimeOffset? PaidAt { get; set; }
 
     public decimal Price { get; set; }
 }

@@ -952,7 +952,7 @@ day. Builds on `LidlPlusConnectionService.AccessAsync`; the Lidl Plus offers (#1
   like on any trip.
 - **A receipt is a closed trip, filed on the day it was printed.** `trip` gains three nullable columns: `source` (`lidl_plus`; null for
   a trip closed on the list), `external_id` (Lidl's receipt id) and `total` (as printed). A partial unique index on
-  `(source, external_id)` means one trip per receipt, so a manual pull racing the nightly one cannot file it twice. `closed_at` is the
+  `(source, external_id)` means one trip per receipt, so two pulls racing cannot file it twice. `closed_at` is the
   receipt's time, so receipts sort into the history among the trips closed by hand. A trip's lines are its receipt lines as `trip_item`
   rows: text as printed, `checked_at` the receipt time, nobody as the ticker, and the product and shop (`lidl`) set, so reloading a
   receipt puts product lines on the list that the Shelf tile marks "On the list". `GET /api/trips` returns `source` and `total` on every
@@ -969,29 +969,33 @@ day. Builds on `LidlPlusConnectionService.AccessAsync`; the Lidl Plus offers (#1
   keeps the products with a known last paid price at that shop, and the card shows what was paid and when ("€2.19 / Last paid 3 Nov")
   instead of a page reading; **All** shows them too. The list endpoint's `not_sold_there` check follows: a shop "sells" a product when its
   page is linked **or** a receipt shows it was bought there, so tapping the card works; Tesco, Aldi and Dunnes are unchanged.
-- **Last paid price and date.** One `paid_price` row per product, shop and day (an existing table that stayed empty until now): the
-  price of one item, which is the line's amount over its quantity, or the price of a kilo for a weighed line. Receipts are filed oldest
-  first, so when two receipts of one day have the same product the later one is the price that stays. The day is the Dublin day of the
-  receipt. It reaches `GET /api/products` (`lastPaid`: `known` with price and day; `none` once Lidl Plus is connected but no receipt has
+- **Last paid price and date.** One `paid_price` row per product, shop and day (an existing table that stayed empty until now; its
+  index on those three is now unique): the price of one item, which is the line's amount over its quantity, or the price of a kilo for
+  a weighed line. The row also keeps `paid_at`, the time of the receipt behind it (nullable). When two receipts of one day have the
+  same product, the one printed later is the price that stays, whichever order they are found in: an existing row is overwritten only
+  by a receipt with a later time. If a save loses a race on that unique index (a deploy overlap with the nightly job), the receipt is
+  built again against the row that won and filed; if the other pull already filed the receipt itself, its copy stands. The day is the
+  Dublin day of the receipt. It reaches `GET /api/products` (`lastPaid`: `known` with price and day; `none` once Lidl Plus is connected but no receipt has
   the product, which the Prices page leaves blank; `not_connected` before that) and **the plan API**: each plan line carries `lastPaid`,
   the latest paid price at each shop it was bought at (shop, price, day), whether or not that shop's page is linked. It is information
   only: it never decides the best shop or the coverage, and a product with only a paid price is still flagged `no_price`. The Plan tab
   does not draw it yet.
-- **It pulls on its own, nightly, and the owner can pull now.** A recurring job runs at 05:00 Europe/Dublin (after the 03:00 price read
-  and the 04:30 invite cleanup) and does nothing until Lidl Plus is connected. `POST /api/lidl-plus/receipts/pull` (owner only, `no-store`)
-  does the same on demand and answers `{receipts, products, skipped, waiting}`: `404 not_connected`, `409 needs_new_token` (Lidl refused
-  or the saved token cannot be read), `409 no_owner`, `502 lidl_unavailable` (what was filed before Lidl stopped answering stays). There
-  is no Settings button: Settings is already drawn connected in the screen baselines, and a button there would change them for a route
-  nobody needs once the nightly job has run; add it if the first pull wants watching.
+- **It pulls on its own, nightly.** A recurring job runs at 05:00 Europe/Dublin (after the 03:00 price read and the 04:30 invite
+  cleanup) and does nothing until Lidl Plus is connected. There is no endpoint or Settings button to pull on demand: Settings is
+  already drawn connected in the screen baselines, and a button there would change them for a route nobody needs once the nightly job
+  has run; add one if the first pull wants watching.
 - **A pull is idempotent and polite.** It reads every page of the list (a page of known receipts says nothing about older ones, which
-  an earlier capped pull may have left), but opens only receipts not yet filed, newest first, at most 30 per pull
-  (`LidlPlus:MaxNewReceiptsPerPull`), at most 50 list pages (`MaxReceiptPages`), one request at a time with 500 ms between them. A longer
+  an earlier capped pull may have left), but opens only receipts not yet filed, newest first, until 30 have been
+  read (`LidlPlus:MaxNewReceiptsPerPull`), at most 50 list pages (`MaxReceiptPages`), one request at a time with 500 ms between them. A longer
   history is taken over the following nights; `waiting` says how many are left. A receipt is filed in one save (trip, lines, new
-  products, paid prices), so it is there whole or not at all. A receipt in a shape basket cannot read is skipped, counted in `skipped`
-  and tried again next time; a Lidl failure stops the pull and keeps what was filed. A process-wide lock stops two pulls overlapping.
+  products, paid prices), so it is there whole or not at all. A receipt in a shape basket cannot read, or that Lidl refuses on its own
+  (a 4xx such as not found or forbidden), is skipped, counted in `skipped` and tried again next time; it does not use up the 30, so
+  one receipt that never opens cannot hold back the older ones. Lidl being down, throttling (429), turning the access token away
+  (401) or unreachable stops the pull and keeps what was filed. A process-wide lock stops two pulls overlapping.
   The access token goes in a header, is never logged or returned, and a test checks it against every rendered log line.
 - **Tests use fake Lidl responses only.** `FakeLidlPlusTickets` stands in for Lidl at the `ILidlPlusTickets` seam in the integration
-  tests (trip, products, paid prices, the plan and products responses, idempotency, the limit, failures mid-pull, owner-only, the job);
+  tests (trip, products, paid prices, the plan and products responses, idempotency, the limit, failures mid-pull, a lost race for a day's
+  price, two products differing only by letter case, the job);
   `LidlPlusTicketsClientTests` feeds recorded answers (decimal commas and numbers, bad shapes, refusals, network error) to the real
   client. No test, and no build step, calls Lidl.
 - **Not verified live.** The receipts service address, the headers (`App`, `Operating-System`, `App-Version`) and the field names
