@@ -598,6 +598,15 @@ namespace Basket.Api.Data.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("checked_by_user_id");
 
+                    b.Property<Guid?>("ProductId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("product_id");
+
+                    b.Property<string>("Store")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("store");
+
                     b.Property<string>("Text")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -611,6 +620,8 @@ namespace Basket.Api.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CheckedByUserId");
+
+                    b.HasIndex("ProductId");
 
                     b.HasIndex("TripId");
 
@@ -842,6 +853,11 @@ namespace Basket.Api.Data.Migrations
                     b.HasOne("Basket.Api.Data.AppUser", null)
                         .WithMany()
                         .HasForeignKey("CheckedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Basket.Api.Data.Product", null)
+                        .WithMany()
+                        .HasForeignKey("ProductId")
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("Basket.Api.Data.Trip", null)

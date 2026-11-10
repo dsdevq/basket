@@ -73,6 +73,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             item.HasOne<Trip>().WithMany().HasForeignKey(i => i.TripId).OnDelete(DeleteBehavior.Cascade);
             item.HasOne<AppUser>().WithMany().HasForeignKey(i => i.CheckedByUserId).OnDelete(DeleteBehavior.SetNull);
             item.HasIndex(i => i.TripId);
+            item.Property(i => i.Store).HasConversion<string>().HasMaxLength(16);
+            item.HasOne<Product>().WithMany().HasForeignKey(i => i.ProductId).OnDelete(DeleteBehavior.SetNull);
         });
 
         builder.Entity<Invite>(invite =>

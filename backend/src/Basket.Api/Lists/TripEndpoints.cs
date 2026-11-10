@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using Basket.Api.Data;
+using Basket.Api.Prices;
 using Microsoft.EntityFrameworkCore;
 
 namespace Basket.Api.Lists;
@@ -64,6 +65,9 @@ public static class TripEndpoints
             Text = i.Text,
             CheckedAt = i.CheckedAt,
             CheckedByUserId = i.CheckedByUserId,
+            ProductId = i.ProductId,
+            // A shop only means something with its product (the add endpoint refuses one without).
+            Store = i.ProductId is null ? null : i.Store,
         }));
         await db.SaveChangesAsync(ct);
 
@@ -98,8 +102,10 @@ public static class TripEndpoints
     }
 
     /// <summary>
-    /// "Same as last time": puts the trip's items back on the list as to-buy lines added by the caller. An item whose
-    /// text is already waiting on the list (any letter case) is not added twice, so a second tap adds nothing.
+    /// "Same as last time": puts the trip's items back on the list as to-buy lines added by the caller. A Shelf line comes
+    /// back as its product and shop, so the Shelf tile sees it; a line from before trips kept that, or a free-text one,
+    /// comes back as text. Nothing already waiting is added twice: a product line is the same as an open line for that
+    /// product and shop, a text line as one with the same text (any letter case), so a second tap adds nothing.
     /// </summary>
     private static async Task<IResult> Reload(
         Guid id,
@@ -108,33 +114,70 @@ public static class TripEndpoints
         TimeProvider clock,
         CancellationToken ct)
     {
-        var texts = await db.TripItems.AsNoTracking().Where(i => i.TripId == id)
-            .OrderBy(i => i.CheckedAt).ThenBy(i => i.Text).Select(i => i.Text).ToListAsync(ct);
-        if (texts.Count == 0)
+        var items = await db.TripItems.AsNoTracking().Where(i => i.TripId == id)
+            .OrderBy(i => i.CheckedAt).ThenBy(i => i.Text)
+            .Select(i => new { i.Text, i.ProductId, i.Store })
+            .ToListAsync(ct);
+        if (items.Count == 0)
         {
             return Results.NotFound();
         }
 
-        var onList = await db.ListItems.AsNoTracking().Select(i => new { i.Text, i.IsChecked }).ToListAsync(ct);
-        var waiting = onList.Where(i => !i.IsChecked).Select(i => i.Text).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var toAdd = texts.Where(waiting.Add).ToList();
-        if (onList.Count + toAdd.Count > ListEndpoints.MaxItems)
-        {
-            return Results.Json(new { error = "list_full", message = "The list is full. Delete some items first." }, statusCode: 409);
-        }
-
         var userId = Guid.Parse(principal.FindFirstValue(ClaimTypes.NameIdentifier)!);
-        var now = clock.GetUtcNow();
-        // A tick apart (a microsecond) so the list keeps the trip's order instead of an arbitrary one.
-        db.ListItems.AddRange(toAdd.Select((text, index) => new ListItem
-        {
-            Id = Guid.NewGuid(),
-            Text = text,
-            AddedAt = now.AddTicks(index * 10L),
-            AddedByUserId = userId,
-        }));
-        await db.SaveChangesAsync(ct);
 
-        return Results.Ok(new { added = toAdd.Count, alreadyOnList = texts.Count - toAdd.Count });
+        // Two phones reloading at once can both see a line missing; the database's one-open-line-per-product index then
+        // refuses the second insert, and the retry finds the first phone's lines waiting and adds what is left.
+        for (var attempt = 1; ; attempt++)
+        {
+            var onList = await db.ListItems.AsNoTracking().Select(i => new { i.Text, i.IsChecked, i.ProductId, i.Store }).ToListAsync(ct);
+            var waitingText = onList.Where(i => !i.IsChecked).Select(i => i.Text).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var waitingProducts = onList.Where(i => !i.IsChecked && i.ProductId is not null)
+                .Select(i => (i.ProductId, i.Store)).ToHashSet();
+
+            var toAdd = new List<(string Text, Guid? ProductId, Store? Store)>();
+            foreach (var item in items)
+            {
+                if (item.ProductId is { } productId)
+                {
+                    if (waitingProducts.Add((productId, item.Store)))
+                    {
+                        toAdd.Add((item.Text, productId, item.Store));
+                        waitingText.Add(item.Text);
+                    }
+                }
+                else if (waitingText.Add(item.Text))
+                {
+                    toAdd.Add((item.Text, null, null));
+                }
+            }
+
+            if (onList.Count + toAdd.Count > ListEndpoints.MaxItems)
+            {
+                return Results.Json(new { error = "list_full", message = "The list is full. Delete some items first." }, statusCode: 409);
+            }
+
+            var now = clock.GetUtcNow();
+            // A tick apart (a microsecond) so the list keeps the trip's order instead of an arbitrary one.
+            db.ListItems.AddRange(toAdd.Select((line, index) => new ListItem
+            {
+                Id = Guid.NewGuid(),
+                Text = line.Text,
+                AddedAt = now.AddTicks(index * 10L),
+                AddedByUserId = userId,
+                ProductId = line.ProductId,
+                Store = line.Store,
+            }));
+            try
+            {
+                await db.SaveChangesAsync(ct);
+            }
+            catch (DbUpdateException ex) when (attempt == 1 && ListEndpoints.IsUniqueViolation(ex))
+            {
+                db.ChangeTracker.Clear();
+                continue;
+            }
+
+            return Results.Ok(new { added = toAdd.Count, alreadyOnList = items.Count - toAdd.Count });
+        }
     }
 }
