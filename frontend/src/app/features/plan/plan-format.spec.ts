@@ -164,7 +164,9 @@ describe('plan-format', () => {
     it('puts the paid price on a second line of the shop that has the offer', () => {
       const [row] = planRows(line({stores: [lidlOffer], lastPaid: [paid()]}));
 
-      expect(rowLines(row)).toBe('Seen 5 Nov · Lidl Plus price · €0.50/l\nLast paid €1.19 on 3 Nov');
+      expect(rowLines(row)).toBe(
+        'Seen 5 Nov · Lidl Plus price · €0.50/l\nLast paid €1.19 on 3 Nov'
+      );
       expect(priceText(row.entry)).toBe('€0.99');
       expect(rowTag(row.entry)).toBe('Best');
     });
