@@ -148,7 +148,6 @@ describe('plan-format', () => {
         total: 3.9,
         oldestSeenOn: '2026-11-05',
         promoLines: 1,
-        packsDiffer: 0,
         cards: ['Lidl Plus'],
         groups: [],
       };
@@ -166,24 +165,6 @@ describe('plan-format', () => {
       ]);
       expect(answer.caveat).toBe(
         'Lidl and Aldi together have a fresh price for every line, €3.90 in all, the oldest seen 5 Nov.'
-      );
-    });
-
-    it('warns when packs differ in the proposed pair', () => {
-      const split: PlanPairSplit = {
-        total: 3.9,
-        oldestSeenOn: null,
-        promoLines: 0,
-        packsDiffer: 2,
-        cards: [],
-        groups: [
-          {store: 'lidl', storeName: 'Lidl', total: 1.9, lines: []},
-          {store: 'tesco', storeName: 'Tesco', total: 2, lines: []},
-        ],
-      };
-
-      expect(verdict({...none, split}, 3).caveat).toBe(
-        'Lidl and Tesco together have a fresh price for every line, €3.90 in all. Packs differ on 2 lines, so check the sizes.'
       );
     });
 

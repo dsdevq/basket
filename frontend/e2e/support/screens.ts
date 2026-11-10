@@ -546,7 +546,6 @@ const PLAN_SPLIT = {
       total: 3.9,
       oldestSeenOn: '2026-11-05',
       promoLines: 1,
-      packsDiffer: 0,
       cards: ['Lidl Plus'],
       groups: [
         {

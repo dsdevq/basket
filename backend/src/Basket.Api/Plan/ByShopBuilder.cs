@@ -126,7 +126,7 @@ public static class ByShopBuilder
         item.Flag == PlanFlags.Unmatched ? PlanFlags.Unmatched : entry?.State ?? PlanStoreStates.NotLinked;
 
     /// <summary>Several shops price the line and their packs are not all the same known size.</summary>
-    internal static bool PackDiffers(PlanItem item)
+    private static bool PackDiffers(PlanItem item)
     {
         var packs = item.Stores
             .Where(s => s.State == PlanStoreStates.Priced && s.Offer is not null)

@@ -5,24 +5,24 @@ namespace Basket.Api.Plan;
 /// <summary>
 /// The cheapest two shops that together price every open line, with what each one is bought at. <see cref="Groups"/> are the shops
 /// in the fixed order (Lidl, Aldi, Tesco, Dunnes) with their lines, dated prices and subtotals, the same shape as the By shop
-/// split. <see cref="Total"/> adds one pack of each line at the cheaper of the two shops, a card price or a multi-buy counted.
-/// <see cref="PacksDiffer"/> counts the lines whose pack is not the same at every shop that prices them, so the total is not like
-/// for like on them.
+/// split. <see cref="Total"/> adds one pack of each line at the shop with the lower unit price, a card price or a multi-buy counted.
 /// </summary>
 public sealed record PlanPairSplit(
     decimal Total,
     DateOnly? OldestSeenOn,
     int PromoLines,
-    int PacksDiffer,
     IReadOnlyList<string> Cards,
     IReadOnlyList<ByShopGroup> Groups);
 
 /// <summary>
 /// The plan's answer when no one shop covers the list: of every pair of shops, those that between them price every line, the one
 /// with the lowest total. Pure and built only on the plan's items: whether a shop prices a line, at what, and the line shape all come
-/// from <see cref="ByShopBuilder"/>, so a price is the same number on the Plan tab and in By shop. A line is bought at the cheaper of
-/// the two (pack price, as every shop total is), the first shop in the fixed order on a tie. Nothing is guessed: a pair that leaves
-/// any line unpriced is not a candidate, so with a line no shop prices there is no split.
+/// from <see cref="ByShopBuilder"/>, so a price is the same number on the Plan tab and in By shop. A line is bought at the shop with the
+/// lower unit price (<see cref="PromoOffer.Rank"/>, the rule the plan's best shop and By shop's split use), the first shop in the
+/// fixed order on a tie; the pair's total is the sum of the chosen offers' pack prices and the pair with the lowest total wins.
+/// Nothing is guessed: a pair that leaves any line unpriced is not a candidate, and neither is one where both shops price a line
+/// but their unit prices cannot be compared (no pack size, or another unit), because choosing between them would be a guess. So
+/// with a line no shop prices there is no split.
 /// </summary>
 public static class PairSplitBuilder
 {
@@ -54,7 +54,6 @@ public static class PairSplitBuilder
     {
         var lines = new Dictionary<string, List<ByShopLine>> { [first.Slug] = [], [second.Slug] = [] };
         var cards = new List<string>();
-        var packsDiffer = 0;
         foreach (var item in items)
         {
             var at = new[] { first.Slug, second.Slug }
@@ -66,18 +65,18 @@ public static class PairSplitBuilder
                 return null;
             }
 
-            // The cheaper pack wins; on a tie the first shop in the fixed order, which `at` keeps.
-            var pick = at.MinBy(c => c.Entry!.Offer!.EachPrice);
+            if (at.Count > 1 && at.Any(c => c.Entry!.Offer!.Rank is null))
+            {
+                return null;
+            }
+
+            // The lower unit price wins; on a tie the first shop in the fixed order, which `at` keeps.
+            var pick = at.MinBy(c => c.Entry!.Offer!.Rank);
             var line = ByShopBuilder.Line(item, pick.Entry!);
             lines[pick.Slug].Add(line);
             if (line.Card is not null)
             {
                 cards.Add(line.Card);
-            }
-
-            if (ByShopBuilder.PackDiffers(item))
-            {
-                packsDiffer++;
             }
         }
 
@@ -90,7 +89,6 @@ public static class PairSplitBuilder
             groups.Sum(g => g.Total),
             all.Min(l => l.ObservedOn),
             all.Count(l => l.IsPromo),
-            packsDiffer,
             cards.Distinct().Order().ToList(),
             groups);
     }

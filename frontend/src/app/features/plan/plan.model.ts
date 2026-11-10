@@ -55,8 +55,8 @@ export interface PlanBlocker {
 }
 
 /**
- * The cheapest two shops that together price every open line, when no one shop does. Each line is bought at the cheaper of the
- * two (one pack, a card price or a multi-buy counted); `groups` are the shops with their lines, dated prices and subtotals,
+ * The cheapest two shops that together price every open line, when no one shop does. Each line is bought at the shop with the
+ * lower unit price (one pack, a card price or a multi-buy counted); `groups` are the shops with their lines, dated prices and subtotals,
  * the shape of the By shop split.
  */
 export interface PlanPairSplit {
@@ -64,8 +64,6 @@ export interface PlanPairSplit {
   /** The day of the oldest price in the total. */
   readonly oldestSeenOn: string | null;
   readonly promoLines: number;
-  /** Lines whose pack is not the same at every shop that prices them, so the total is not like for like on them. */
-  readonly packsDiffer: number;
   readonly cards: readonly string[];
   readonly groups: readonly ByShopGroup[];
 }

@@ -196,7 +196,6 @@ describe('PlanPage', () => {
           total: 3.9,
           oldestSeenOn: '2026-11-05',
           promoLines: 1,
-          packsDiffer: 0,
           cards: ['Lidl Plus'],
           groups: [
             {
@@ -237,6 +236,7 @@ describe('PlanPage', () => {
       'Kerrygold butter 227g'
     );
     expect(text(host, '[data-testid="rule"]')).toContain('the two shops that together do');
+    expect(text(host, '[data-testid="rule"]')).toContain('the shop of the two with the lower price');
   });
 
   it('proposes no pair when the server sends none', async () => {

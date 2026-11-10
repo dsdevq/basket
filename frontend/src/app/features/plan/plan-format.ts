@@ -156,9 +156,6 @@ export function verdict(coverage: PlanCoverage, lineCount: number): Verdict {
   if (coverage.split) {
     const {split} = coverage;
     const shops = split.groups.map(group => group.storeName);
-    const packs = split.packsDiffer
-      ? ` Packs differ on ${plural(split.packsDiffer, 'line', 'lines')}, so check the sizes.`
-      : '';
     return {
       status: {tone: 'warning', label: 'No one shop covers it'},
       pills: [
@@ -168,7 +165,7 @@ export function verdict(coverage: PlanCoverage, lineCount: number): Verdict {
       ],
       caveat:
         `${shops.join(' and ')} together have a fresh price for every line, ${euro(split.total)} in all` +
-        `${split.oldestSeenOn ? `, the oldest seen ${shortDate(split.oldestSeenOn)}` : ''}.${packs}`,
+        `${split.oldestSeenOn ? `, the oldest seen ${shortDate(split.oldestSeenOn)}` : ''}.`,
     };
   }
   if (coverage.closestStore) {

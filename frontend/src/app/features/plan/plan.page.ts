@@ -153,8 +153,8 @@ import {
                 out of stock are shown but never picked, and a line is never guessed.
                 @if (splitGroups().length) {
                   When no one shop prices every line, the two shops that together do for the lowest
-                  total are proposed: one pack of each line at the cheaper of the two, a card price
-                  or a multi-buy included, so a line can go to a shop with a smaller pack.
+                  total are proposed: each line is bought at the shop of the two with the lower price
+                  per kilo, litre or piece, a card price or a multi-buy included.
                 }
               </p>
             </cmn-list-section>

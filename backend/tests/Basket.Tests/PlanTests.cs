@@ -466,21 +466,51 @@ public sealed class PlanTests : IClassFixture<BasketFactory>
     }
 
     [Fact]
-    public void A_split_counts_the_lines_whose_packs_differ_between_shops()
+    public void Within_the_pair_a_line_goes_to_the_shop_with_the_lower_unit_price_even_when_its_pack_costs_more()
     {
         var shelf = new Shelf();
         var milk = shelf.Product("Milk");
-        var eggs = shelf.Product("Eggs");
+        var eggs = shelf.Product("Eggs 12 pack");
+        var butter = shelf.Product("Butter 250g");
         shelf.Line(milk);
         shelf.Line(eggs);
-        shelf.Read(milk, Store.Lidl, o => o.Price = 1.00m, title: "Milk 1L");
-        shelf.Read(milk, Store.Aldi, o => o.Price = 1.40m, title: "Milk 2L");
-        shelf.Read(eggs, Store.Tesco, o => o.Price = 3.00m, title: "Eggs 12 pack");
+        shelf.Line(butter);
+        shelf.Read(milk, Store.Lidl, o => o.Price = 1.20m, title: "Milk 1L"); // 1.20/l
+        shelf.Read(milk, Store.Aldi, o => o.Price = 2.20m, title: "Milk 2L"); // 1.10/l: dearer pack, cheaper litre
+        shelf.Read(eggs, Store.Lidl, o => o.Price = 3.00m);
+        shelf.Read(butter, Store.Aldi, o => o.Price = 2.00m);
 
         var split = shelf.Build().Coverage.Split;
 
-        split!.Groups.Select(g => g.Store).Should().Equal("lidl", "tesco");
-        split.PacksDiffer.Should().Be(1, "milk is a litre at Lidl and two at Aldi; the eggs are priced at one shop only");
+        split!.Groups.Select(g => g.Store).Should().Equal("lidl", "aldi");
+        split.Groups.Single(g => g.Store == "aldi").Lines.Select(l => (l.Text, l.Price)).Should().Equal(("Milk", 2.20m), ("Butter 250g", 2.00m));
+        split.Total.Should().Be(7.20m, "the Aldi litre is cheaper, so the milk is bought there at its 2.20 pack: 2.20 + eggs 3.00 + butter 2.00");
+    }
+
+    [Fact]
+    public void A_pair_whose_shops_both_price_a_line_that_cannot_be_compared_is_not_a_candidate()
+    {
+        var shelf = new Shelf();
+        var skewers = shelf.Product("Chicken skewers");
+        var eggs = shelf.Product("Eggs 12 pack");
+        var butter = shelf.Product("Butter 250g");
+        shelf.Line(skewers);
+        shelf.Line(eggs);
+        shelf.Line(butter);
+        shelf.Read(skewers, Store.Lidl, o => o.Price = 2.19m); // no size anywhere
+        shelf.Read(skewers, Store.Aldi, o => o.Price = 2.50m);
+        shelf.Read(eggs, Store.Lidl, o => o.Price = 3.00m);
+        shelf.Read(butter, Store.Aldi, o => o.Price = 2.00m);
+
+        shelf.Build().Coverage.Split.Should().BeNull("choosing between the two skewers would be a guess");
+
+        shelf.Read(eggs, Store.Dunnes, o => o.Price = 3.10m);
+        shelf.Read(butter, Store.Dunnes, o => o.Price = 2.10m);
+
+        var split = shelf.Build().Coverage.Split;
+
+        split!.Groups.Select(g => g.Store).Should().Equal("lidl", "dunnes");
+        split.Total.Should().Be(7.29m, "Dunnes does not price the skewers, so there is nothing to rank them against: skewers 2.19 and eggs 3.00 at Lidl, butter 2.10 at Dunnes");
     }
 
     [Fact]
