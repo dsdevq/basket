@@ -5,6 +5,7 @@ describe('pendingPage', () => {
     expect(pendingPage('/')).toMatchObject({title: 'Shopping list', shape: 'list'});
     expect(pendingPage('/prices/')).toMatchObject({title: 'Prices', kind: 'list'});
     expect(pendingPage('/settings?x=1')).toMatchObject({title: 'Settings'});
+    expect(pendingPage('/plan')).toMatchObject({title: 'Plan', kind: 'list'});
     expect(pendingPage('/cards')).toMatchObject({title: 'Cards'});
     expect(pendingPage('/cards/tesco')).toMatchObject({title: 'Loyalty card'});
   });

@@ -285,6 +285,232 @@ const PROMOTIONS = {
     },
   ],
 };
+type PlanShop = 'lidl' | 'aldi' | 'tesco' | 'dunnes';
+const PLAN_SHOP_NAMES: Record<PlanShop, string> = {
+  lidl: 'Lidl',
+  aldi: 'Aldi',
+  tesco: 'Tesco',
+  dunnes: 'Dunnes',
+};
+
+/** One shop's reading of a line, as GET /api/plan sends it: the reading itself and the normalised offer (null when nothing usable). */
+function planShop(
+  store: PlanShop,
+  state: string,
+  reading: {observedOn?: string; price: number | null; wasPrice?: number; promoText?: string},
+  offer: object | null,
+  best = false
+) {
+  return {
+    store,
+    storeName: PLAN_SHOP_NAMES[store],
+    state,
+    observedOn: reading.observedOn ?? '2026-11-06',
+    price: reading.price,
+    wasPrice: reading.wasPrice ?? null,
+    promoText: reading.promoText ?? null,
+    offer: offer && {
+      kind: 'regular',
+      isPromo: false,
+      deal: 'Shelf price',
+      promoText: null,
+      card: null,
+      buyQuantity: 1,
+      payTotal: reading.price,
+      eachPrice: reading.price,
+      shelfPrice: reading.price,
+      referencePrice: null,
+      savingPercent: null,
+      packSize: null,
+      unit: null,
+      unitPrice: null,
+      referenceUnitPrice: null,
+      observedOn: reading.observedOn ?? '2026-11-06',
+      validUntil: null,
+      rank: null,
+      flags: [],
+      store,
+      storeName: PLAN_SHOP_NAMES[store],
+      ...offer,
+    },
+    best,
+  };
+}
+
+function planLine(
+  text: string,
+  over: {
+    productId?: string;
+    flag?: string;
+    bestStore?: string;
+    stores?: ReturnType<typeof planShop>[];
+  } = {}
+) {
+  return {
+    id: `plan-${text}`,
+    text,
+    productId: over.productId ?? null,
+    productName: over.productId ? text : null,
+    pickedStore: null,
+    flag: over.flag ?? null,
+    bestStore: over.bestStore ?? null,
+    stores: over.stores ?? [],
+  };
+}
+
+const MILK_LIDL = planShop(
+  'lidl',
+  'priced',
+  {price: 1.29, wasPrice: 1.49, promoText: 'Lidl Plus deal'},
+  {
+    kind: 'loyalty',
+    isPromo: true,
+    deal: 'Lidl Plus price',
+    card: 'Lidl Plus',
+    eachPrice: 0.99,
+    savingPercent: 33,
+    packSize: '2 L',
+    unit: 'l',
+    unitPrice: 0.5,
+    rank: 1,
+  },
+  true
+);
+const MILK_TESCO = planShop(
+  'tesco',
+  'priced',
+  {price: 2.15, wasPrice: 2.35, promoText: 'Clubcard Price'},
+  {
+    kind: 'loyalty',
+    isPromo: true,
+    deal: 'Clubcard price',
+    card: 'Clubcard',
+    eachPrice: 1.89,
+    savingPercent: 20,
+    packSize: '2 L',
+    unit: 'l',
+    unitPrice: 0.95,
+    rank: 2,
+  }
+);
+const BUTTER_ALDI = planShop(
+  'aldi',
+  'priced',
+  {price: 2.99},
+  {eachPrice: 2.99, packSize: '227 g', unit: 'kg', unitPrice: 13.17, rank: 1},
+  true
+);
+const BUTTER_TESCO_OUT = planShop(
+  'tesco',
+  'out_of_stock',
+  {price: 3.19},
+  {
+    eachPrice: 3.19,
+    packSize: '227 g',
+    unit: 'kg',
+    unitPrice: 14.05,
+    rank: null,
+    flags: ['out_of_stock'],
+  }
+);
+
+/** A list nobody can shop in one place: one best shop for the lines that have one, and a line of each flag that explains why not. */
+const PLAN = {
+  asOf: '2026-11-06',
+  staleAfterDays: 3,
+  items: [
+    planLine('Whole milk 2L', {
+      productId: 'p1',
+      bestStore: 'lidl',
+      stores: [MILK_LIDL, MILK_TESCO],
+    }),
+    planLine('Kerrygold butter 227g', {
+      productId: 'p3',
+      bestStore: 'aldi',
+      stores: [BUTTER_ALDI, BUTTER_TESCO_OUT],
+    }),
+    planLine('Brennans sliced pan 800g', {
+      productId: 'p2',
+      flag: 'stale',
+      stores: [
+        planShop(
+          'tesco',
+          'stale',
+          {observedOn: '2026-11-01', price: 1.85},
+          {observedOn: '2026-11-01', eachPrice: 1.85, rank: null, flags: ['stale']}
+        ),
+      ],
+    }),
+    planLine('Free-range eggs, a dozen', {
+      productId: 'p4',
+      flag: 'no_price',
+      stores: [planShop('aldi', 'upcoming', {price: 2.49}, null)],
+    }),
+    planLine('Bananas', {flag: 'unmatched'}),
+  ],
+  coverage: {
+    singleStore: false,
+    store: null,
+    coveredBy: [],
+    closestStore: 'lidl',
+    blockers: [
+      {itemId: 'plan-Kerrygold butter 227g', text: 'Kerrygold butter 227g', reason: 'not_linked'},
+      {itemId: 'plan-Brennans sliced pan 800g', text: 'Brennans sliced pan 800g', reason: 'stale'},
+      {
+        itemId: 'plan-Free-range eggs, a dozen',
+        text: 'Free-range eggs, a dozen',
+        reason: 'no_price',
+      },
+      {itemId: 'plan-Bananas', text: 'Bananas', reason: 'unmatched'},
+    ],
+  },
+};
+
+/** The happy case: two shops price both lines, so the list can be done in one. */
+const PLAN_COVERED = {
+  asOf: '2026-11-06',
+  staleAfterDays: 3,
+  items: [
+    planLine('Whole milk 2L', {
+      productId: 'p1',
+      bestStore: 'lidl',
+      stores: [MILK_LIDL, MILK_TESCO],
+    }),
+    planLine('Brennans sliced pan 800g', {
+      productId: 'p2',
+      bestStore: 'tesco',
+      stores: [
+        planShop(
+          'lidl',
+          'priced',
+          {price: 1.99},
+          {eachPrice: 1.99, packSize: '800 g', unit: 'kg', unitPrice: 2.49, rank: 2}
+        ),
+        planShop(
+          'tesco',
+          'priced',
+          {price: 1.85},
+          {eachPrice: 1.85, packSize: '800 g', unit: 'kg', unitPrice: 2.31, rank: 1},
+          true
+        ),
+      ],
+    }),
+  ],
+  coverage: {
+    singleStore: true,
+    store: 'lidl',
+    coveredBy: ['lidl', 'tesco'],
+    closestStore: null,
+    blockers: [],
+  },
+};
+const PLAN_EMPTY = {
+  asOf: '2026-11-06',
+  staleAfterDays: 3,
+  items: [],
+  coverage: {singleStore: false, store: null, coveredBy: [], closestStore: null, blockers: []},
+};
+
 const MEMBERS = [
   {id: 'u1', displayName: 'Anna', role: 'owner', createdAt: '2026-11-01T09:00:00Z'},
   {id: 'u2', displayName: 'Ben', role: 'member', createdAt: '2026-11-02T09:00:00Z'},
@@ -342,6 +568,7 @@ export async function signedIn(page: Page): Promise<void> {
   await page.route('**/api/trips', r => r.fulfill({json: TRIPS}));
   await page.route('**/api/products', r => r.fulfill({json: PRODUCTS}));
   await page.route('**/api/promotions', r => r.fulfill({json: PROMOTIONS}));
+  await page.route('**/api/plan', r => r.fulfill({json: PLAN}));
   await page.route('**/api/cards', r => r.fulfill({json: {cards: CARDS}}));
   await page.route('**/api/cards/tesco', r => r.fulfill({json: TESCO_CARD}));
   await page.route('**/api/members', r => r.fulfill({json: MEMBERS}));
@@ -359,6 +586,23 @@ export const ROUTES: readonly Route[] = [
   {name: 'list', path: '/list', setup: signedIn},
   {name: 'history', path: '/history', setup: signedIn},
   {name: 'shelf', path: '/shelf', setup: signedIn},
+  {name: 'plan', path: '/plan', setup: signedIn},
+  {
+    name: 'plan-covered',
+    path: '/plan',
+    setup: async page => {
+      await signedIn(page);
+      await page.route('**/api/plan', r => r.fulfill({json: PLAN_COVERED}));
+    },
+  },
+  {
+    name: 'plan-empty',
+    path: '/plan',
+    setup: async page => {
+      await signedIn(page);
+      await page.route('**/api/plan', r => r.fulfill({json: PLAN_EMPTY}));
+    },
+  },
   {name: 'prices', path: '/prices', setup: signedIn},
   {name: 'promotions', path: '/promotions', setup: signedIn},
   {name: 'cards', path: '/cards', setup: signedIn},

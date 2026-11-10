@@ -50,6 +50,12 @@ export const APP_ROUTES: Routes = [
         loadComponent: () => import('./features/shelf/shelf.page').then(m => m.ShelfPage),
       },
       {
+        path: 'plan',
+        title: 'Plan',
+        data: {title: 'Plan'} satisfies PageChromeData,
+        loadComponent: () => import('./features/plan/plan.page').then(m => m.PlanPage),
+      },
+      {
         path: 'prices',
         title: 'Prices',
         data: {title: 'Prices'} satisfies PageChromeData,

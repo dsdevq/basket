@@ -27,12 +27,13 @@ import type {PendingPage} from './pending-route';
 
 const LIST: NavItem = {label: 'List', icon: 'ShoppingBasket', route: '/list'};
 const SHELF: NavItem = {label: 'Shelf', icon: 'Store', route: '/shelf'};
+const PLAN: NavItem = {label: 'Plan', icon: 'ListChecks', route: '/plan'};
 const PRICES: NavItem = {label: 'Prices', icon: 'Tag', route: '/prices'};
 const PROMOTIONS: NavItem = {label: 'Promotions', icon: 'BadgePercent', route: '/promotions'};
 const CARDS: NavItem = {label: 'Cards', icon: 'WalletCards', route: '/cards'};
 const PEOPLE: NavItem = {label: 'People', icon: 'Users', route: '/people'};
 
-/** The signed-in frame: the lifekit app layout with List, Shelf, Prices and Cards as the tabs and Promotions, People and Settings behind More. */
+/** The signed-in frame: the lifekit app layout with List, Shelf, Plan and Cards as the tabs and Prices, Promotions, People and Settings behind More. */
 @Component({
   selector: 'bk-app-shell',
   imports: [AppLayoutComponent, PageComponent, RouterOutlet, SkeletonComponent],
@@ -78,11 +79,11 @@ export class AppShellComponent {
 
   protected readonly update = inject(AppUpdateService);
 
-  protected readonly tabRoutes = [LIST.route, SHELF.route, PRICES.route, CARDS.route];
+  protected readonly tabRoutes = [LIST.route, SHELF.route, PLAN.route, CARDS.route];
   protected readonly navItems = computed<NavItem[]>(() =>
     this.session.isOwner()
-      ? [LIST, SHELF, PRICES, CARDS, PROMOTIONS, PEOPLE]
-      : [LIST, SHELF, PRICES, CARDS, PROMOTIONS]
+      ? [LIST, SHELF, PLAN, PRICES, CARDS, PROMOTIONS, PEOPLE]
+      : [LIST, SHELF, PLAN, PRICES, CARDS, PROMOTIONS]
   );
   protected readonly account = computed<AppLayoutAccount | undefined>(() => {
     const user = this.session.user();
