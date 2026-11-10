@@ -131,7 +131,7 @@ test('a breadcrumb that is only the front page and the product leaves no categor
   assert.equal('category' in r, false);
 });
 
-test('tesco and dunnes: the photo is og:image, else the JSON-LD image, and only a plain https address', () => {
+test('tesco and dunnes: the photo is the JSON-LD image, else og:image, and only a plain https address', () => {
   for (const [store, url, file] of [['tesco', TESCO, 'tesco-product-page.html'], ['dunnes', DUNNES, 'dunnes-product-page.html']] as const) {
     const html = fixture(file);
     const read = (page: string) => reading(readPage(store, url, { status: 200, html: page })).imageUrl;
@@ -142,7 +142,7 @@ test('tesco and dunnes: the photo is og:image, else the JSON-LD image, and only 
 
     const withLd = html.replace('"offers"', '"image":["https://img.example.ie/ld/1.jpg","https://img.example.ie/ld/2.jpg"],"offers"');
     assert.equal(read(withLd), 'https://img.example.ie/ld/1.jpg');
-    assert.equal(read(withLd.replace('</head>', '<meta property="og:image" content="https://img.example.ie/og.jpg"></head>')), 'https://img.example.ie/og.jpg');
+    assert.equal(read(withLd.replace('</head>', '<meta property="og:image" content="https://img.example.ie/og.jpg"></head>')), 'https://img.example.ie/ld/1.jpg');
 
     // A bad og:image is dropped, not a failed read; the JSON-LD image still serves.
     assert.equal(read(og('http://img.example.ie/p/1.jpg')), undefined);
