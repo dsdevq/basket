@@ -8,7 +8,7 @@ we buy, and the four shops' **loyalty cards** as barcodes to show at the till. M
 ## What is here (M1, M2)
 
 - `backend/` - .NET 10 minimal API: ASP.NET Core Identity with passkeys and one-time invite links, the shared list,
-  EF Core + Postgres, Hangfire, Serilog. Tests in `backend/tests/Basket.Tests` (real WebAuthn ceremonies against a
+  the shop loyalty cards (`Cards`, numbers encrypted at rest), EF Core + Postgres, Hangfire, Serilog. Tests in `backend/tests/Basket.Tests` (real WebAuthn ceremonies against a
   software authenticator).
 - `backend/src/Basket.Api/Prices` - M2: the nightly Hangfire price pull (Lidl), its parsers and polite fetcher, the
   product and price endpoints, `Prices/Promotions` (the Promotions tab: current promos ranked by unit price, rule in [decisions](docs/decisions.md)), and `Prices/Ingest`: the token-signed write-only endpoint the owner's PC posts Tesco, Aldi and Dunnes prices to. Tests use recorded shop pages in `backend/tests/Basket.Tests/Fixtures`, never the network.
