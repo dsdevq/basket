@@ -337,6 +337,11 @@ function planShop(
   };
 }
 
+/** What a receipt says was paid at a shop, as GET /api/plan sends it. */
+function planPaid(store: PlanShop, price: number, paidOn: string) {
+  return {store, storeName: PLAN_SHOP_NAMES[store], price, paidOn};
+}
+
 function planLine(
   text: string,
   over: {
@@ -344,6 +349,7 @@ function planLine(
     flag?: string;
     bestStore?: string;
     stores?: ReturnType<typeof planShop>[];
+    lastPaid?: ReturnType<typeof planPaid>[];
   } = {}
 ) {
   return {
@@ -355,6 +361,7 @@ function planLine(
     flag: over.flag ?? null,
     bestStore: over.bestStore ?? null,
     stores: over.stores ?? [],
+    lastPaid: over.lastPaid ?? [],
   };
 }
 
@@ -376,6 +383,7 @@ const MILK_LIDL = planShop(
   },
   true
 );
+const MILK_LIDL_PAID = planPaid('lidl', 1.19, '2026-11-03');
 const MILK_TESCO = planShop(
   'tesco',
   'priced',
@@ -423,6 +431,7 @@ const PLAN = {
       productId: 'p1',
       bestStore: 'lidl',
       stores: [MILK_LIDL, MILK_TESCO],
+      lastPaid: [MILK_LIDL_PAID],
     }),
     planLine('Kerrygold butter 227g', {
       productId: 'p3',
@@ -475,6 +484,7 @@ const PLAN_COVERED = {
       productId: 'p1',
       bestStore: 'lidl',
       stores: [MILK_LIDL, MILK_TESCO],
+      lastPaid: [MILK_LIDL_PAID],
     }),
     planLine('Brennans sliced pan 800g', {
       productId: 'p2',

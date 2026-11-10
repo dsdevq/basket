@@ -8,6 +8,7 @@ import type {
   PlanCoverage,
   PlanFlag,
   PlanItem,
+  PlanPaid,
   PlanStorePrice,
   PlanStoreState,
 } from './plan.model';
@@ -212,4 +213,32 @@ export function orderedStores(item: PlanItem): PlanStorePrice[] {
     return entry.state === 'priced' ? Rank.Priced : Rank.Unusable;
   };
   return [...item.stores].sort((a, b) => rank(a) - rank(b));
+}
+
+/** "Last paid €1.19 on 3 Nov": the wording of the Shelf and Prices pages, so one price reads the same on every screen. */
+export function paidText(paid: PlanPaid): string {
+  return `Last paid ${euro(paid.price)} on ${shortDate(paid.paidOn)}`;
+}
+
+/** One shop's place in a line: its reading, and what was last paid there (null when nothing was bought there). */
+export interface PlanRow {
+  readonly entry: PlanStorePrice;
+  readonly paid: PlanPaid | null;
+}
+
+/** The rows of a line: the shops with a reading in reading order, each with what was last paid there. */
+export function planRows(item: PlanItem): PlanRow[] {
+  return orderedStores(item).map(entry => ({
+    entry,
+    paid: item.lastPaid.find(paid => paid.store === entry.store) ?? null,
+  }));
+}
+
+/** The lines under a shop's name, one fact group per line: the reading (date, deal, card, unit price), then what was last paid. */
+export function rowLines(row: PlanRow): string {
+  const lines = [rowDetail(row.entry)];
+  if (row.paid) {
+    lines.push(paidText(row.paid));
+  }
+  return lines.join('\n');
 }

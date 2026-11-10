@@ -26,6 +26,9 @@ test('the Plan tab is in the tab bar, Prices is behind More, and the plan says w
   await expect(answer).toContainText('Closest: Lidl');
   await expect(page.getByText('Not priced at Lidl')).toBeVisible();
   await expect(page.getByText('Seen 6 Nov').first()).toBeVisible();
+  // Lidl's offer sits beside what was last paid there, with the day.
+  await expect(page.getByText('Lidl Plus price').first()).toBeVisible();
+  await expect(page.getByText('Last paid €1.19 on 3 Nov')).toBeVisible();
 
   await tabs.getByRole('button', {name: 'More'}).click();
   await expect(page.getByRole('link', {name: 'Prices'})).toBeVisible();
