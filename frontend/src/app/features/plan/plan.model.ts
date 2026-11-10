@@ -24,6 +24,14 @@ export interface PlanStorePrice {
   readonly best: boolean;
 }
 
+/** A price really paid at a shop, from a receipt, with the day. Information only: it never picks the best shop. A weighed product's is the price of a kilo. */
+export interface PlanPaid {
+  readonly store: StoreId;
+  readonly storeName: string;
+  readonly price: number;
+  readonly paidOn: string;
+}
+
 /** One open line of the list. */
 export interface PlanItem {
   readonly id: string;
@@ -35,6 +43,8 @@ export interface PlanItem {
   readonly flag: PlanFlag | null;
   readonly bestStore: StoreId | null;
   readonly stores: readonly PlanStorePrice[];
+  /** The latest receipt price at each shop the product was bought at, whether or not that shop's page is linked. */
+  readonly lastPaid: readonly PlanPaid[];
 }
 
 export interface PlanBlocker {

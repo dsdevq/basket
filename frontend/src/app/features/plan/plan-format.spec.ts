@@ -1,10 +1,13 @@
-import {entry, line, offer} from './plan-fixtures';
+import {entry, line, offer, paid} from './plan-fixtures';
 import {
   blockerTag,
   flagText,
   orderedStores,
+  paidText,
+  planRows,
   priceText,
   rowDetail,
+  rowLines,
   rowTag,
   tagVariant,
   verdict,
@@ -138,6 +141,46 @@ describe('plan-format', () => {
 
       expect(answer.status.label).toBe('No shop prices it yet');
       expect(answer.pills.map(p => p.label)).toEqual(['1 line blocks it']);
+    });
+  });
+
+  describe("this week's offer beside the last price paid", () => {
+    const lidlOffer = entry({
+      best: true,
+      offer: offer({
+        kind: 'loyalty',
+        isPromo: true,
+        deal: 'Lidl Plus price',
+        card: 'Lidl Plus',
+        eachPrice: 0.99,
+        unitPrice: 0.5,
+      }),
+    });
+
+    it('words a paid price the way the Shelf does, with its day', () => {
+      expect(paidText(paid({price: 1.19, paidOn: '2026-11-03'}))).toBe('Last paid €1.19 on 3 Nov');
+    });
+
+    it('puts the paid price on a second line of the shop that has the offer', () => {
+      const [row] = planRows(line({stores: [lidlOffer], lastPaid: [paid()]}));
+
+      expect(rowLines(row)).toBe(
+        'Seen 5 Nov · Lidl Plus price · €0.50/l\nLast paid €1.19 on 3 Nov'
+      );
+      expect(priceText(row.entry)).toBe('€0.99');
+      expect(rowTag(row.entry)).toBe('Best');
+    });
+
+    it('leaves a shop it was never bought at with its reading alone', () => {
+      const tesco = entry({store: 'tesco', storeName: 'Tesco'});
+      const rows = planRows(line({stores: [lidlOffer, tesco], lastPaid: [paid()]}));
+
+      expect(rows.map(r => r.paid?.store ?? null)).toEqual(['lidl', null]);
+      expect(rowLines(rows[1])).toBe('Seen 5 Nov · €0.65/l');
+    });
+
+    it('has no rows for a line with neither a reading nor a paid price', () => {
+      expect(planRows(line())).toEqual([]);
     });
   });
 

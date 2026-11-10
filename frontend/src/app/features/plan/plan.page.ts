@@ -26,9 +26,9 @@ import {
   blockerTag,
   type FlagText,
   flagText,
-  orderedStores,
+  planRows,
   priceText,
-  rowDetail,
+  rowLines,
   rowTag,
   tagVariant,
   verdict,
@@ -38,8 +38,8 @@ import {
 /**
  * Where to buy what is on the list. Each open line gets the shop with the lowest price per kilo, litre or piece (the
  * promotions rule), and the top says whether one shop can price the whole list. The price per shop is the per-store
- * comparison row of price-comparison grocery apps: shop, price, the day it was read. A line that cannot be priced says
- * why and is never guessed.
+ * comparison row of price-comparison grocery apps: shop, price, the day it was read, and beside it what the household
+ * last paid there and when (the Shelf's "Last paid" wording). A line that cannot be priced says why and is never guessed.
  */
 @Component({
   selector: 'bk-plan-page',
@@ -103,18 +103,19 @@ import {
                     <span class="text-cmn-sm text-text-secondary">{{ why.detail }}</span>
                   </div>
                 }
-                @for (entry of stores(item); track entry.store) {
+                @for (row of rows(item); track row.entry.store) {
                   <cmn-list-item-row
-                    [label]="entry.storeName"
-                    [sublabel]="detail(entry)"
-                    [dimmed]="!entry.best && entry.state !== 'priced'"
+                    [label]="row.entry.storeName"
+                    [sublabel]="lines(row)"
+                    [dimmed]="!row.entry.best && row.entry.state !== 'priced'"
+                    class="[&_.truncate]:overflow-visible [&_.truncate]:whitespace-pre-line [&_.truncate]:break-words"
                   >
-                    @if (tag(entry); as text) {
-                      <cmn-tag [variant]="variant(entry)" meta>{{ text }}</cmn-tag>
+                    @if (tag(row.entry); as text) {
+                      <cmn-tag [variant]="variant(row.entry)" meta>{{ text }}</cmn-tag>
                     }
                     <span amount class="flex flex-col items-end text-cmn-sm">
-                      <span class="font-semibold text-text-primary">{{ price(entry) }}</span>
-                      @if (was(entry); as old) {
+                      <span class="font-semibold text-text-primary">{{ price(row.entry) }}</span>
+                      @if (was(row.entry); as old) {
                         <s class="text-cmn-xs text-text-secondary"
                           ><span class="sr-only">was </span>{{ old }}</s
                         >
@@ -159,8 +160,8 @@ export class PlanPage implements OnInit {
   });
   protected readonly asOf = computed(() => shortDate(this.store.asOf()));
 
-  protected readonly stores = orderedStores;
-  protected readonly detail = rowDetail;
+  protected readonly rows = planRows;
+  protected readonly lines = rowLines;
   protected readonly price = priceText;
   protected readonly was = wasText;
   protected readonly tag = rowTag;
