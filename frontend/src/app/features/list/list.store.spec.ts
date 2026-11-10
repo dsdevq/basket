@@ -17,6 +17,8 @@ function item(id: string, over: Partial<ListItem> = {}): ListItem {
     addedBy: ME,
     checkedAt: null,
     checkedBy: null,
+    productId: null,
+    store: null,
     ...over,
   };
 }
@@ -236,5 +238,27 @@ describe('ListStore', () => {
       expect(second).toBe(false);
       expect(close).toHaveBeenCalledTimes(1);
     });
+  });
+
+  it('puts a picked product on the list once, whether the server created the line or returned the open one', async () => {
+    const line = item('p', {text: 'Whole milk 2L', productId: 'milk', store: 'tesco'});
+    const addProduct = vi.fn().mockResolvedValue(line);
+    const {store} = setup({addProduct, items: vi.fn().mockResolvedValue([])});
+    await store.load();
+
+    expect(await store.addProduct('milk', 'tesco')).toBe(true);
+    expect(await store.addProduct('milk', 'tesco')).toBe(true);
+
+    expect(addProduct).toHaveBeenCalledWith('milk', 'tesco');
+    expect(store.toBuy()).toEqual([line]);
+  });
+
+  it('says so and adds nothing when a picked product is refused', async () => {
+    const {store, toast} = setup({addProduct: vi.fn().mockRejectedValue(new Error('offline'))});
+
+    expect(await store.addProduct('milk', null)).toBe(false);
+
+    expect(store.items()).toEqual([]);
+    expect(toast.error).toHaveBeenCalledTimes(1);
   });
 });

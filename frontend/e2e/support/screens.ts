@@ -9,14 +9,17 @@ export const FROZEN_NOW = new Date('2026-11-06T10:00:00Z');
 
 const OWNER = {authenticated: true, user: {id: 'u1', displayName: 'Anna', role: 'owner'}};
 const GUEST = {authenticated: false, user: null};
-const ITEMS = [
+const ITEMS: {text: string; checked: boolean; productId?: string; store?: string}[] = [
   {text: 'Milk', checked: false},
   {text: 'Bread', checked: false},
   {text: 'Apples', checked: false},
   {text: 'Rice', checked: true},
+  {text: 'Whole milk 2L', checked: false, productId: 'p1', store: 'tesco'},
 ].map((item, i) => ({
   id: `item-${i}`,
   ...item,
+  productId: item.productId ?? null,
+  store: item.store ?? null,
   addedAt: '2026-11-03T09:00:00Z',
   addedBy: {id: 'u1', name: 'Anna'},
   checkedAt: null,
@@ -45,38 +48,118 @@ const TRIPS = {
   })),
   hasMore: false,
 };
-const PRODUCTS = {
+/** A flat tinted square as a product photo, so the baselines never wait on a shop's image server. */
+const PHOTO = (colour: string): string =>
+  `data:image/svg+xml;utf8,${encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="112" height="112"><rect width="112" height="112" rx="12" fill="${colour}"/><rect x="34" y="22" width="44" height="68" rx="8" fill="white" fill-opacity="0.7"/></svg>`
+  )}`;
+
+type MockShop = 'lidl' | 'aldi' | 'tesco' | 'dunnes';
+const SHOPS: Record<MockShop, {name: string; readBy: string}> = {
+  lidl: {name: 'Lidl', readBy: 'nightly'},
+  aldi: {name: 'Aldi', readBy: 'pc'},
+  tesco: {name: 'Tesco', readBy: 'pc'},
+  dunnes: {name: 'Dunnes', readBy: 'pc'},
+};
+
+function entry(shop: MockShop, listing: {imageUrl?: string | null; price?: object} | null) {
+  return {
+    store: shop,
+    ...SHOPS[shop],
+    listing: listing && {
+      url: `https://example.test/${shop}`,
+      title: null,
+      checkedAt: '2026-11-05T03:00:00Z',
+      error: null,
+      imageUrl: listing.imageUrl ?? null,
+    },
+    price: listing?.price ?? null,
+    lastPaid: shop === 'lidl' ? {state: 'not_connected', price: null, paidOn: null} : null,
+  };
+}
+
+function price(over: object) {
+  return {
+    observedOn: '2026-11-05',
+    state: 'current',
+    price: null,
+    wasPrice: null,
+    loyaltyPrice: null,
+    loyaltyScheme: null,
+    promoText: null,
+    validFrom: null,
+    validUntil: null,
+    best: null,
+    inStock: true,
+    ...over,
+  };
+}
+
+export const PRODUCTS = {
   products: [
     {
       id: 'p1',
       name: 'Whole milk 2L',
       stores: [
-        {
-          store: 'lidl',
-          name: 'Lidl',
-          readBy: 'nightly',
-          listing: {
-            url: 'https://www.lidl.ie/p/milk/p11000',
-            title: 'Milk',
-            checkedAt: '2026-11-05T03:00:00Z',
-            error: null,
-          },
-          price: {
-            observedOn: '2026-11-05',
-            state: 'current',
+        entry('lidl', {
+          imageUrl: PHOTO('#cfe3ff'),
+          price: price({
             price: 1.29,
             wasPrice: 1.49,
             loyaltyPrice: 0.99,
             loyaltyScheme: 'Lidl Plus',
             promoText: 'Lidl Plus deal',
-            validFrom: null,
             validUntil: '2026-11-11',
             best: 0.99,
-          },
-          lastPaid: {state: 'not_connected', price: null, paidOn: null},
-        },
-        {store: 'aldi', name: 'Aldi', readBy: 'pc', listing: null, price: null, lastPaid: null},
-        {store: 'tesco', name: 'Tesco', readBy: 'pc', listing: null, price: null, lastPaid: null},
+          }),
+        }),
+        entry('aldi', null),
+        entry('tesco', {
+          imageUrl: PHOTO('#ffd9d9'),
+          price: price({
+            price: 2.15,
+            wasPrice: 2.35,
+            loyaltyPrice: 1.89,
+            loyaltyScheme: 'Clubcard',
+            promoText: 'Clubcard Price',
+            validUntil: '2026-11-15',
+            best: 1.89,
+          }),
+        }),
+        entry('dunnes', null),
+      ],
+    },
+    {
+      id: 'p2',
+      name: 'Brennans sliced pan 800g',
+      stores: [
+        entry('lidl', null),
+        entry('aldi', null),
+        entry('tesco', {price: price({price: 1.85, best: 1.85})}),
+        entry('dunnes', null),
+      ],
+    },
+    {
+      id: 'p3',
+      name: 'Kerrygold butter 227g',
+      stores: [
+        entry('lidl', null),
+        entry('aldi', {imageUrl: PHOTO('#fff1c2'), price: price({price: 2.99, best: 2.99})}),
+        entry('tesco', {
+          imageUrl: PHOTO('#fff1c2'),
+          price: price({state: 'unavailable', inStock: false}),
+        }),
+        entry('dunnes', null),
+      ],
+    },
+    {
+      id: 'p4',
+      name: 'Free-range eggs, a dozen, large, from a farm with a very long name',
+      stores: [
+        entry('lidl', null),
+        entry('aldi', {price: price({state: 'upcoming', price: 2.49, validFrom: '2026-11-12'})}),
+        entry('tesco', null),
+        entry('dunnes', null),
       ],
     },
   ],
@@ -84,6 +167,7 @@ const PRODUCTS = {
     {
       store: 'tesco',
       name: 'Tesco',
+      readBy: 'pc',
       lastRun: {
         finishedAt: '2026-11-05T03:00:00Z',
         outcome: 'blocked',
@@ -274,6 +358,7 @@ export async function guest(page: Page): Promise<void> {
 export const ROUTES: readonly Route[] = [
   {name: 'list', path: '/list', setup: signedIn},
   {name: 'history', path: '/history', setup: signedIn},
+  {name: 'shelf', path: '/shelf', setup: signedIn},
   {name: 'prices', path: '/prices', setup: signedIn},
   {name: 'promotions', path: '/promotions', setup: signedIn},
   {name: 'cards', path: '/cards', setup: signedIn},

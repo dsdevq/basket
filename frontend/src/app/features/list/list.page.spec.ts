@@ -27,6 +27,8 @@ function item(id: string, text: string, over: Partial<ListItem> = {}): ListItem 
     addedBy: ANNA,
     checkedAt: null,
     checkedBy: null,
+    productId: null,
+    store: null,
     ...over,
   };
 }
@@ -101,6 +103,17 @@ describe('ListPage', () => {
     expect(text).toContain('Spinach');
     expect(text).toContain('Butter');
     expect(text).toContain('Anna');
+  });
+
+  it('marks a line picked from a shop with that shop, and leaves a free-text line bare', async () => {
+    const {host} = await render([
+      item('1', 'Whole milk 2L', {productId: 'p1', store: 'tesco'}),
+      item('2', 'Candles'),
+    ]);
+
+    const rows = Array.from(host.querySelectorAll('cmn-list-item-row'));
+    expect(rows[0]?.textContent).toContain('Tesco');
+    expect(rows[1]?.textContent).not.toMatch(/Tesco|Lidl|Aldi|Dunnes/);
   });
 
   it('adds the typed text and clears the field', async () => {

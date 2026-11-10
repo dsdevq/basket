@@ -67,6 +67,26 @@ public sealed class ProductTests : IClassFixture<BasketFactory>
     }
 
     [Fact]
+    public async Task Linking_with_a_photo_stores_it_and_a_relink_to_another_page_forgets_it()
+    {
+        var (owner, id) = await WithProductAsync("Aubergine");
+        const string photo = "https://imgproxy.example.test/aubergine.jpg";
+
+        var linked = await owner.PutAsJsonAsync($"/api/products/{id}/stores/lidl", new { url = "https://www.lidl.ie/p/aubergine/p11214436", imageUrl = photo });
+        linked.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await linked.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("imageUrl").GetString().Should().Be(photo);
+
+        (await owner.PutAsJsonAsync($"/api/products/{id}/stores/lidl", new { url = "https://www.lidl.ie/p/aubergine/p11214436" })).EnsureSuccessStatusCode();
+        (await _factory.WithDb(db => db.StoreListings.Select(l => l.ImageUrl).SingleAsync())).Should().Be(photo, "no photo sent leaves the stored one");
+
+        var other = await owner.PutAsJsonAsync($"/api/products/{id}/stores/lidl", new { url = "https://www.lidl.ie/p/courgette/p11214437" });
+        (await other.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("imageUrl").ValueKind.Should().Be(JsonValueKind.Null);
+
+        var bad = await owner.PutAsJsonAsync($"/api/products/{id}/stores/lidl", new { url = "https://www.lidl.ie/p/courgette/p11214437", imageUrl = "http://insecure.example/a.jpg" });
+        bad.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
     public async Task Linking_a_shop_page_stores_the_tidied_address_and_relinking_forgets_the_old_readings()
     {
         var (owner, id) = await WithProductAsync("Chicken skewers");

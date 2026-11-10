@@ -13,10 +13,13 @@ import {
   ListSectionComponent,
   PageComponent,
   SkeletonComponent,
+  TagComponent,
 } from '@lifekit-hq/ui';
 import {firstValueFrom, fromEvent, interval} from 'rxjs';
 
 import {ComposerBarComponent} from '../../core/shell/composer-bar.component';
+import {STORE_NAMES} from '../prices/price-format';
+import type {StoreId} from '../prices/prices.model';
 import {type ItemAction, ItemActionsSheetComponent} from './item-actions.sheet';
 import type {ListItem} from './list.model';
 import {ListStore} from './list.store';
@@ -38,6 +41,7 @@ const REFRESH_MS = 15_000;
     ListSectionComponent,
     PageComponent,
     SkeletonComponent,
+    TagComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -125,6 +129,9 @@ const REFRESH_MS = 15_000;
         (swipeTrailingAction)="remove(item)"
         class="[&_.truncate]:overflow-visible [&_.truncate]:whitespace-normal [&_.truncate]:break-words"
       >
+        @if (item.store) {
+          <cmn-tag meta variant="neutral">{{ storeName(item.store) }}</cmn-tag>
+        }
         <cmn-checkbox
           [checked]="item.checked"
           [label]="(item.checked ? 'Untick ' : 'Tick ') + item.text"
@@ -182,6 +189,10 @@ export class ListPage implements OnInit {
     if (await this.store.add(value)) {
       this.text.reset('');
     }
+  }
+
+  protected storeName(store: StoreId): string {
+    return STORE_NAMES[store];
   }
 
   protected toggle(item: ListItem, checked: boolean): void {

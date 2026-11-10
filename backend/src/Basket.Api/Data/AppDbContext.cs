@@ -48,6 +48,14 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             item.HasOne<AppUser>().WithMany().HasForeignKey(i => i.AddedByUserId).OnDelete(DeleteBehavior.Restrict);
             item.HasOne<AppUser>().WithMany().HasForeignKey(i => i.CheckedByUserId).OnDelete(DeleteBehavior.SetNull);
             item.HasIndex(i => new { i.IsChecked, i.AddedAt });
+            item.Property(i => i.Store).HasConversion<string>().HasMaxLength(16);
+            item.HasOne<Product>().WithMany().HasForeignKey(i => i.ProductId).OnDelete(DeleteBehavior.SetNull);
+            // One open line per product and shop (a null shop counts as one value): tapping a Shelf tile twice, or two
+            // phones tapping at once, cannot put the same thing on the list twice. A ticked line is history, not a duplicate.
+            item.HasIndex(i => new { i.ProductId, i.Store })
+                .IsUnique()
+                .AreNullsDistinct(false)
+                .HasFilter("is_checked = false AND product_id IS NOT NULL");
         });
 
         builder.Entity<Trip>(trip =>

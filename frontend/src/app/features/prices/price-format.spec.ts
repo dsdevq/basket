@@ -13,6 +13,7 @@ function price(over: Partial<Price> = {}): Price {
     validFrom: null,
     validUntil: null,
     best: 2.29,
+    inStock: true,
     ...over,
   };
 }
@@ -22,7 +23,13 @@ function entry(over: Partial<ProductStore> = {}): ProductStore {
     store: 'lidl',
     name: 'Lidl',
     readBy: 'nightly',
-    listing: {url: 'https://www.lidl.ie/p/x/p11115738', title: 'X', checkedAt: null, error: null},
+    listing: {
+      url: 'https://www.lidl.ie/p/x/p11115738',
+      title: 'X',
+      checkedAt: null,
+      error: null,
+      imageUrl: null,
+    },
     price: price(),
     lastPaid: null,
     ...over,
@@ -83,6 +90,7 @@ describe('price formatting', () => {
             title: null,
             checkedAt: null,
             error: 'www.tesco.ie answered HTTP 403',
+            imageUrl: null,
           },
         })
       )
@@ -129,7 +137,13 @@ describe('price formatting', () => {
 
   it('keeps the last known price visible when the latest read failed', () => {
     const failed = entry({
-      listing: {url: 'u', title: null, checkedAt: null, error: 'page layout changed'},
+      listing: {
+        url: 'u',
+        title: null,
+        checkedAt: null,
+        error: 'page layout changed',
+        imageUrl: null,
+      },
     });
 
     expect(headline(failed)).toBe('€2.29');
