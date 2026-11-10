@@ -20,11 +20,7 @@ public sealed class LoyaltyCard
     /// <summary>The card number, encrypted. Plain text never reaches the database.</summary>
     public string NumberProtected { get; set; } = string.Empty;
 
-    public DateTimeOffset AddedAt { get; set; }
-
     public DateTimeOffset UpdatedAt { get; set; }
-
-    public Guid AddedByUserId { get; set; }
 }
 
 /// <summary>How the card is drawn as a code at the till.</summary>

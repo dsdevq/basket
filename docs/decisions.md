@@ -592,7 +592,7 @@ number under it).
   `e2e/support/screens.ts`) are covered by the screen check, the route scan and the 390 / 1280 baselines. The Linux baselines
   for the new screens, and for More and every other screen that now has a Cards tab, are rendered by the "Update screen
   baselines" workflow on CI (`update-baselines` label), not from a local run.
-- **One migration, additive: `20261109232031_LoyaltyCard`.** It creates `loyalty_card` (and its two indexes) and nothing else;
+- **One migration, additive: `20261109232031_LoyaltyCard`.** It creates `loyalty_card` (and its unique index on `store`) and nothing else;
   it touches no existing table. Needs the owner's go before merge, and it sorts after `IngestToken`, the latest on main when
   this was written. Other ships' migrations must order after whichever merges first.
 - **Out of scope.** The Lidl Plus token connection and receipts (their own tasks). Scanning a card with the camera to add it

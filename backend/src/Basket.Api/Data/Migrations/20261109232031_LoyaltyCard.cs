@@ -19,25 +19,12 @@ namespace Basket.Api.Data.Migrations
                     store = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
                     format = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
                     number_protected = table.Column<string>(type: "character varying(2048)", maxLength: 2048, nullable: false),
-                    added_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    added_by_user_id = table.Column<Guid>(type: "uuid", nullable: false)
+                    updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_loyalty_card", x => x.id);
-                    table.ForeignKey(
-                        name: "FK_loyalty_card_users_added_by_user_id",
-                        column: x => x.added_by_user_id,
-                        principalTable: "users",
-                        principalColumn: "id",
-                        onDelete: ReferentialAction.Restrict);
                 });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_loyalty_card_added_by_user_id",
-                table: "loyalty_card",
-                column: "added_by_user_id");
 
             migrationBuilder.CreateIndex(
                 name: "IX_loyalty_card_store",

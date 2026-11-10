@@ -185,14 +185,13 @@ public sealed class CardTests : IClassFixture<BasketFactory>
     {
         var owner = await CleanOwnerAsync();
         await owner.PutAsJsonAsync("/api/cards/aldi", new { number = "123456789" });
-        var userId = await _factory.WithDb(db => db.Users.Select(u => u.Id).FirstAsync());
 
         var duplicate = async () => await _factory.WithDb(async db =>
         {
             db.LoyaltyCards.Add(new LoyaltyCard
             {
                 Id = Guid.NewGuid(), Store = Store.Aldi, Format = CardFormat.Code128, NumberProtected = "x",
-                AddedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow, AddedByUserId = userId,
+                UpdatedAt = DateTimeOffset.UtcNow,
             });
             await db.SaveChangesAsync();
             return 0;
@@ -205,13 +204,12 @@ public sealed class CardTests : IClassFixture<BasketFactory>
     public async Task Two_people_adding_the_same_shop_at_once_leave_one_card_and_the_loser_is_told_it_exists()
     {
         var owner = await CleanOwnerAsync();
-        var userId = await _factory.WithDb(db => db.Users.Select(u => u.Id).FirstAsync());
         _factory.BeforeCardInsert = () => _factory.WithDb(async db =>
         {
             db.LoyaltyCards.Add(new LoyaltyCard
             {
                 Id = Guid.NewGuid(), Store = Store.Tesco, Format = CardFormat.Code128, NumberProtected = "the-other-persons",
-                AddedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow, AddedByUserId = userId,
+                UpdatedAt = DateTimeOffset.UtcNow,
             });
             await db.SaveChangesAsync();
             return 0;
@@ -235,16 +233,16 @@ public sealed class CardTests : IClassFixture<BasketFactory>
     public async Task A_database_failure_other_than_a_duplicate_shop_is_not_reported_as_an_existing_card()
     {
         var owner = await CleanOwnerAsync();
-        var (her, _) = await _factory.MemberAsync(owner, "Leaves mid-save");
-        // The person saving is deleted between sign-in and the insert: a foreign-key failure, not a duplicate shop.
-        _factory.BeforeCardInsert = () => _factory.WithDb(db => db.Users.Where(u => u.DisplayName == "Leaves mid-save").ExecuteDeleteAsync());
+        // A check constraint that refuses every new row: the insert fails with a database error that is not the shop's unique index.
+        _factory.BeforeCardInsert = () => _factory.WithDb(db =>
+            db.Database.ExecuteSqlRawAsync("ALTER TABLE loyalty_card ADD CONSTRAINT refuse_new_cards CHECK (false) NOT VALID"));
 
         try
         {
             HttpResponseMessage? response = null;
             try
             {
-                response = await her.PutAsJsonAsync("/api/cards/aldi", new { number = "123456789" });
+                response = await owner.PutAsJsonAsync("/api/cards/aldi", new { number = "123456789" });
             }
             catch (Exception)
             {
@@ -257,6 +255,7 @@ public sealed class CardTests : IClassFixture<BasketFactory>
         finally
         {
             _factory.BeforeCardInsert = null;
+            await _factory.WithDb(db => db.Database.ExecuteSqlRawAsync("ALTER TABLE loyalty_card DROP CONSTRAINT IF EXISTS refuse_new_cards"));
         }
     }
 

@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using Basket.Api.Data;
 using Basket.Api.Prices;
 using Microsoft.EntityFrameworkCore;
@@ -73,7 +72,6 @@ public static class CardEndpoints
     private static async Task<IResult> SaveCard(
         string store,
         SaveCardRequest request,
-        ClaimsPrincipal principal,
         AppDbContext db,
         CardNumberProtector protector,
         TimeProvider clock,
@@ -107,8 +105,6 @@ public static class CardEndpoints
             {
                 Id = Guid.NewGuid(),
                 Store = shop,
-                AddedAt = now,
-                AddedByUserId = Guid.Parse(principal.FindFirstValue(ClaimTypes.NameIdentifier)!),
             };
             db.LoyaltyCards.Add(card);
         }

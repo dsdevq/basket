@@ -292,14 +292,6 @@ namespace Basket.Api.Data.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
-                    b.Property<DateTimeOffset>("AddedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("added_at");
-
-                    b.Property<Guid>("AddedByUserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("added_by_user_id");
-
                     b.Property<string>("Format")
                         .IsRequired()
                         .HasMaxLength(16)
@@ -323,8 +315,6 @@ namespace Basket.Api.Data.Migrations
                         .HasColumnName("updated_at");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("AddedByUserId");
 
                     b.HasIndex("Store")
                         .IsUnique();
@@ -730,15 +720,6 @@ namespace Basket.Api.Data.Migrations
                         .WithMany()
                         .HasForeignKey("CheckedByUserId")
                         .OnDelete(DeleteBehavior.SetNull);
-                });
-
-            modelBuilder.Entity("Basket.Api.Data.LoyaltyCard", b =>
-                {
-                    b.HasOne("Basket.Api.Data.AppUser", null)
-                        .WithMany()
-                        .HasForeignKey("AddedByUserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
                 });
 
             modelBuilder.Entity("Basket.Api.Data.PaidPrice", b =>

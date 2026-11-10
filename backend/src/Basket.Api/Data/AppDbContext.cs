@@ -127,7 +127,6 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             card.Property(c => c.Store).HasConversion<string>().HasMaxLength(16);
             card.Property(c => c.Format).HasConversion<string>().HasMaxLength(16);
             card.Property(c => c.NumberProtected).HasMaxLength(LoyaltyCard.MaxProtectedLength).IsRequired();
-            card.HasOne<AppUser>().WithMany().HasForeignKey(c => c.AddedByUserId).OnDelete(DeleteBehavior.Restrict);
             card.HasIndex(c => c.Store).IsUnique();
         });
 
