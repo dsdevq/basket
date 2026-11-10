@@ -27,6 +27,10 @@
         {
           "text": "The app now uses the Lifekit look. You can change the look in Settings under Appearance.",
           "owner": false
+        },
+        {
+          "text": "A new Plan tab shows the best shop for each thing on your list, with the price and the day it was seen, and tells you whether one shop can cover the whole list. Things it cannot price are marked, never guessed. Prices moved behind More.",
+          "owner": false
         }
       ],
       "changes": []

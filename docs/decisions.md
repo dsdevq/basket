@@ -824,7 +824,47 @@ covers all of it. Unmatched or stale lines are flagged, never guessed. Backend a
   shop prices any) and `blockers` lists the lines it cannot price with a `reason`: the line's flag when no shop can price it
   (`unmatched`, `no_price`, `stale`, `out_of_stock`), otherwise that shop's own state for it (`not_read`, `no_price`, `upcoming`,
   `ended`, `stale`, `out_of_stock`, or `not_linked` when the shop has no page for the product).
-- **Not in this change:** the Plan tab (bsk-plan-view), the cheapest two-shop split, per-shop basket totals, and Lidl last-paid prices.
+- **Not in this change:** the Plan tab (next section), the cheapest two-shop split, per-shop basket totals, and Lidl last-paid prices.
+
+## Plan tab: the plan on the phone (2026-11-10, issue #13, epic #24)
+
+Owner's plan of 2026-11-07, step Plan tab: the `GET /api/plan` answer on a screen, with prices dated. Frontend only; no backend change
+and no migration.
+
+- **Borrowed pattern, named.** The per-store price comparison row of price-comparison grocery apps (shop, price, the day it was read),
+  as the epic asks. Each open line is a `cmn-list-section` card headed by the line, with one `cmn-list-item-row` per linked shop: shop
+  name, "Seen 5 Nov" and the deal beneath it, a tag, and the price on the right with the old price struck through. No interaction is
+  invented; the page is read-only and sits on the `list` template with lifekit-common components only (`cmn-verdict-header`,
+  `cmn-list-section`, `cmn-list-item-row`, `cmn-tag`, `cmn-empty-state`, `cmn-skeleton`). The only utility classes are the spacing and
+  type tokens other pages use; the row's own layout is not overridden, so the date comes first in the line where a narrow row can
+  least afford to lose it.
+- **A fourth tab slot, so Prices moves behind More.** The phone tab bar holds four tabs and More (the library's `MAX_BOTTOM_TABS`). It
+  is now **List, Shelf, Plan, Cards**; **Prices** joins Promotions behind More, in the order of the desktop sidebar (List, Shelf, Plan,
+  Prices, Cards, Promotions, People). Plan took Prices' slot because Prices is where products are set up and shop pages linked
+  (occasional), while the Shelf and the Plan are the weekly shopping loop and Cards must stay one tap away at the till. Reversible:
+  it is the `tabRoutes` list of the shell and of the More page.
+- **The answer on top is the coverage.** A `cmn-verdict-header` says "One shop covers it" with that shop (and how many can, when
+  several), or "No one shop covers it" with the closest shop and how many lines block it, or "No shop prices it yet". Under it, when
+  one shop does not cover the list, a card "Not priced at <closest shop>" lists the blocking lines each with a short reason tag. The
+  wording is the server's coverage and nothing is recomputed on the phone.
+- **Per line: the best shop first.** The best shop is tagged "Best", the other fresh prices follow, then shops with nothing usable;
+  a shop whose reading is old, out of stock, not read yet, without a price, not started or ended says so in its tag and is dimmed. The
+  price on the right is the offer's price for one pack when the deal is met (a card price counts and names its card, "2 for €4" is
+  €2.00 with the deal in the line), and the unit price (€/kg, €/l, each) is in the line. The was-price is struck through only when
+  it is higher than what is charged. A line the server could not price carries its flag as a plain label and one sentence: "Not
+  matched" (typed by hand), "No price", "Old prices" (older than the server's window, 3 days), "Out of stock", "Can't compare". Its
+  readings stay listed with their dates.
+- **Dates are the reading's own** (`observedOn`, Dublin day, never shifted by a time zone), and a rule card at the bottom states the
+  as-of day, the unit-price rule and the staleness limit the server sent.
+- **States follow the other tabs.** Skeleton while loading, an error empty state with "Try again" plus a toast, an empty list says
+  "Nothing to plan", and the page reads again when it comes back into view (prices change at most once a night). Icons: `ListChecks`
+  for the tab and the empty state, from the library's Lucide subset, so nothing new is registered in `app.config.ts`.
+- **Tests.** Unit: the wording helpers and the page against a recorded response (`plan-format.spec.ts`, `plan.page.spec.ts`).
+  E2E: `plan-flow.spec.ts` (the tab bar and More on a phone, and what the Plan tab answers), the cold-start layout shift for `/plan`, and
+  three screens in `e2e/support/screens.ts` (`plan`: no shop covers it, with one line of each flag; `plan-covered`; `plan-empty`), so
+  the screen check, the route scan and the baselines cover them. The new baselines and the changed tab bar are rendered by the Update
+  screen baselines workflow on the PR branch, never committed by hand.
+- **Not in this change:** the cheapest two-shop split, per-shop basket totals, Lidl last-paid prices, and ticking lines off from the Plan.
 
 ## Basket-side halves of the phone audit's Carbon findings (2026-11-10, issues #83, #86, #88)
 

@@ -33,16 +33,25 @@ export class MorePage {
   private readonly router = inject(Router);
   private readonly whatsNew = inject(CmnWhatsNewService);
 
-  protected readonly tabRoutes = ['/list', '/shelf', '/prices', '/cards'];
+  protected readonly tabRoutes = ['/list', '/shelf', '/plan', '/cards'];
   protected readonly items = computed<NavItem[]>(() => {
     const list: NavItem = {label: 'List', icon: 'ShoppingBasket', route: '/list'};
     const shelf: NavItem = {label: 'Shelf', icon: 'Store', route: '/shelf'};
+    const plan: NavItem = {label: 'Plan', icon: 'ListChecks', route: '/plan'};
     const prices: NavItem = {label: 'Prices', icon: 'Tag', route: '/prices'};
     const promotions: NavItem = {label: 'Promotions', icon: 'BadgePercent', route: '/promotions'};
     const cards: NavItem = {label: 'Cards', icon: 'WalletCards', route: '/cards'};
     return this.session.isOwner()
-      ? [list, shelf, prices, cards, promotions, {label: 'People', icon: 'Users', route: '/people'}]
-      : [list, shelf, prices, cards, promotions];
+      ? [
+          list,
+          shelf,
+          plan,
+          prices,
+          cards,
+          promotions,
+          {label: 'People', icon: 'Users', route: '/people'},
+        ]
+      : [list, shelf, plan, prices, cards, promotions];
   });
   protected readonly account = computed<AppLayoutAccount | undefined>(() => {
     const user = this.session.user();

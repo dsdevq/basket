@@ -10,6 +10,7 @@ const PAGES = [
   '/list',
   '/history',
   '/shelf',
+  '/plan',
   '/prices',
   '/promotions',
   '/cards',
