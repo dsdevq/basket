@@ -16,7 +16,8 @@ public sealed record IngestPrice(
     DateOnly? ValidFrom,
     DateOnly? ValidUntil,
     bool? InStock,
-    string? ImageUrl = null);
+    string? ImageUrl = null,
+    string? Category = null);
 
 public sealed record IngestRequest(IReadOnlyList<IngestPrice>? Prices);
 
@@ -203,7 +204,8 @@ public sealed class PriceIngest(AppDbContext db, PriceRecorder recorder, TimePro
                 item.ValidFrom,
                 item.ValidUntil,
                 inStock,
-                image));
+                image,
+                UserNames.Clean(item.Category, StoreListing.MaxCategoryLength)));
         return null;
     }
 

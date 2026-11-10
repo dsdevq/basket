@@ -39,6 +39,52 @@ public sealed class PriceSourceTests
     }
 
     [Fact]
+    public async Task Lidl_opens_a_listed_products_own_page_once_for_its_category_and_keeps_the_offer_price()
+    {
+        var fetcher = new FakeFetcher()
+            .Serve(OffersPage, Fixtures.Read("lidl-offers-page.html"))
+            .Serve(SkewersUrl, Fixtures.Read("lidl-product-page-breadcrumb.html"));
+        var skewers = Listing(SkewersUrl) with { NeedsCategory = true };
+
+        var pull = await Lidl(fetcher, OffersPage).PullAsync([skewers], CancellationToken.None);
+
+        var quote = pull.Listings[skewers.ListingId].Quote!;
+        quote.Price.Should().Be(2.19m);
+        quote.InStock.Should().BeTrue("the offer tile says so, the product page's stock is not the offer's");
+        quote.Category.Should().Be("Food & Drink > Meat & Poultry");
+        fetcher.Requested.Should().Equal(OffersPage, SkewersUrl);
+    }
+
+    [Fact]
+    public async Task Lidl_loses_only_the_category_when_a_listed_products_own_page_is_down()
+    {
+        var fetcher = new FakeFetcher().Serve(OffersPage, Fixtures.Read("lidl-offers-page.html"));
+        var skewers = Listing(SkewersUrl) with { NeedsCategory = true };
+
+        var pull = await Lidl(fetcher, OffersPage).PullAsync([skewers], CancellationToken.None);
+
+        pull.Outcome.Should().Be(PullOutcome.Ok);
+        pull.Listings[skewers.ListingId].Quote!.Price.Should().Be(2.19m);
+        pull.Listings[skewers.ListingId].Quote!.Category.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Lidl_stops_the_pull_when_a_listed_products_own_page_is_refused_for_its_category()
+    {
+        var fetcher = new FakeFetcher()
+            .Serve(OffersPage, Fixtures.Read("lidl-offers-page.html"))
+            .Serve(SkewersUrl, new FetchResult(FetchStatus.Blocked, null, "www.lidl.ie answered HTTP 403"));
+        var skewers = Listing(SkewersUrl) with { NeedsCategory = true };
+        var other = Listing(AubergineUrl) with { NeedsCategory = true };
+
+        var pull = await Lidl(fetcher, OffersPage).PullAsync([skewers, other], CancellationToken.None);
+
+        pull.Outcome.Should().Be(PullOutcome.Blocked);
+        pull.Message.Should().Contain("403");
+        fetcher.Requested.Should().Equal(OffersPage, SkewersUrl);
+    }
+
+    [Fact]
     public async Task Lidl_reads_the_product_page_of_anything_the_offer_pages_do_not_list()
     {
         var fetcher = new FakeFetcher()

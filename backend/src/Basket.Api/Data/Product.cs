@@ -19,6 +19,10 @@ public sealed class Product
 /// <summary>The page of one shop that sells a product: where the nightly job reads its price.</summary>
 public sealed class StoreListing
 {
+    public const int MaxCategoryLength = 200;
+
+    public const string CategorySeparator = " > ";
+
     public Guid Id { get; set; }
 
     public Guid ProductId { get; set; }
@@ -35,6 +39,12 @@ public sealed class StoreListing
     /// carried one. A read without a photo leaves it as it was.
     /// </summary>
     public string? ImageUrl { get; set; }
+
+    /// <summary>
+    /// Where the shop files it, from the breadcrumb of its page, outermost first and joined with <see cref="CategorySeparator"/>
+    /// ("Chilled Food &gt; Milk"). Null until a reader has sent one; a later reading without one keeps it.
+    /// </summary>
+    public string? Category { get; set; }
 
     public DateTimeOffset AddedAt { get; set; }
 

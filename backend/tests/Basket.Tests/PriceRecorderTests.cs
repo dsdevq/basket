@@ -32,6 +32,25 @@ public sealed class PriceRecorderTests : IClassFixture<BasketFactory>
         new(title, price, null, price - 0.2m, "Clubcard", "Clubcard Price", null, null, true);
 
     [Fact]
+    public async Task A_category_is_stored_on_the_listing_and_a_later_reading_without_one_never_clears_it()
+    {
+        var id = await SeedListingAsync();
+
+        await _factory.WithDb(async db =>
+        {
+            var listing = await db.StoreListings.SingleAsync(l => l.Id == id);
+            var recorder = new PriceRecorder(db);
+            await recorder.RecordAsync(listing, Quote(1.80m) with { Category = "Chilled Food > Milk" }, DateTimeOffset.Parse("2026-11-05T20:00:00Z"), CancellationToken.None);
+            await db.SaveChangesAsync();
+            await recorder.RecordAsync(listing, Quote(1.70m), DateTimeOffset.Parse("2026-11-06T20:00:00Z"), CancellationToken.None);
+            await db.SaveChangesAsync();
+            return 0;
+        });
+
+        (await _factory.WithDb(db => db.StoreListings.Where(l => l.Id == id).Select(l => l.Category).SingleAsync())).Should().Be("Chilled Food > Milk");
+    }
+
+    [Fact]
     public async Task A_reading_from_any_source_lands_as_the_days_observation_and_updates_the_listing()
     {
         var id = await SeedListingAsync();

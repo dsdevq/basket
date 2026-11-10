@@ -105,6 +105,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             listing.Property(l => l.Url).HasMaxLength(400).IsRequired();
             listing.Property(l => l.Title).HasMaxLength(300);
             listing.Property(l => l.ImageUrl).HasMaxLength(ImageUrls.MaxLength);
+            listing.Property(l => l.Category).HasMaxLength(StoreListing.MaxCategoryLength);
             listing.Property(l => l.LastError).HasMaxLength(500);
             listing.HasOne<Product>().WithMany().HasForeignKey(l => l.ProductId).OnDelete(DeleteBehavior.Cascade);
             listing.HasIndex(l => new { l.ProductId, l.Store }).IsUnique();

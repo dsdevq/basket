@@ -129,7 +129,7 @@ test('dunnes: pages are 5 seconds apart, the reading has the same shape as the o
   assert.ok(gaps.every((gap) => gap >= 5_000), `gaps ${gaps}`);
   assert.equal(report?.store, 'dunnes');
   assert.equal(report?.read, 3);
-  assert.deepEqual(ok.posts[0]?.[0], { store: 'dunnes', url: dunnes(1).url, title: 'Dunnes Stores Irish Whole Milk 2L', price: 2.2, inStock: true });
+  assert.deepEqual(ok.posts[0]?.[0], { store: 'dunnes', url: dunnes(1).url, title: 'Dunnes Stores Irish Whole Milk 2L', price: 2.2, inStock: true, category: 'Dairy & Eggs > Milk' });
 
   const refused = harness((url) => (url.includes('item-1') ? dunnesPage : challenged));
   const reports = await run([dunnes(1), dunnes(2), dunnes(3), tesco(5555)], refused.deps);
