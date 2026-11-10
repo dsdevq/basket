@@ -11,6 +11,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 {
     public DbSet<ListItem> ListItems => Set<ListItem>();
 
+    public DbSet<Trip> Trips => Set<Trip>();
+
+    public DbSet<TripItem> TripItems => Set<TripItem>();
+
     public DbSet<Invite> Invites => Set<Invite>();
 
     public DbSet<IngestToken> IngestTokens => Set<IngestToken>();
@@ -44,6 +48,23 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             item.HasOne<AppUser>().WithMany().HasForeignKey(i => i.AddedByUserId).OnDelete(DeleteBehavior.Restrict);
             item.HasOne<AppUser>().WithMany().HasForeignKey(i => i.CheckedByUserId).OnDelete(DeleteBehavior.SetNull);
             item.HasIndex(i => new { i.IsChecked, i.AddedAt });
+        });
+
+        builder.Entity<Trip>(trip =>
+        {
+            trip.ToTable("trip");
+            trip.HasKey(t => t.Id);
+            trip.HasIndex(t => t.ClosedAt);
+        });
+
+        builder.Entity<TripItem>(item =>
+        {
+            item.ToTable("trip_item");
+            item.HasKey(i => i.Id);
+            item.Property(i => i.Text).HasMaxLength(ListItem.MaxTextLength).IsRequired();
+            item.HasOne<Trip>().WithMany().HasForeignKey(i => i.TripId).OnDelete(DeleteBehavior.Cascade);
+            item.HasOne<AppUser>().WithMany().HasForeignKey(i => i.CheckedByUserId).OnDelete(DeleteBehavior.SetNull);
+            item.HasIndex(i => i.TripId);
         });
 
         builder.Entity<Invite>(invite =>

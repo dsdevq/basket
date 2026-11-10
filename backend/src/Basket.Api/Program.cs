@@ -135,6 +135,7 @@ api.MapHealthChecks("/health/ready", new() { Predicate = check => check.Tags.Con
 api.MapAuthEndpoints();
 api.MapPasskeyEndpoints();
 api.MapListEndpoints();
+api.MapTripEndpoints();
 api.MapProductEndpoints();
 api.MapPromotionEndpoints();
 api.MapCardEndpoints();

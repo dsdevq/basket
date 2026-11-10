@@ -2,7 +2,8 @@
 
 Where to buy what I buy: grocery app over Lidl, Aldi, Tesco and Dunnes in Dublin.
 
-For the two of us first: **one shared shopping list** on the phone, (M2) **prices** read every night for the products
+For the two of us first: **one shared shopping list** on the phone ("Done shopping" files the ticked items as a trip in
+History, and a past trip can be reloaded onto the list), (M2) **prices** read every night for the products
 we buy, and the four shops' **loyalty cards** as barcodes to show at the till. Matching, a shop plan and Lidl Plus receipts come in later milestones (see [docs/decisions.md](docs/decisions.md)).
 
 ## What is here (M1, M2)
