@@ -37,6 +37,7 @@ async function open(page: Page, route: string, insets: boolean): Promise<void> {
   }
   // The shell is drawn before the session answers; the routed shell replaces it once the first
   // navigation ends, so measure only after that swap.
+  await expect(page.locator('html')).toHaveAttribute('data-bk-mounted', '');
   await expect(page.getByRole('status', {name: 'Loading'})).toHaveCount(0);
   await expect(page.locator('cmn-bottom-tab-bar nav')).toBeVisible();
 }
