@@ -67,6 +67,17 @@ builder.Services.AddHttpClient<ILidlPlusAuth, LidlPlusAuthClient>((services, cli
     client.DefaultRequestHeaders.Accept.ParseAdd("application/json");
 });
 builder.Services.AddScoped<LidlPlusConnectionService>();
+builder.Services.AddHttpClient<ILidlPlusTickets, LidlPlusTicketsClient>((services, client) =>
+{
+    var options = services.GetRequiredService<Microsoft.Extensions.Options.IOptions<LidlPlusOptions>>().Value;
+    client.BaseAddress = new Uri(options.TicketsBase.TrimEnd('/') + "/");
+    client.Timeout = TimeSpan.FromSeconds(30);
+    client.MaxResponseContentBufferSize = 2 * 1024 * 1024;
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("basket/1.0 (a household app reading its own Lidl Plus receipts once a night)");
+    client.DefaultRequestHeaders.Accept.ParseAdd("application/json");
+});
+builder.Services.AddScoped<LidlReceiptImport>();
+builder.Services.AddScoped<LidlReceiptsJob>();
 builder.Services.AddScoped<PriceIngest>();
 builder.Services.AddBasketAuth(builder.Configuration);
 builder.Services.Configure<SecurityOptions>(builder.Configuration.GetSection(SecurityOptions.Section));
@@ -164,6 +175,7 @@ if (builder.Configuration.GetValue("Hangfire:Enabled", true))
 {
     InviteCleanupJob.Schedule(app.Services.GetRequiredService<IRecurringJobManager>());
     PricePullJob.Schedule(app.Services.GetRequiredService<IRecurringJobManager>());
+    LidlReceiptsJob.Schedule(app.Services.GetRequiredService<IRecurringJobManager>());
 }
 
 app.Run();

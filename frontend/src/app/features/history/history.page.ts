@@ -10,6 +10,7 @@ import {
   SkeletonComponent,
 } from '@lifekit-hq/ui';
 
+import {euro} from '../prices/price-format';
 import type {Trip} from './history.model';
 import {HistoryStore} from './history.store';
 
@@ -54,7 +55,9 @@ import {HistoryStore} from './history.store';
           }
           @for (trip of store.trips(); track trip.id) {
             <cmn-list-section
-              [heading]="(trip.closedAt | date: 'EEE d MMM y') + ' · ' + count(trip)"
+              [heading]="
+                (trip.closedAt | date: 'EEE d MMM y') + ' · ' + count(trip) + receipt(trip)
+              "
               card
             >
               @for (item of trip.items; track item.id) {
@@ -102,6 +105,13 @@ export class HistoryPage implements OnInit {
 
   protected count(trip: Trip): string {
     return trip.items.length === 1 ? '1 item' : `${trip.items.length} items`;
+  }
+
+  /** " · Lidl Plus €12.34" for a trip made from a receipt, nothing for one closed on the list. */
+  protected receipt(trip: Trip): string {
+    return trip.source === 'lidl_plus'
+      ? ` · Lidl Plus${trip.total === null ? '' : ' ' + euro(trip.total)}`
+      : '';
   }
 
   protected async reload(trip: Trip): Promise<void> {

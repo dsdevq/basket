@@ -58,8 +58,15 @@ public sealed record PlanStorePrice(
     bool Best);
 
 /// <summary>
+/// A price the household really paid at a shop, from a receipt, with the day it was paid. Not a shelf price: it never takes part in
+/// choosing the best shop, it is the number to set the shelf prices against. A weighed product's is the price of a kilo.
+/// </summary>
+public sealed record PlanPaid(string Store, string StoreName, decimal Price, DateOnly PaidOn);
+
+/// <summary>
 /// One open line of the list. <see cref="BestStore"/> is the cheapest shop by unit price among the fresh, in-stock,
-/// comparable prices; null with a <see cref="Flag"/> saying why when there is none.
+/// comparable prices; null with a <see cref="Flag"/> saying why when there is none. <see cref="LastPaid"/> is the latest receipt
+/// price at each shop the product was bought at, whether or not that shop's page is linked.
 /// </summary>
 public sealed record PlanItem(
     Guid Id,
@@ -69,7 +76,8 @@ public sealed record PlanItem(
     string? PickedStore,
     string? Flag,
     string? BestStore,
-    IReadOnlyList<PlanStorePrice> Stores);
+    IReadOnlyList<PlanStorePrice> Stores,
+    IReadOnlyList<PlanPaid> LastPaid);
 
 /// <summary>A line the reference shop cannot price. <see cref="Reason"/> is the line's flag when no shop prices it, else the shop's own state.</summary>
 public sealed record PlanBlocker(Guid ItemId, string Text, string Reason);
@@ -101,9 +109,10 @@ public static class PlanBuilder
         IReadOnlyDictionary<Guid, Product> products,
         ILookup<Guid, StoreListing> listings,
         IReadOnlyDictionary<Guid, PriceObservation> latest,
-        DateOnly today)
+        DateOnly today,
+        IReadOnlyDictionary<(Guid ProductId, Store Store), PaidPrice>? paid = null)
     {
-        var items = lines.Select(line => Item(line, products, listings, latest, today)).ToList();
+        var items = lines.Select(line => Item(line, products, listings, latest, today, paid)).ToList();
         return new PlanResponse(today, PromotionBuilder.StaleAfterDays, items, Coverage(items));
     }
 
@@ -112,12 +121,13 @@ public static class PlanBuilder
         IReadOnlyDictionary<Guid, Product> products,
         ILookup<Guid, StoreListing> listings,
         IReadOnlyDictionary<Guid, PriceObservation> latest,
-        DateOnly today)
+        DateOnly today,
+        IReadOnlyDictionary<(Guid ProductId, Store Store), PaidPrice>? paid)
     {
         var picked = line.Store?.Slug();
         if (line.ProductId is not { } productId || !products.TryGetValue(productId, out var product))
         {
-            return new PlanItem(line.Id, line.Text, null, null, picked, PlanFlags.Unmatched, null, []);
+            return new PlanItem(line.Id, line.Text, null, null, picked, PlanFlags.Unmatched, null, [], []);
         }
 
         var comparison = PromotionBuilder.Compare(product, listings, latest, today);
@@ -132,7 +142,13 @@ public static class PlanBuilder
             stores = stores.Select(s => s.Store == best ? s with { Best = true } : s).ToList();
         }
 
-        return new PlanItem(line.Id, line.Text, product.Id, product.Name, picked, flag, best, stores);
+        var lastPaid = Stores.All
+            .Select(store => paid is not null && paid.TryGetValue((product.Id, store), out var row)
+                ? new PlanPaid(store.Slug(), store.DisplayName(), row.Price, row.PaidOn)
+                : null)
+            .OfType<PlanPaid>()
+            .ToList();
+        return new PlanItem(line.Id, line.Text, product.Id, product.Name, picked, flag, best, stores, lastPaid);
     }
 
     private static PlanStorePrice? Entry(

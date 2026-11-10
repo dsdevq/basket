@@ -3,14 +3,29 @@ using Basket.Api.Prices;
 namespace Basket.Api.Data;
 
 /// <summary>
-/// A shopping trip that was closed with "Done shopping": the day it was filed and the items that were ticked.
-/// Nothing else is kept (not the shops, not the prices), so the history is exactly what the list showed.
+/// A shopping trip that was closed with "Done shopping": the day it was filed and the items that were ticked, so the history
+/// is exactly what the list showed. A trip can also come from a Lidl Plus receipt (<see cref="Source"/>), filed on the day of the
+/// receipt with the lines the till printed.
 /// </summary>
 public sealed class Trip
 {
     public Guid Id { get; set; }
 
     public DateTimeOffset ClosedAt { get; set; }
+
+    /// <summary>Where the trip came from: null when it was closed on the list, <see cref="TripSources.LidlPlus"/> for a receipt.</summary>
+    public string? Source { get; set; }
+
+    /// <summary>The source's own id for the trip (Lidl's receipt id), so the same receipt is never filed twice. Null for a trip closed on the list.</summary>
+    public string? ExternalId { get; set; }
+
+    /// <summary>What the receipt came to, as printed. Null for a trip closed on the list, which keeps no prices.</summary>
+    public decimal? Total { get; set; }
+}
+
+public static class TripSources
+{
+    public const string LidlPlus = "lidl_plus";
 }
 
 /// <summary>One ticked line of a closed trip, copied off the list when the trip was closed.</summary>

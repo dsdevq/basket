@@ -29,7 +29,10 @@ public sealed record PriceResponse(
     decimal? Best,
     bool InStock);
 
-/// <summary>The last price really paid. <c>not_connected</c> until the owner's one-off Lidl Plus login exists (M4).</summary>
+/// <summary>
+/// The last price really paid, from Lidl Plus receipts. <c>known</c> with the price and day; <c>none</c> when Lidl Plus is connected
+/// but no receipt has this product; <c>not_connected</c> until the owner has pasted the Lidl Plus token.
+/// </summary>
 public sealed record PaidResponse(string State, decimal? Price, DateOnly? PaidOn);
 
 public sealed record ProductStoreResponse(
@@ -71,6 +74,7 @@ public static class ProductEndpoints
         var products = await db.Products.AsNoTracking().OrderBy(p => p.Name).ToListAsync(ct);
         var listings = (await db.StoreListings.AsNoTracking().ToListAsync(ct)).ToLookup(l => l.ProductId);
         var latest = await LatestObservationsAsync(db, ct);
+        var connected = await db.LidlPlusConnections.AnyAsync(ct);
         var paid = (await db.PaidPrices.AsNoTracking().ToListAsync(ct))
             .GroupBy(p => (p.ProductId, p.Store))
             .ToDictionary(g => g.Key, g => g.OrderByDescending(p => p.PaidOn).First());
@@ -87,7 +91,7 @@ public static class ProductEndpoints
                     store.ReadBy(),
                     listing is null ? null : new ListingResponse(listing.Url, listing.Title, listing.LastCheckedAt, listing.LastError, listing.Category, listing.ImageUrl),
                     listing is not null && latest.TryGetValue(listing.Id, out var observation) ? ToPrice(observation, today) : null,
-                    LastPaid(store, paid.GetValueOrDefault((product.Id, store))));
+                    LastPaid(store, paid.GetValueOrDefault((product.Id, store)), connected));
             }).ToList())).ToList();
 
         var runs = await db.PricePullRuns.AsNoTracking()
@@ -146,10 +150,11 @@ public static class ProductEndpoints
         db.Products.Add(product);
         await db.SaveChangesAsync(ct);
 
+        var connected = await db.LidlPlusConnections.AnyAsync(ct);
         var created = new ProductResponse(
             product.Id,
             product.Name,
-            Stores.All.Select(s => new ProductStoreResponse(s.Slug(), s.DisplayName(), s.ReadBy(), null, null, LastPaid(s, null))).ToList());
+            Stores.All.Select(s => new ProductStoreResponse(s.Slug(), s.DisplayName(), s.ReadBy(), null, null, LastPaid(s, null, connected))).ToList());
         return Results.Created($"/api/products/{product.Id}", created);
     }
 
@@ -165,14 +170,18 @@ public static class ProductEndpoints
             return Guid.Parse(http.User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         }
 
-        return await (
+        return await OwnerIdAsync(db, ct);
+    }
+
+    /// <summary>The household owner (the first one, should there ever be more), who anything made without a person is recorded against.</summary>
+    internal static async Task<Guid?> OwnerIdAsync(AppDbContext db, CancellationToken ct) =>
+        await (
             from u in db.Users.AsNoTracking()
             join ur in db.UserRoles on u.Id equals ur.UserId
             join r in db.Roles on ur.RoleId equals r.Id
             where r.Name == Roles.Owner
             orderby u.CreatedAt
             select (Guid?)u.Id).FirstOrDefaultAsync(ct);
-    }
 
     private static async Task<IResult> DeleteProduct(Guid id, AppDbContext db, CancellationToken ct) =>
         await db.Products.Where(p => p.Id == id).ExecuteDeleteAsync(ct) == 0 ? Results.NotFound() : Results.NoContent();
@@ -243,13 +252,13 @@ public static class ProductEndpoints
             .ToListAsync(ct))
         .ToDictionary(o => o.ListingId);
 
-    private static PaidResponse? LastPaid(Store store, PaidPrice? paid) =>
+    private static PaidResponse? LastPaid(Store store, PaidPrice? paid, bool connected) =>
         store != Store.Lidl
             ? null
             : paid is not null
                 ? new PaidResponse("known", paid.Price, paid.PaidOn)
-                // The receipts feed needs the owner's one-off Lidl Plus login, which is built in milestone 4.
-                : new PaidResponse("not_connected", null, null);
+                // Receipts come in through the owner's Lidl Plus connection; without it nothing can be known.
+                : new PaidResponse(connected ? "none" : "not_connected", null, null);
 
     private static PriceResponse ToPrice(PriceObservation o, DateOnly today)
     {

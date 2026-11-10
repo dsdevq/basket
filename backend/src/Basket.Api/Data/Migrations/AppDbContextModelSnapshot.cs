@@ -371,6 +371,10 @@ namespace Basket.Api.Data.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<DateTimeOffset?>("PaidAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("paid_at");
+
                     b.Property<DateOnly>("PaidOn")
                         .HasColumnType("date")
                         .HasColumnName("paid_on");
@@ -392,7 +396,8 @@ namespace Basket.Api.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ProductId", "Store", "PaidOn");
+                    b.HasIndex("ProductId", "Store", "PaidOn")
+                        .IsUnique();
 
                     b.ToTable("paid_price", (string)null);
                 });
@@ -606,9 +611,28 @@ namespace Basket.Api.Data.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("closed_at");
 
+                    b.Property<string>("ExternalId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("external_id");
+
+                    b.Property<string>("Source")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("source");
+
+                    b.Property<decimal?>("Total")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("total");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ClosedAt");
+
+                    b.HasIndex("Source", "ExternalId")
+                        .IsUnique()
+                        .HasFilter("external_id IS NOT NULL");
 
                     b.ToTable("trip", (string)null);
                 });

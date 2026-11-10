@@ -94,6 +94,35 @@ describe('shelf tiles', () => {
     expect(tiles[3]?.entry).toBeNull();
   });
 
+  it('keeps a product a receipt shows was bought at the shop, though no page is linked, and draws what was paid', () => {
+    const butter = product('butter', [
+      {...entry('lidl', null), lastPaid: {state: 'known', price: 2.19, paidOn: '2026-11-03'}},
+    ]);
+    const unbought = product('unbought', [
+      {...entry('lidl', null), lastPaid: {state: 'none', price: null, paidOn: null}},
+    ]);
+
+    const lidl = shelfTiles([butter, unbought], 'lidl');
+    expect(lidl.map(tile => tile.product.id)).toEqual(['butter']);
+    const bought = lidl[0]?.entry;
+    if (!bought) {
+      throw new Error('the Lidl tile has no entry');
+    }
+    expect(cardPrice(bought, 'lidl')).toMatchObject({
+      main: '€2.19',
+      seen: 'Last paid 3 Nov',
+      was: null,
+      promo: null,
+    });
+    expect(shelfTiles([butter], 'aldi')).toEqual([]);
+    const everything = shelfTiles([butter], 'all')[0]?.entry;
+    if (!everything) {
+      throw new Error('the All tile has no entry');
+    }
+    expect(everything.store).toBe('lidl');
+    expect(cardPrice(everything, 'all').seen).toBe('Lidl · last paid 3 Nov');
+  });
+
   it('records the selected shop on a pick, and none on All', () => {
     expect(pickStore('tesco')).toBe('tesco');
     expect(pickStore('all')).toBeNull();

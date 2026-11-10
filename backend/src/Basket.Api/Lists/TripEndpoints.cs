@@ -7,7 +7,8 @@ namespace Basket.Api.Lists;
 
 public sealed record TripItemResponse(Guid Id, string Text, DateTimeOffset? CheckedAt, Person? CheckedBy);
 
-public sealed record TripResponse(Guid Id, DateTimeOffset ClosedAt, IReadOnlyList<TripItemResponse> Items);
+/// <summary><see cref="Source"/> is null for a trip closed on the list and <c>lidl_plus</c> for one made from a receipt, which also has its <see cref="Total"/>.</summary>
+public sealed record TripResponse(Guid Id, DateTimeOffset ClosedAt, string? Source, decimal? Total, IReadOnlyList<TripItemResponse> Items);
 
 /// <summary>Done shopping and the history of closed trips. A trip is a copy of the ticked items, filed on the day it was closed.</summary>
 public static class TripEndpoints
@@ -38,6 +39,8 @@ public static class TripEndpoints
         return trips.Select(trip => new TripResponse(
             trip.Id,
             trip.ClosedAt,
+            trip.Source,
+            trip.Total,
             rows.Where(r => r.TripId == trip.Id).Select(r => r.Item)
                 .OrderBy(i => i.CheckedAt).ThenBy(i => i.Text, StringComparer.Ordinal).ToList())).ToList();
     }
