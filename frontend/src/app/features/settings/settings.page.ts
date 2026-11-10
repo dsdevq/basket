@@ -3,6 +3,7 @@ import {ChangeDetectionStrategy, Component, inject} from '@angular/core';
 import {AppearanceSettingsComponent, PageComponent, SettingsSectionComponent} from '@lifekit-hq/ui';
 
 import {SessionStore} from '../../core/auth/session.store';
+import {LidlPlusSectionComponent} from './lidl-plus.section';
 import {PasskeysSectionComponent} from './passkeys.section';
 import {PriceRelaySectionComponent} from './price-relay.section';
 
@@ -10,6 +11,7 @@ import {PriceRelaySectionComponent} from './price-relay.section';
   selector: 'bk-settings-page',
   imports: [
     AppearanceSettingsComponent,
+    LidlPlusSectionComponent,
     PageComponent,
     PasskeysSectionComponent,
     PriceRelaySectionComponent,
@@ -32,6 +34,13 @@ import {PriceRelaySectionComponent} from './price-relay.section';
           caption="Lets your PC send Tesco and Aldi prices"
         >
           <bk-price-relay-section />
+        </cmn-settings-section>
+
+        <cmn-settings-section
+          heading="Lidl Plus"
+          caption="Lets basket sign in to your Lidl Plus account"
+        >
+          <bk-lidl-plus-section />
         </cmn-settings-section>
       }
     </cmn-page>

@@ -2,6 +2,7 @@ using Basket.Api.Auth;
 using Basket.Api.Cards;
 using Basket.Api.Data;
 using Basket.Api.Infrastructure;
+using Basket.Api.LidlPlus;
 using Basket.Api.Lists;
 using Basket.Api.Plan;
 using Basket.Api.Prices;
@@ -54,6 +55,18 @@ builder.Services.AddScoped<PriceRecorder>();
 builder.Services.AddScoped<PricePullJob>();
 builder.Services.AddScoped<IngestTokenService>();
 builder.Services.AddSingleton<CardNumberProtector>();
+builder.Services.Configure<LidlPlusOptions>(builder.Configuration.GetSection(LidlPlusOptions.Section));
+builder.Services.AddSingleton<LidlPlusTokenProtector>();
+builder.Services.AddHttpClient<ILidlPlusAuth, LidlPlusAuthClient>((services, client) =>
+{
+    var options = services.GetRequiredService<Microsoft.Extensions.Options.IOptions<LidlPlusOptions>>().Value;
+    client.BaseAddress = new Uri(options.AccountsBase.TrimEnd('/') + "/");
+    client.Timeout = TimeSpan.FromSeconds(options.RequestTimeoutSeconds);
+    client.MaxResponseContentBufferSize = 64 * 1024;
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("basket/1.0 (a household app keeping its own Lidl Plus sign-in alive)");
+    client.DefaultRequestHeaders.Accept.ParseAdd("application/json");
+});
+builder.Services.AddScoped<LidlPlusConnectionService>();
 builder.Services.AddScoped<PriceIngest>();
 builder.Services.AddBasketAuth(builder.Configuration);
 builder.Services.Configure<SecurityOptions>(builder.Configuration.GetSection(SecurityOptions.Section));
@@ -141,6 +154,7 @@ api.MapProductEndpoints();
 api.MapPromotionEndpoints();
 api.MapPlanEndpoints();
 api.MapCardEndpoints();
+api.MapLidlPlusEndpoints();
 api.MapIngestEndpoints();
 api.MapFallback(() => Results.NotFound()).AllowAnonymous();
 

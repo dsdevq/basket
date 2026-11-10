@@ -880,3 +880,59 @@ changes land here; the library halves are fixed in lifekit-common, not worked ar
 - **Sheet bodies are padded `px-cmn-6 pt-cmn-4 pb-cmn-6` (#88).** All seven `*.sheet.ts` bodies carry the padding themselves so
   the body lines up with the title and clears the header rule. This is a **stopgap until the library drawer pads its body**; when
   it does, drop the class string from the seven sheets so the padding is not doubled.
+
+## Lidl Plus connection: paste a token once (2026-11-10, issue #15, epic #26)
+
+Owner's words (Q5): the Lidl refresh token "lives encrypted in basket's database, seeded by one paste in Settings, not in SOPS".
+This is that connection: the token is pasted, checked with Lidl, kept encrypted, and Settings says whether it still works. What is
+read through it is not here: receipts import (#45) and the Lidl Plus offers (#14) are their own tasks and will call
+`LidlPlusConnectionService.AccessAsync`.
+
+- **One connection for the household, owner only.** `lidl_plus_connection` is a single-row table: the primary key is a fixed id, so
+  a second row cannot exist, and a paste is `INSERT ... ON CONFLICT (id) DO UPDATE` (one statement, so two pastes at once do not
+  collide). The routes are on the owner policy, like the price tokens: a member gets 403, a signed-out caller 401, and the fleet
+  identity is not accepted. `GET /api/lidl-plus/connection` says where it stands; `PUT` pastes a token (201 the first time, 200
+  after); `POST .../check` asks Lidl again with the saved token; `DELETE` removes it (204, or 404 when there is none). Every answer
+  is `Cache-Control: no-store`.
+- **The token is checked with Lidl before it is kept.** `PUT` exchanges it at Lidl's `/connect/token` (OAuth2 refresh grant, the
+  Lidl Plus Android app's public client id and secret in a Basic header, the token in the form body). Lidl accepts it: stored,
+  `201`/`200`. Lidl refuses it (400/401/403): `422 token_rejected`, nothing stored, and an existing connection is left as it was, so
+  a mistyped paste cannot break a working one. Lidl cannot be reached, or answers something unreadable (5xx, 429, not JSON, no
+  `access_token`): `502 lidl_unavailable`, nothing stored. A value that cannot be a token (empty, under 16 or over 1024 characters,
+  spaces or non-ASCII inside) is `400 token_invalid` without asking Lidl. Quotes and spaces round a paste are dropped. The messages
+  never repeat what was pasted.
+- **Encrypted at rest with Data Protection, as Q5 and the loyalty cards chose.** `refresh_token_protected` holds
+  `Protect`ed text (purpose `basket.lidl-plus.refresh-token.v1`, the app's key ring on the `/keys` volume); a test reads the column
+  raw and asserts the token is not in it. Same consequences as the cards, stated so they are not a surprise: whoever can read the
+  key volume and the database can read the token, and if the key ring is lost the token is unreadable. basket then reports
+  `unreadable` and asks for a new paste (it does not show garbage or ask Lidl with it).
+- **Never logged, never returned.** No response carries the token, whole or in part. It travels in a request body, never a path or
+  query. `LidlPlusAuthClient` logs nothing and reduces every failure (including the exception text of a failed request, which could
+  hold the form body) to an outcome; `LidlAuthResult` and `LidlAccess` print only their outcome. A test pastes a unique token through
+  every route including the refusals, registers a log sink, and asserts neither the token, the replacement token Lidl hands out nor
+  the protected text appears in any rendered log event. The HTTP client factory logs the address only, and EF's command log is at
+  Warning, so parameters are not logged.
+- **Lidl rotates the refresh token, so the replacement is saved first.** When Lidl's answer carries a new `refresh_token` it replaces
+  the stored one in the same call, before the access token is handed to anyone: losing it would end the connection. An answer
+  without one means Lidl kept the old token. The exchange is behind a process-wide lock (basket runs as one instance), so two
+  exchanges of the same token cannot race and have Lidl refuse the second.
+- **The states.** `not_connected`, `connected`, `needs_new_token` (Lidl refused the saved token the last time it was used: the
+  row keeps a `problem` of `token_rejected`, Lidl is not asked again, and a new paste clears it) and `unreadable`. An unreachable
+  Lidl changes nothing: a check answers `502`, and the connection stays `connected`, because a network error says nothing about
+  the token.
+- **Settings shows it, owner only.** A "Lidl Plus" section after "Price reader": the state (with the day Lidl last accepted the
+  token), **Connect Lidl Plus** / **Paste a new token** (a sheet with a masked field and the server's reason when a paste is
+  refused), **Check now** (only while connected) and **Disconnect** (with a confirmation). The token is never shown again after the
+  paste. The what's-new note and the Settings screen mock are updated; the Linux screen baselines for Settings are rendered by the
+  "Update screen baselines" workflow on CI (`update-baselines` label), not from a local run.
+- **Tests use fake responses only.** `FakeLidlPlusAuth` stands in for Lidl at the `ILidlPlusAuth` seam in the integration tests;
+  `LidlPlusAuthClientTests` feeds recorded answers (accepted, rotated, refused, 5xx, malformed, network error, timeout) to the real
+  client through a stub handler and checks the request it sends. No test, and no build step, calls Lidl.
+- **Not verified live.** The token endpoint, the client credentials and the grant shape follow the community `lidl-plus` client for
+  the Lidl Plus app, not an official Lidl document, and nothing here has been run against Lidl. The first real paste is the
+  check: `lidl_unavailable` or `token_rejected` on a token the app still accepts would mean one of those is different for Ireland
+  (`LidlPlus:AccountsBase`, `ClientId` and `ClientSecret` are options for that reason). Where the owner gets a refresh token is the
+  `lidl-plus` tool's sign-in; basket does not drive Lidl's login page (a person signs in, once).
+- **One migration, additive: `20261110134121_LidlPlusConnection`.** It creates `lidl_plus_connection` and nothing else; it touches no
+  existing table. It sorts after `TripItemProduct`, the latest on main when this was generated. Other ships' migrations must order
+  after whichever merges first.

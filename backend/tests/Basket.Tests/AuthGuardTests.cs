@@ -36,6 +36,10 @@ public sealed class AuthGuardTests : IClassFixture<BasketFactory>
     [InlineData("GET", "/api/ingest-tokens")]
     [InlineData("POST", "/api/ingest-tokens")]
     [InlineData("DELETE", "/api/ingest-tokens/00000000-0000-0000-0000-000000000001")]
+    [InlineData("GET", "/api/lidl-plus/connection")]
+    [InlineData("PUT", "/api/lidl-plus/connection")]
+    [InlineData("POST", "/api/lidl-plus/connection/check")]
+    [InlineData("DELETE", "/api/lidl-plus/connection")]
     [InlineData("POST", "/api/ingest/prices")]
     [InlineData("POST", "/api/auth/sign-out")]
     [InlineData("GET", "/api/passkeys")]
@@ -76,6 +80,9 @@ public sealed class AuthGuardTests : IClassFixture<BasketFactory>
         (await member.GetAsync("/api/members")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
         (await member.GetAsync("/api/ingest-tokens")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
         (await member.PostAsJsonAsync("/api/ingest-tokens", new { label = "x" })).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await member.GetAsync("/api/lidl-plus/connection")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await member.PutAsJsonAsync("/api/lidl-plus/connection", new { refreshToken = "x" })).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await member.DeleteAsync("/api/lidl-plus/connection")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
         (await owner.GetAsync("/api/members")).StatusCode.Should().Be(HttpStatusCode.OK);
     }
 

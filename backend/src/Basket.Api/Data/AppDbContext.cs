@@ -31,6 +31,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
     public DbSet<LoyaltyCard> LoyaltyCards => Set<LoyaltyCard>();
 
+    public DbSet<LidlPlusConnection> LidlPlusConnections => Set<LidlPlusConnection>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
@@ -162,6 +164,15 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             card.Property(c => c.Format).HasConversion<string>().HasMaxLength(16);
             card.Property(c => c.NumberProtected).HasMaxLength(LoyaltyCard.MaxProtectedLength).IsRequired();
             card.HasIndex(c => c.Store).IsUnique();
+        });
+
+        builder.Entity<LidlPlusConnection>(connection =>
+        {
+            connection.ToTable("lidl_plus_connection");
+            connection.HasKey(c => c.Id);
+            connection.Property(c => c.Id).ValueGeneratedNever();
+            connection.Property(c => c.RefreshTokenProtected).HasMaxLength(LidlPlusConnection.MaxProtectedLength).IsRequired();
+            connection.Property(c => c.Problem).HasMaxLength(32);
         });
 
         builder.Entity<AppUser>().ToTable("users");

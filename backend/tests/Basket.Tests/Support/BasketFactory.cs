@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Basket.Api.Auth;
 using Basket.Api.Data;
+using Basket.Api.LidlPlus;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -38,6 +39,9 @@ public sealed class BasketFactory : WebApplicationFactory<Program>
 
     /// <summary>Runs on its own connection just before a new loyalty card is written, so a test can cause the moment the insert meets.</summary>
     public Func<Task>? BeforeCardInsert { get; set; }
+
+    /// <summary>Lidl's sign-in service, as a test sets it up: what it answers and which tokens it was asked about.</summary>
+    public FakeLidlPlusAuth Lidl { get; } = new();
 
     public int AuthRequestsPerMinute { get; init; } = 1000;
 
@@ -94,6 +98,8 @@ public sealed class BasketFactory : WebApplicationFactory<Program>
         {
             services.AddSingleton<Serilog.Core.ILogEventSink>(Logs);
             services.ConfigureDbContext<AppDbContext>(options => options.AddInterceptors(new CardInsertHook(this)));
+            services.RemoveAll<ILidlPlusAuth>();
+            services.AddSingleton<ILidlPlusAuth>(Lidl);
             services.RemoveAll<TimeProvider>();
             services.AddSingleton<TimeProvider>(Clock);
             if (FleetAgentEnabled)

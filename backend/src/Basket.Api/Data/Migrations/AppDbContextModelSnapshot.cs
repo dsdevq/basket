@@ -238,6 +238,36 @@ namespace Basket.Api.Data.Migrations
                     b.ToTable("invite", (string)null);
                 });
 
+            modelBuilder.Entity("Basket.Api.Data.LidlPlusConnection", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("ConnectedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("connected_at");
+
+                    b.Property<string>("Problem")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("problem");
+
+                    b.Property<string>("RefreshTokenProtected")
+                        .IsRequired()
+                        .HasMaxLength(4096)
+                        .HasColumnType("character varying(4096)")
+                        .HasColumnName("refresh_token_protected");
+
+                    b.Property<DateTimeOffset>("VerifiedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("verified_at");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("lidl_plus_connection", (string)null);
+                });
+
             modelBuilder.Entity("Basket.Api.Data.ListItem", b =>
                 {
                     b.Property<Guid>("Id")
