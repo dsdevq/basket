@@ -150,7 +150,7 @@ export const ROUTES: readonly Route[] = [
     setup: signedIn,
     reveal: async page => {
       await page.getByRole('button', {name: 'Show at till'}).click();
-      await page.locator('cmn-dialog-container canvas[role=img]').waitFor();
+      await page.locator('[role=dialog] canvas[role=img]').waitFor();
     },
   },
   {name: 'people', path: '/people', setup: signedIn},

@@ -469,13 +469,15 @@ number under it).
   for a shop with no card, the add sheet. `/cards/:store` shows the card: the code and the number in groups of four as a preview,
   then "Show at till", "Change number or code" and "Remove card" (with a confirmation). Both are on `cmn-page` (`list` and
   `detail` kinds) with lifekit-common components only; no token, template or colour was added, and the drift check passes.
-- **"Show at till" is full-screen.** The owner asked for the code as a full-screen barcode, so the button opens the code in
-  `CmnDialogService` with `size: 'full'` and `phone: 'full-screen'`: on a phone (below `md`) it covers the whole viewport with
-  the code on a white ground, the number under it and a close button in the header; from `md` up it is the library's near-full
-  dialog (95% of the viewport) over the page. The dialog gives the keyboard path (focus moves in, Escape closes, focus returns to
-  the button) and the screen-reader path (`role="dialog"` named "<shop> card at the till"); the code's canvas stays `role="img"`
-  labelled "<shop> card <format>", which never reads the number out. It does not raise the brightness or hold the screen awake
-  (not asked for).
+- **"Show at till" is full-screen, at every width.** The owner asked for the code as a full-screen barcode, so the button opens
+  it in `CmnDialogService` with `CmnDialogBareContainerComponent` and a pane stretched to the whole viewport (`panelClass`), on a
+  phone and on a desktop alike: the library's own `size: 'full'` is a 95% dialog from `md` up, which is not a takeover. The bare
+  container keeps the dialog behaviour (`role="dialog"` named "<shop> card at the till", focus moved in and trapped, Escape closes,
+  focus returns to the button); the till component draws its own header (the shop's name and a close button, the first tabbable
+  element) because the bare container has none. The code is fitted to the smaller of the width and the height left, white on its
+  own ground, with the number under it, so the number and the close button are visible without scrolling at 1280x720 and on a
+  short phone (375x667). The code's canvas stays `role="img"` labelled "<shop> card <format>", which never reads the number
+  out. It does not raise the brightness or hold the screen awake (not asked for).
 - **Gates.** `cards`, `card` and `card-till` (the card page with the till dialog open, brought up by `reveal` in
   `e2e/support/screens.ts`) are covered by the screen check, the route scan and the 390 / 1280 baselines. The Linux baselines
   for the new screens, and for More and every other screen that now has a Cards tab, are rendered by the "Update screen

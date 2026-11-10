@@ -1,7 +1,12 @@
 import {HttpErrorResponse} from '@angular/common/http';
 import {TestBed} from '@angular/core/testing';
 import {Router} from '@angular/router';
-import {CmnDialogService, CmnDrawerService, ToastService} from '@lifekit-hq/ui';
+import {
+  CmnDialogBareContainerComponent,
+  CmnDialogService,
+  CmnDrawerService,
+  ToastService,
+} from '@lifekit-hq/ui';
 import {of} from 'rxjs';
 
 import {BarcodeRenderer} from './barcode.component';
@@ -79,10 +84,10 @@ describe('CardPage', () => {
     expect(component).toBe(TillDialogComponent);
     expect(config).toMatchObject({
       data: {card: TESCO},
-      title: 'Tesco card',
-      size: 'full',
-      phone: 'full-screen',
+      ariaLabel: 'Tesco card at the till',
+      container: CmnDialogBareContainerComponent,
     });
+    expect(config.panelClass).toContain('cmn-dialog-panel--full');
     expect(config.ariaLabel).not.toContain(TESCO.number);
   });
 

@@ -11,6 +11,7 @@ import {Router} from '@angular/router';
 import {
   AlertComponent,
   ButtonComponent,
+  CmnDialogBareContainerComponent,
   CmnDialogService,
   CmnDrawerService,
   EmptyStateComponent,
@@ -180,10 +181,16 @@ export class CardPage implements OnInit {
     }
     this.dialog.open(TillDialogComponent, {
       data: {card: {...card, number: card.number}},
-      title: `${card.name} card`,
       ariaLabel: `${card.name} card at the till`,
-      size: 'full',
-      phone: 'full-screen',
+      container: CmnDialogBareContainerComponent,
+      // The bare container sizes to its content, so the pane stretches it to the whole viewport.
+      panelClass: [
+        'cmn-dialog-panel',
+        'cmn-dialog-panel--full',
+        'h-full',
+        '[&>*]:h-full',
+        '[&>*]:w-full',
+      ],
     });
   }
 

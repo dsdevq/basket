@@ -1,4 +1,5 @@
 import {TestBed} from '@angular/core/testing';
+import {DialogRef} from '@angular/cdk/dialog';
 import {CMN_DIALOG_DATA} from '@lifekit-hq/ui';
 
 import {BarcodeRenderer} from './barcode.component';
@@ -6,12 +7,14 @@ import type {Card} from './cards.model';
 import {TillDialogComponent} from './till.dialog';
 
 const draw = vi.fn();
+const close = vi.fn();
 
 function render(card: Card & {number: string}) {
   TestBed.configureTestingModule({
     providers: [
       {provide: BarcodeRenderer, useValue: {draw}},
       {provide: CMN_DIALOG_DATA, useValue: {card}},
+      {provide: DialogRef, useValue: {close}},
     ],
   });
   const fixture = TestBed.createComponent(TillDialogComponent);
@@ -29,6 +32,7 @@ const TESCO = {
 
 describe('TillDialogComponent', () => {
   beforeEach(() => {
+    close.mockReset();
     draw.mockReset();
     draw.mockResolvedValue(undefined);
   });
@@ -53,6 +57,16 @@ describe('TillDialogComponent', () => {
     const canvas = host.querySelector('canvas');
     expect(canvas?.getAttribute('role')).toBe('img');
     expect(canvas?.getAttribute('aria-label')).toBe('Tesco card Code 128');
+  });
+
+  it('closes the dialog from a close button', () => {
+    const {host} = render(TESCO);
+
+    const button = host.querySelector('cmn-button button') as HTMLButtonElement;
+    expect(button.getAttribute('aria-label')).toBe('Close');
+    button.click();
+
+    expect(close).toHaveBeenCalledOnce();
   });
 
   it('shows a QR text as typed', () => {
