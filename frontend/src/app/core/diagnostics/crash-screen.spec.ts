@@ -3,6 +3,7 @@ import {ChangeDetectionStrategy, Component, ErrorHandler, inject, signal} from '
 import {TestBed} from '@angular/core/testing';
 import {provideRouter, Router, type Routes} from '@angular/router';
 import {AppUpdateService} from '@lifekit-hq/core/pwa';
+import {provideWhatsNew} from '@lifekit-hq/ui';
 
 import {AppComponent} from '../../app.component';
 import {SessionStore} from '../auth/session.store';
@@ -96,6 +97,7 @@ describe('crash screen', () => {
 
     /** What the shell, which `AppComponent` draws until the first navigation ends, injects. */
     const shellProviders = [
+      provideWhatsNew({version: '1.0.0', load: () => new Promise(() => undefined)}),
       {provide: AppUpdateService, useValue: {updateReady: signal(false), reload: vi.fn()}},
       {provide: SessionStore, useValue: {isOwner: signal(false), user: signal(null)}},
     ];
