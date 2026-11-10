@@ -282,6 +282,53 @@ namespace Basket.Api.Data.Migrations
                     b.ToTable("list_item", (string)null);
                 });
 
+            modelBuilder.Entity("Basket.Api.Data.LoyaltyCard", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("AddedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("added_at");
+
+                    b.Property<Guid>("AddedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("added_by_user_id");
+
+                    b.Property<string>("Format")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("format");
+
+                    b.Property<string>("NumberProtected")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)")
+                        .HasColumnName("number_protected");
+
+                    b.Property<string>("Store")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("store");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AddedByUserId");
+
+                    b.HasIndex("Store")
+                        .IsUnique();
+
+                    b.ToTable("loyalty_card", (string)null);
+                });
+
             modelBuilder.Entity("Basket.Api.Data.PaidPrice", b =>
                 {
                     b.Property<Guid>("Id")
@@ -680,6 +727,15 @@ namespace Basket.Api.Data.Migrations
                         .WithMany()
                         .HasForeignKey("CheckedByUserId")
                         .OnDelete(DeleteBehavior.SetNull);
+                });
+
+            modelBuilder.Entity("Basket.Api.Data.LoyaltyCard", b =>
+                {
+                    b.HasOne("Basket.Api.Data.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("AddedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Basket.Api.Data.PaidPrice", b =>

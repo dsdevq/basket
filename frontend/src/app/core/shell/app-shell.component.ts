@@ -24,9 +24,10 @@ import {SessionStore} from '../auth/session.store';
 const LIST: NavItem = {label: 'List', icon: 'ShoppingBasket', route: '/list'};
 const PRICES: NavItem = {label: 'Prices', icon: 'Tag', route: '/prices'};
 const PROMOTIONS: NavItem = {label: 'Promotions', icon: 'BadgePercent', route: '/promotions'};
+const CARDS: NavItem = {label: 'Cards', icon: 'WalletCards', route: '/cards'};
 const PEOPLE: NavItem = {label: 'People', icon: 'Users', route: '/people'};
 
-/** The signed-in frame: the lifekit app layout with List, Prices and Promotions as the tabs and People/Settings behind More. */
+/** The signed-in frame: the lifekit app layout with List, Prices, Promotions and Cards as the tabs and People/Settings behind More. */
 @Component({
   selector: 'bk-app-shell',
   imports: [AppLayoutComponent, RouterOutlet],
@@ -60,9 +61,11 @@ export class AppShellComponent {
 
   protected readonly update = inject(AppUpdateService);
 
-  protected readonly tabRoutes = [LIST.route, PRICES.route, PROMOTIONS.route];
+  protected readonly tabRoutes = [LIST.route, PRICES.route, PROMOTIONS.route, CARDS.route];
   protected readonly navItems = computed<NavItem[]>(() =>
-    this.session.isOwner() ? [LIST, PRICES, PROMOTIONS, PEOPLE] : [LIST, PRICES, PROMOTIONS]
+    this.session.isOwner()
+      ? [LIST, PRICES, PROMOTIONS, CARDS, PEOPLE]
+      : [LIST, PRICES, PROMOTIONS, CARDS]
   );
   protected readonly account = computed<AppLayoutAccount | undefined>(() => {
     const user = this.session.user();

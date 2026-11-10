@@ -24,6 +24,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
     public DbSet<PaidPrice> PaidPrices => Set<PaidPrice>();
 
+    public DbSet<LoyaltyCard> LoyaltyCards => Set<LoyaltyCard>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
@@ -116,6 +118,17 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             paid.Property(p => p.Price).HasPrecision(10, 2);
             paid.HasOne<Product>().WithMany().HasForeignKey(p => p.ProductId).OnDelete(DeleteBehavior.Cascade);
             paid.HasIndex(p => new { p.ProductId, p.Store, p.PaidOn });
+        });
+
+        builder.Entity<LoyaltyCard>(card =>
+        {
+            card.ToTable("loyalty_card");
+            card.HasKey(c => c.Id);
+            card.Property(c => c.Store).HasConversion<string>().HasMaxLength(16);
+            card.Property(c => c.Format).HasConversion<string>().HasMaxLength(16);
+            card.Property(c => c.NumberProtected).HasMaxLength(LoyaltyCard.MaxProtectedLength).IsRequired();
+            card.HasOne<AppUser>().WithMany().HasForeignKey(c => c.AddedByUserId).OnDelete(DeleteBehavior.Restrict);
+            card.HasIndex(c => c.Store).IsUnique();
         });
 
         builder.Entity<AppUser>().ToTable("users");
