@@ -33,13 +33,14 @@ export class MorePage {
   private readonly router = inject(Router);
   private readonly whatsNew = inject(CmnWhatsNewService);
 
-  protected readonly tabRoutes = ['/list', '/prices'];
+  protected readonly tabRoutes = ['/list', '/prices', '/promotions'];
   protected readonly items = computed<NavItem[]>(() => {
     const list: NavItem = {label: 'List', icon: 'ShoppingBasket', route: '/list'};
     const prices: NavItem = {label: 'Prices', icon: 'Tag', route: '/prices'};
+    const promotions: NavItem = {label: 'Promotions', icon: 'BadgePercent', route: '/promotions'};
     return this.session.isOwner()
-      ? [list, prices, {label: 'People', icon: 'Users', route: '/people'}]
-      : [list, prices];
+      ? [list, prices, promotions, {label: 'People', icon: 'Users', route: '/people'}]
+      : [list, prices, promotions];
   });
   protected readonly account = computed<AppLayoutAccount | undefined>(() => {
     const user = this.session.user();

@@ -454,3 +454,79 @@ Owner's goal: ticking and removing a list item should be one gesture on a phone 
 - **Delete skips the sheet.** The sheet's Delete button was already the confirmation; a swipe reveals a labelled Delete that must
   be pressed, so it is the same two deliberate steps. The store still rolls the row back if the server refuses.
 - No server change, no migration.
+
+## Promotions: ranked by unit price (2026-11-10, issue #48)
+
+Owner's words: "I am as a customer should understand what needs to be bought. I want to know where certain position is better. I want
+to know what promotions are in the store and which promotion is better." Epic #24. A **Promotions** tab lists the current promos of
+every tracked product and ranks the shops by the price of one kilo, one litre or one piece, so "2 for €4", "20% off" and the Lidl Plus
+price can be set side by side.
+
+- **Borrowed pattern: the unit-price shelf label** (the "€4.92/kg" printed under the price in a shop, and the per-unit column of
+  price-comparison apps). Nothing is invented: the label's number is the ranking key. The screen is the existing list template
+  (`cmn-page` kind `list`, `cmn-list-section` cards, `cmn-list-item-row`), a `cmn-segmented` control (HIG Segmented controls) for the
+  two groupings, and a `cmn-tag` for the place. It is a third tab (List, Prices, Promotions), also in the More page's list.
+- **A view over what is already collected; no migration, no new collection.** `GET /api/promotions` (signed-in people only; a
+  fleet token is refused like on every route not named as a machine route) reads the latest `price_observation` of every linked
+  listing: price, was-price, loyalty price and scheme, promo text, valid dates, in-stock. It needs no list-item product link and
+  adds no column. The calculation is pure (`PromotionBuilder`, `OfferCalculator`, `PackSizes`, `PromoText` under
+  `Basket.Api/Prices/Promotions`) and tested without a database.
+
+### The rule (also printed on the page)
+
+1. **One price per pack.** The reading's candidate prices are the shelf price, the card price (when it is lower) and a multi-buy; the
+   deal is the one with the lowest price per pack for a customer who meets its terms. "Each" below means per pack.
+   - **Multi-buy.** `N for €X` is `X / N` each ("Mix 'n' Match 2 for €4" is €2.00). `N for M` with no € sign and M below N means pay
+     for M of N ("3 for 2" is `2 x price / 3` each); a whole number above N with no € sign is euros ("2 for 3" is €3 for two);
+     `2 for 2` says nothing and is ignored. "Buy 1 get 1 free", "buy two get one free" and "BOGOF" are pay-for-M offers. A multi-buy
+     dearer than the single price is not the deal (the unit price assumes you buy the whole set, and the row says how many).
+   - **Percentage.** The shown price is the price: a was-price above it makes a price cut, and the saving is `(was - price) / was`.
+     A "20% off" in the text with no was-price is shown as the deal's name but **never subtracted again** (the shop's price may
+     already include it), and its saving is unknown, not guessed.
+   - **Loyalty price.** A card price below the shelf price is a deal that **needs the card** (Q7: loyalty prices count); the row says
+     "needs Lidl Plus". It ranks like any other price, flagged, because the owner counts card prices. A card price with no shelf
+     price is still a card price; there is then no saving to show.
+   - **Card and multi-buy together.** The promo text sits in the card's block on Lidl's tiles and Clubcard offers, so when a reading
+     has a card price and a scheme, a multi-buy in its text is the card's (it needs the card and counts the card price for "3 for 2").
+     With no card price it is for everyone. This is a reading of the shops' pages, not a guarantee; the row always names the card.
+   - **Saving** compares with the was-price when the shop gives one, else the shelf price; it is shown only when positive.
+2. **Divide by the pack size.** Pack size is read from the shop's own name for the product (`store_listing.title`), then from the
+   household's product name ("Whole milk 2L"): `500g`, `1.5kg`, `75cl`, `1,5L`, `6 x 330ml` (a multipack counts every part), `pack of
+   6`, `9 pack`, `each`. Weights become kilograms, volumes litres, counts pieces, and the unit price is `pack price / size`, rounded
+   to the cent away from zero. A size taken from the product name rather than the shop's title is marked, since the shop may sell a
+   different pack. **No size found: no unit price and no rank** (flag "no pack size"), never a guessed one; the pack price is shown.
+   **An ambiguous text gives no size either**: a weight or volume beside a separate pack count ("Heinz Beans 415g x 4",
+   "Coca-Cola 330ml 6 pack") could be one pack or several, so it reads as no size, and the search stops there: the product name
+   is not consulted in its place.
+3. **Rank within one product across the shops, cheapest first.** A kilo of mince is not a litre of milk, so the ranking key is the unit
+   price of the *same* product in each shop, and equal unit prices share a place. A product is listed when at least one shop has a
+   promo on it, and its ordinary shelf prices elsewhere are ranked beside the promos, so "Aldi's plain price beats Lidl's 2 for 3"
+   is visible. The "By store" grouping lists each shop's promos (not shelf prices) with the same place, e.g. "#2 of 3".
+4. **What is shown but not ranked** (each with its reason on the row, never dropped silently):
+   - a reading **older than 3 days** (`PromotionBuilder.StaleAfterDays`; the nightly Lidl job and the PC reader should beat that, and
+     an offer's price can move) with its "Seen" date;
+   - an **out-of-stock** reading;
+   - a pack with **no size**;
+   - **mixed units**: when a product's shops measure it differently (kg here, pieces there) the unit most shops share is ranked and
+     the others are flagged "sold by a different unit". They are not converted: that would need a weight per piece, which is a guess.
+5. **A shop with nothing usable today is named with the reason**, not skipped and not filled in: no reading yet, no price listed,
+   the offer starts on a date, the offer ended on a date. An offer is *current* by the same rule the Prices page uses
+   (`PriceStates`, shared): not before `valid_from`, not after `valid_until`, with a price.
+
+### Edge cases and calls
+
+- **Size changes (shrinkflation).** Basket stores no pack size and keeps no title history, so a changed pack shows from the next
+  reading, when the listing's title changes; the unit price then moves with it. The view does not compare a product with its own
+  past size. Remembering sizes per observation would be a column and a migration, left for the owner's go if wanted.
+- **Prices carry dates.** Every row shows when it was seen and when the offer ends. Nothing is carried forward past an ended offer
+  or filled in for a shop that was not read.
+- **Unit prices are to the cent**, which is also what ranks, so two offers that print the same figure share a place.
+- **Pieces need the household to say so.** Only "pack of N", "N pack/pk/pcs/pieces/count" and "each" count as a piece size; a bare
+  "10 Chicken Breast Skewers" has no size (Lidl's own tiles carry none), so it is listed unranked until the product name carries one.
+- **What this cannot see yet.** Shop-printed unit prices ("€2.50/kg") are not collected, so the app's own division is the number;
+  Dunnes and Tesco promos depend on what the PC reader can post (see the Tesco and Dunnes sections) and show as "No price read yet"
+  until then.
+- **Not part of this change** (out of scope in the issue): the plan API, basket totals and the shelf screen.
+- **Screens.** The new Promotions page and the extra tab change every signed-in screen's Linux baseline; they are re-rendered by the
+  "Update screen baselines" workflow on CI, not committed from a local run. The route scan, drift check and screen composition check
+  pass locally on the new page at 390 and 1280 px, light and dark.

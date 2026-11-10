@@ -5,6 +5,7 @@ using Basket.Api.Lists;
 using Basket.Api.Prices;
 using Basket.Api.Prices.Ingest;
 using Basket.Api.Prices.Fetching;
+using Basket.Api.Prices.Promotions;
 using Basket.Api.Prices.Sources;
 using Hangfire;
 using Hangfire.PostgreSql;
@@ -130,6 +131,7 @@ api.MapAuthEndpoints();
 api.MapPasskeyEndpoints();
 api.MapListEndpoints();
 api.MapProductEndpoints();
+api.MapPromotionEndpoints();
 api.MapIngestEndpoints();
 api.MapFallback(() => Results.NotFound()).AllowAnonymous();
 

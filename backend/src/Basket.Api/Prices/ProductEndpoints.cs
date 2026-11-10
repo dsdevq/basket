@@ -243,11 +243,8 @@ public static class ProductEndpoints
 
     private static PriceResponse ToPrice(PriceObservation o, DateOnly today)
     {
-        var state = o.ValidFrom is { } from && from > today ? "upcoming"
-            : o.ValidUntil is { } until && until < today ? "ended"
-            : o.Price is null && o.LoyaltyPrice is null ? "unavailable"
-            : "current";
-        decimal? best = state == "current"
+        var state = PriceStates.Of(o, today);
+        decimal? best = state == PriceStates.Current
             ? new[] { o.Price, o.LoyaltyPrice }.Where(p => p is not null).Min()
             : null;
         return new PriceResponse(o.ObservedOn, state, o.Price, o.WasPrice, o.LoyaltyPrice, o.LoyaltyScheme, o.PromoText, o.ValidFrom, o.ValidUntil, best);
