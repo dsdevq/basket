@@ -382,6 +382,138 @@ public sealed class PlanTests : IClassFixture<BasketFactory>
         coverage.Blockers.Should().ContainSingle().Which.Should().Be(new PlanBlocker(line.Id, "candles", PlanFlags.Unmatched));
     }
 
+    // ---- the two-shop split -------------------------------------------------------------------------------------
+
+    [Fact]
+    public void When_no_one_shop_covers_the_list_the_cheapest_pair_of_shops_that_does_is_proposed_with_dated_prices()
+    {
+        var shelf = new Shelf();
+        var milk = shelf.Product("Milk 1L");
+        var eggs = shelf.Product("Eggs 12 pack");
+        var butter = shelf.Product("Butter 250g");
+        foreach (var product in new[] { milk, eggs, butter })
+        {
+            shelf.Line(product);
+        }
+
+        shelf.Read(milk, Store.Lidl, o => o.Price = 1.20m);
+        shelf.Read(milk, Store.Tesco, o => { o.Price = 1.30m; o.LoyaltyPrice = 1.00m; o.LoyaltyScheme = "Clubcard"; }, Today.AddDays(-1));
+        shelf.Read(eggs, Store.Aldi, o => o.Price = 3.00m, Today.AddDays(-2));
+        shelf.Read(eggs, Store.Dunnes, o => o.Price = 3.40m);
+        shelf.Read(butter, Store.Aldi, o => o.Price = 2.00m, Today.AddDays(-2));
+        shelf.Read(butter, Store.Tesco, o => o.Price = 2.30m);
+
+        var split = shelf.Build().Coverage.Split;
+
+        split.Should().NotBeNull();
+        split!.Groups.Select(g => g.Store).Should().Equal("aldi", "tesco");
+        split.Groups.Single(g => g.Store == "aldi").Lines.Select(l => (l.Text, l.Price, l.ObservedOn))
+            .Should().Equal(("Eggs 12 pack", 3.00m, Today.AddDays(-2)), ("Butter 250g", 2.00m, Today.AddDays(-2)));
+        var tesco = split.Groups.Single(g => g.Store == "tesco");
+        tesco.Lines.Should().ContainSingle().Which.Should().Match<ByShopLine>(l => l.Text == "Milk 1L" && l.Price == 1.00m && l.Card == "Clubcard" && l.ObservedOn == Today.AddDays(-1));
+        tesco.Total.Should().Be(1.00m);
+        split.Total.Should().Be(6.00m, "the card price counts: milk at Tesco 1.00, eggs and butter at Aldi 5.00");
+        split.OldestSeenOn.Should().Be(Today.AddDays(-2));
+        split.Cards.Should().Equal("Clubcard");
+    }
+
+    [Fact]
+    public void The_pair_is_chosen_by_the_lowest_total_not_by_the_shops_with_most_lines()
+    {
+        var shelf = new Shelf();
+        var milk = shelf.Product("Milk 1L");
+        var eggs = shelf.Product("Eggs 12 pack");
+        shelf.Line(milk);
+        shelf.Line(eggs);
+        shelf.Read(milk, Store.Lidl, o => o.Price = 1.00m);
+        shelf.Read(eggs, Store.Aldi, o => o.Price = 3.00m);
+        shelf.Read(milk, Store.Tesco, o => o.Price = 1.50m);
+        shelf.Read(eggs, Store.Tesco, o => o.Price = 3.10m);
+        shelf.Read(eggs, Store.Dunnes, o => o.Price = 2.50m);
+
+        var plan = shelf.Build();
+
+        // Tesco alone covers the list at 4.60, so no split is proposed.
+        plan.Coverage.SingleStore.Should().BeTrue();
+        plan.Coverage.Split.Should().BeNull();
+
+        var third = shelf.Product("Butter 250g");
+        shelf.Line(third);
+        shelf.Read(third, Store.Aldi, o => o.Price = 2.00m);
+        shelf.Read(third, Store.Dunnes, o => o.Price = 2.00m);
+
+        var split = shelf.Build().Coverage.Split;
+
+        split.Should().NotBeNull();
+        split!.Groups.Select(g => (g.Store, g.Total)).Should().Equal(("lidl", 1.00m), ("dunnes", 4.50m));
+        split.Total.Should().Be(5.50m);
+    }
+
+    [Fact]
+    public void A_tie_goes_to_the_first_pair_in_the_fixed_shop_order()
+    {
+        var shelf = new Shelf();
+        var milk = shelf.Product("Milk 1L");
+        var eggs = shelf.Product("Eggs 12 pack");
+        shelf.Line(milk);
+        shelf.Line(eggs);
+        shelf.Read(milk, Store.Lidl, o => o.Price = 1.00m);
+        shelf.Read(milk, Store.Tesco, o => o.Price = 1.00m);
+        shelf.Read(eggs, Store.Aldi, o => o.Price = 2.00m);
+        shelf.Read(eggs, Store.Dunnes, o => o.Price = 2.00m);
+
+        shelf.Build().Coverage.Split!.Groups.Select(g => g.Store).Should().Equal("lidl", "aldi");
+    }
+
+    [Fact]
+    public void A_split_counts_the_lines_whose_packs_differ_between_shops()
+    {
+        var shelf = new Shelf();
+        var milk = shelf.Product("Milk");
+        var eggs = shelf.Product("Eggs");
+        shelf.Line(milk);
+        shelf.Line(eggs);
+        shelf.Read(milk, Store.Lidl, o => o.Price = 1.00m, title: "Milk 1L");
+        shelf.Read(milk, Store.Aldi, o => o.Price = 1.40m, title: "Milk 2L");
+        shelf.Read(eggs, Store.Tesco, o => o.Price = 3.00m, title: "Eggs 12 pack");
+
+        var split = shelf.Build().Coverage.Split;
+
+        split!.Groups.Select(g => g.Store).Should().Equal("lidl", "tesco");
+        split.PacksDiffer.Should().Be(1, "milk is a litre at Lidl and two at Aldi; the eggs are priced at one shop only");
+    }
+
+    [Fact]
+    public void No_split_is_proposed_when_a_line_has_no_price_anywhere_or_the_list_is_empty()
+    {
+        var shelf = new Shelf();
+        var milk = shelf.Product("Milk 1L");
+        var eggs = shelf.Product("Eggs 12 pack");
+        shelf.Line(milk);
+        shelf.Line(eggs);
+        shelf.Read(milk, Store.Lidl, o => o.Price = 1.20m);
+        shelf.Read(eggs, Store.Aldi, o => o.Price = 3.00m);
+        shelf.FreeText("birthday candles");
+
+        shelf.Build().Coverage.Split.Should().BeNull("a split that leaves the candles out would not cover the list");
+        new Shelf().Build().Coverage.Split.Should().BeNull();
+    }
+
+    [Fact]
+    public void Old_and_out_of_stock_prices_never_count_towards_a_split()
+    {
+        var shelf = new Shelf();
+        var milk = shelf.Product("Milk 1L");
+        var eggs = shelf.Product("Eggs 12 pack");
+        shelf.Line(milk);
+        shelf.Line(eggs);
+        shelf.Read(milk, Store.Lidl, o => o.Price = 1.20m);
+        shelf.Read(eggs, Store.Aldi, o => o.Price = 3.00m, Today.AddDays(-10));
+        shelf.Read(eggs, Store.Tesco, o => { o.Price = 2.00m; o.InStock = false; });
+
+        shelf.Build().Coverage.Split.Should().BeNull();
+    }
+
     // ---- the endpoint -------------------------------------------------------------------------------------------
 
     [Fact]

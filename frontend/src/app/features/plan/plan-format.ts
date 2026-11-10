@@ -153,6 +153,24 @@ export function verdict(coverage: PlanCoverage, lineCount: number): Verdict {
     };
   }
   const blocked = plural(coverage.blockers.length, 'line blocks it', 'lines block it');
+  if (coverage.split) {
+    const {split} = coverage;
+    const shops = split.groups.map(group => group.storeName);
+    const packs = split.packsDiffer
+      ? ` Packs differ on ${plural(split.packsDiffer, 'line', 'lines')}, so check the sizes.`
+      : '';
+    return {
+      status: {tone: 'warning', label: 'No one shop covers it'},
+      pills: [
+        {label: `Best two: ${shops.join(' + ')}`, tone: 'success'},
+        {label: euro(split.total), tone: 'success'},
+        ...(coverage.closestStore ? [{label: `Closest: ${name(coverage.closestStore)}`}] : []),
+      ],
+      caveat:
+        `${shops.join(' and ')} together have a fresh price for every line, ${euro(split.total)} in all` +
+        `${split.oldestSeenOn ? `, the oldest seen ${shortDate(split.oldestSeenOn)}` : ''}.${packs}`,
+    };
+  }
   if (coverage.closestStore) {
     const priced = lineCount - coverage.blockers.length;
     return {

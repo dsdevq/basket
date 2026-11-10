@@ -472,6 +472,7 @@ const PLAN = {
       },
       {itemId: 'plan-Bananas', text: 'Bananas', reason: 'unmatched'},
     ],
+    split: null,
   },
 };
 
@@ -512,16 +513,93 @@ const PLAN_COVERED = {
     coveredBy: ['lidl', 'tesco'],
     closestStore: null,
     blockers: [],
+    split: null,
+  },
+};
+
+/** No one shop prices both lines, but Lidl and Aldi do between them: the plan proposes that pair, each line at the cheaper of the two. */
+const PLAN_SPLIT = {
+  asOf: '2026-11-06',
+  staleAfterDays: 3,
+  items: [
+    planLine('Whole milk 2L', {
+      productId: 'p1',
+      bestStore: 'lidl',
+      stores: [MILK_LIDL, MILK_TESCO],
+      lastPaid: [MILK_LIDL_PAID],
+    }),
+    planLine('Kerrygold butter 227g', {
+      productId: 'p3',
+      bestStore: 'aldi',
+      stores: [BUTTER_ALDI, BUTTER_TESCO_OUT],
+    }),
+  ],
+  coverage: {
+    singleStore: false,
+    store: null,
+    coveredBy: [],
+    closestStore: 'tesco',
+    blockers: [
+      {itemId: 'plan-Kerrygold butter 227g', text: 'Kerrygold butter 227g', reason: 'out_of_stock'},
+    ],
+    split: {
+      total: 3.9,
+      oldestSeenOn: '2026-11-05',
+      promoLines: 1,
+      packsDiffer: 0,
+      cards: ['Lidl Plus'],
+      groups: [
+        {
+          store: 'lidl',
+          storeName: 'Lidl',
+          total: 0.99,
+          lines: [
+            byShopLine('Whole milk 2L', 0.99, {
+              deal: 'Lidl Plus price',
+              isPromo: true,
+              card: 'Lidl Plus',
+              packSize: '2 L',
+              unit: 'l',
+              unitPrice: 0.5,
+              observedOn: '2026-11-05',
+            }),
+          ],
+        },
+        {
+          store: 'aldi',
+          storeName: 'Aldi',
+          total: 2.91,
+          lines: [
+            byShopLine('Kerrygold butter 227g', 2.91, {
+              packSize: '227 g',
+              unit: 'kg',
+              unitPrice: 12.82,
+            }),
+          ],
+        },
+      ],
+    },
   },
 };
 const PLAN_EMPTY = {
   asOf: '2026-11-06',
   staleAfterDays: 3,
   items: [],
-  coverage: {singleStore: false, store: null, coveredBy: [], closestStore: null, blockers: []},
+  coverage: {
+    singleStore: false,
+    store: null,
+    coveredBy: [],
+    closestStore: null,
+    blockers: [],
+    split: null,
+  },
 };
 
-type ByShopMissing = {itemId: string; text: string; reason: string};
+interface ByShopMissing {
+  itemId: string;
+  text: string;
+  reason: string;
+}
 
 /** One shop's total in GET /api/plan/by-shop: nothing priced unless the case says so. */
 function byShopStore(
@@ -844,6 +922,14 @@ export const ROUTES: readonly Route[] = [
     setup: async page => {
       await signedIn(page);
       await page.route('**/api/plan', r => r.fulfill({json: PLAN_COVERED}));
+    },
+  },
+  {
+    name: 'plan-split',
+    path: '/plan',
+    setup: async page => {
+      await signedIn(page);
+      await page.route('**/api/plan', r => r.fulfill({json: PLAN_SPLIT}));
     },
   },
   {

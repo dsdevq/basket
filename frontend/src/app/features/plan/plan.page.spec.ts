@@ -1,6 +1,7 @@
 import {type ComponentFixture, TestBed} from '@angular/core/testing';
 import {ToastService} from '@lifekit-hq/ui';
 
+import {bought} from './by-shop-fixtures';
 import {PlanApi} from './plan.api';
 import type {PlanCoverage, PlanResponse} from './plan.model';
 import {PlanPage} from './plan.page';
@@ -22,6 +23,7 @@ const SPLIT: PlanCoverage = {
     {itemId: 'b', text: 'Brennans sliced pan 800g', reason: 'stale'},
     {itemId: 'c', text: 'Bananas', reason: 'unmatched'},
   ],
+  split: null,
 };
 
 const RESPONSE: PlanResponse = {
@@ -173,6 +175,7 @@ describe('PlanPage', () => {
         coveredBy: ['lidl'],
         closestStore: null,
         blockers: [],
+        split: null,
       },
     };
     const {host} = await render(covered);
@@ -181,6 +184,66 @@ describe('PlanPage', () => {
     expect(answer).toContain('One shop covers it');
     expect(answer).toContain('Lidl has a fresh price for every line.');
     expect(host.textContent).not.toContain('Not priced at');
+  });
+
+  it('proposes the cheapest two shops, each with its lines, dated prices and subtotal, when no one shop covers the list', async () => {
+    const withSplit: PlanResponse = {
+      ...RESPONSE,
+      coverage: {
+        ...SPLIT,
+        blockers: [],
+        split: {
+          total: 3.9,
+          oldestSeenOn: '2026-11-05',
+          promoLines: 1,
+          packsDiffer: 0,
+          cards: ['Lidl Plus'],
+          groups: [
+            {
+              store: 'lidl',
+              storeName: 'Lidl',
+              total: 0.99,
+              lines: [
+                bought({
+                  itemId: 'a',
+                  text: 'Whole milk 2L',
+                  price: 0.99,
+                  deal: 'Lidl Plus price',
+                  isPromo: true,
+                  card: 'Lidl Plus',
+                  observedOn: '2026-11-05',
+                }),
+              ],
+            },
+            {
+              store: 'aldi',
+              storeName: 'Aldi',
+              total: 2.91,
+              lines: [bought({itemId: 'd', text: 'Kerrygold butter 227g', price: 2.91})],
+            },
+          ],
+        },
+      },
+    };
+    const {host} = await render(withSplit);
+
+    const answer = text(host, '[data-testid="coverage"]');
+    expect(answer).toContain('Best two: Lidl + Aldi');
+    expect(answer).toContain('€3.90');
+    const lidl = squash(section(host, 'Buy at Lidl · €0.99')?.textContent);
+    expect(lidl).toContain('Whole milk 2L');
+    expect(lidl).toContain('Seen 5 Nov · Lidl Plus price');
+    expect(squash(section(host, 'Buy at Aldi · €2.91')?.textContent)).toContain(
+      'Kerrygold butter 227g'
+    );
+    expect(text(host, '[data-testid="rule"]')).toContain('the two shops that together do');
+  });
+
+  it('proposes no pair when the server sends none', async () => {
+    const {host} = await render(RESPONSE);
+
+    expect(section(host, 'Buy at')).toBeUndefined();
+    expect(text(host, '[data-testid="rule"]')).not.toContain('the two shops that together do');
   });
 
   it('states the rule with the date of the prices and the limit the server uses', async () => {
@@ -196,7 +259,14 @@ describe('PlanPage', () => {
     const empty: PlanResponse = {
       ...RESPONSE,
       items: [],
-      coverage: {singleStore: false, store: null, coveredBy: [], closestStore: null, blockers: []},
+      coverage: {
+        singleStore: false,
+        store: null,
+        coveredBy: [],
+        closestStore: null,
+        blockers: [],
+        split: null,
+      },
     };
     const {host} = await render(empty);
 
