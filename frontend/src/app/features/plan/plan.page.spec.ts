@@ -4,7 +4,7 @@ import {ToastService} from '@lifekit-hq/ui';
 import {PlanApi} from './plan.api';
 import type {PlanCoverage, PlanResponse} from './plan.model';
 import {PlanPage} from './plan.page';
-import {entry, line, offer} from './plan-fixtures';
+import {entry, line, offer, paid} from './plan-fixtures';
 
 async function settle(fixture: ComponentFixture<unknown>): Promise<void> {
   await new Promise(resolve => setTimeout(resolve, 0));
@@ -33,6 +33,7 @@ const RESPONSE: PlanResponse = {
       id: 'a',
       text: 'Whole milk 2L',
       bestStore: 'lidl',
+      lastPaid: [paid({price: 1.19, paidOn: '2026-11-03'})],
       stores: [
         entry({
           best: true,
@@ -45,6 +46,7 @@ const RESPONSE: PlanResponse = {
             card: 'Lidl Plus',
             eachPrice: 0.99,
             unitPrice: 0.5,
+            validUntil: '2026-11-12',
           }),
         }),
         entry({
@@ -132,12 +134,40 @@ describe('PlanPage', () => {
     expect(rows).toHaveLength(2);
     expect(rows[0]).toContain('Lidl');
     expect(rows[0]).toContain('Best');
-    expect(rows[0]).toContain('Seen 5 Nov · Lidl Plus price · €0.50/l');
+    expect(rows[0]).toContain('Seen 5 Nov · Lidl Plus price · until 12 Nov · €0.50/l');
+    expect(rows[0]).toContain('Last paid €1.19 on 3 Nov');
     expect(rows[0]).toContain('€0.99');
     expect(rows[0]).toContain('was €1.49');
     expect(rows[1]).toContain('Tesco');
     expect(rows[1]).toContain('Out of stock');
     expect(rows[1]).toContain('Seen 6 Nov');
+    expect(rows[1]).not.toContain('Last paid');
+  });
+
+  it('keeps the price paid at a shop with no page as a row, and the offer of a shop with a page next to what was paid', async () => {
+    const seeded = line({
+      id: 'd',
+      text: 'Chicken breast fillets',
+      flag: 'no_price',
+      lastPaid: [paid({price: 5.49, paidOn: '2026-11-02'})],
+    });
+    const {host} = await render({...RESPONSE, items: [...RESPONSE.items, seeded]});
+
+    const rows = [
+      ...(section(host, 'Chicken breast fillets')?.querySelectorAll('cmn-list-item-row') ?? []),
+    ].map(r => squash(r.textContent));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toContain('Lidl');
+    expect(rows[0]).toContain('No page there');
+    expect(rows[0]).toContain('No page linked yet');
+    expect(rows[0]).toContain('Last paid €5.49 on 2 Nov');
+    expect(squash(section(host, 'Chicken breast fillets')?.textContent)).toContain('No price');
+  });
+
+  it('keeps a price paid out of the answer on top', async () => {
+    const {host} = await render(RESPONSE);
+
+    expect(text(host, '[data-testid="coverage"]')).not.toContain('Last paid');
   });
 
   it('flags a stale line and an unmatched one with plain labels and no best shop', async () => {

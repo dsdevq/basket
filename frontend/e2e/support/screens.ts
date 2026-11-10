@@ -337,6 +337,11 @@ function planShop(
   };
 }
 
+/** What a receipt says was paid at a shop, as GET /api/plan sends it. */
+function planPaid(store: PlanShop, price: number, paidOn: string) {
+  return {store, storeName: PLAN_SHOP_NAMES[store], price, paidOn};
+}
+
 function planLine(
   text: string,
   over: {
@@ -344,6 +349,7 @@ function planLine(
     flag?: string;
     bestStore?: string;
     stores?: ReturnType<typeof planShop>[];
+    lastPaid?: ReturnType<typeof planPaid>[];
   } = {}
 ) {
   return {
@@ -355,6 +361,7 @@ function planLine(
     flag: over.flag ?? null,
     bestStore: over.bestStore ?? null,
     stores: over.stores ?? [],
+    lastPaid: over.lastPaid ?? [],
   };
 }
 
@@ -373,9 +380,11 @@ const MILK_LIDL = planShop(
     unit: 'l',
     unitPrice: 0.5,
     rank: 1,
+    validUntil: '2026-11-12',
   },
   true
 );
+const MILK_LIDL_PAID = planPaid('lidl', 1.19, '2026-11-03');
 const MILK_TESCO = planShop(
   'tesco',
   'priced',
@@ -423,6 +432,7 @@ const PLAN = {
       productId: 'p1',
       bestStore: 'lidl',
       stores: [MILK_LIDL, MILK_TESCO],
+      lastPaid: [MILK_LIDL_PAID],
     }),
     planLine('Kerrygold butter 227g', {
       productId: 'p3',
@@ -447,6 +457,12 @@ const PLAN = {
       stores: [planShop('aldi', 'upcoming', {price: 2.49}, null)],
     }),
     planLine('Bananas', {flag: 'unmatched'}),
+    // Came in on a Lidl Plus receipt: bought at Lidl, but no Lidl page to read a price from.
+    planLine('Chicken breast fillets', {
+      productId: 'p5',
+      flag: 'no_price',
+      lastPaid: [planPaid('lidl', 5.49, '2026-11-02')],
+    }),
   ],
   coverage: {
     singleStore: false,
@@ -462,6 +478,11 @@ const PLAN = {
         reason: 'no_price',
       },
       {itemId: 'plan-Bananas', text: 'Bananas', reason: 'unmatched'},
+      {
+        itemId: 'plan-Chicken breast fillets',
+        text: 'Chicken breast fillets',
+        reason: 'no_price',
+      },
     ],
   },
 };
@@ -475,6 +496,7 @@ const PLAN_COVERED = {
       productId: 'p1',
       bestStore: 'lidl',
       stores: [MILK_LIDL, MILK_TESCO],
+      lastPaid: [MILK_LIDL_PAID],
     }),
     planLine('Brennans sliced pan 800g', {
       productId: 'p2',

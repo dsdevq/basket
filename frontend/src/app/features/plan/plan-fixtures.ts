@@ -1,5 +1,5 @@
 import type {PromoOffer} from '../promotions/promotions.model';
-import type {PlanItem, PlanStorePrice} from './plan.model';
+import type {PlanItem, PlanPaid, PlanStorePrice} from './plan.model';
 
 /** Test helpers: a promotions offer, a shop's entry for a line and a line, each with every field set and overridden per case. */
 export function offer(over: Partial<PromoOffer> = {}): PromoOffer {
@@ -54,6 +54,11 @@ export function line(over: Partial<PlanItem> = {}): PlanItem {
     flag: null,
     bestStore: null,
     stores: [],
+    lastPaid: [],
     ...over,
   };
+}
+
+export function paid(over: Partial<PlanPaid> = {}): PlanPaid {
+  return {store: 'lidl', storeName: 'Lidl', price: 1.19, paidOn: '2026-11-03', ...over};
 }

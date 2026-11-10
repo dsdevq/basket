@@ -7,6 +7,7 @@ import type {
   PlanCoverage,
   PlanFlag,
   PlanItem,
+  PlanPaid,
   PlanStorePrice,
   PlanStoreState,
 } from './plan.model';
@@ -118,6 +119,9 @@ export function rowDetail(entry: PlanStorePrice): string {
     if (offer.card && !offer.deal.includes(offer.card)) {
       parts.push(`needs ${offer.card}`);
     }
+    if (offer.isPromo && offer.validUntil) {
+      parts.push(`until ${shortDate(offer.validUntil)}`);
+    }
     if (offer.unitPrice !== null && offer.unit !== null) {
       parts.push(`${euro(offer.unitPrice)}${UNIT_SUFFIX[offer.unit]}`);
     }
@@ -198,4 +202,68 @@ export function orderedStores(item: PlanItem): PlanStorePrice[] {
     return entry.state === 'priced' ? Rank.Priced : Rank.Unusable;
   };
   return [...item.stores].sort((a, b) => rank(a) - rank(b));
+}
+
+/** "Last paid €1.19 on 3 Nov": the wording of the Shelf and Prices pages, so one price reads the same on every screen. */
+export function paidText(paid: PlanPaid): string {
+  return `Last paid ${euro(paid.price)} on ${shortDate(paid.paidOn)}`;
+}
+
+/**
+ * One shop's place in a line: its reading (null when the product has no page there), and what was last paid there (null when
+ * nothing was bought there). A shop with only a paid price, such as a product that came in on a receipt, is still a row, so the
+ * price paid is not lost for want of a page.
+ */
+export interface PlanRow {
+  readonly store: StoreId;
+  readonly storeName: string;
+  readonly entry: PlanStorePrice | null;
+  readonly paid: PlanPaid | null;
+}
+
+/** The rows of a line: the shops with a reading in reading order, then the shops it was only ever bought at. */
+export function planRows(item: PlanItem): PlanRow[] {
+  const paidAt = (store: StoreId): PlanPaid | null =>
+    item.lastPaid.find(paid => paid.store === store) ?? null;
+  const read: PlanRow[] = orderedStores(item).map(entry => ({
+    store: entry.store,
+    storeName: entry.storeName,
+    entry,
+    paid: paidAt(entry.store),
+  }));
+  const onlyPaid: PlanRow[] = item.lastPaid
+    .filter(paid => !item.stores.some(entry => entry.store === paid.store))
+    .map(paid => ({store: paid.store, storeName: paid.storeName, entry: null, paid}));
+  return [...read, ...onlyPaid];
+}
+
+/** The lines under a shop's name, one fact group per line: the reading (date, deal, card, unit price), then what was last paid. */
+export function rowLines(row: PlanRow): string {
+  const lines = row.entry ? [rowDetail(row.entry)] : ['No page linked yet'];
+  if (row.paid) {
+    lines.push(paidText(row.paid));
+  }
+  return lines.join('\n');
+}
+
+/** The word beside a row: the entry's own tag, or that the shop has no page when only a price paid is known. */
+export function planRowTag(row: PlanRow): string | null {
+  return row.entry ? rowTag(row.entry) : 'No page there';
+}
+
+export function planRowVariant(row: PlanRow): TagVariant {
+  return row.entry ? tagVariant(row.entry) : 'warning';
+}
+
+/** A row with nothing usable today is dimmed, except the best shop. */
+export function planRowDimmed(row: PlanRow): boolean {
+  return row.entry ? !row.entry.best && row.entry.state !== 'priced' : true;
+}
+
+export function planRowPrice(row: PlanRow): string {
+  return row.entry ? priceText(row.entry) : '—';
+}
+
+export function planRowWas(row: PlanRow): string | null {
+  return row.entry ? wasText(row.entry) : null;
 }

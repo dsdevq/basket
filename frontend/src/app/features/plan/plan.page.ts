@@ -26,20 +26,21 @@ import {
   blockerTag,
   type FlagText,
   flagText,
-  orderedStores,
-  priceText,
-  rowDetail,
-  rowTag,
-  tagVariant,
+  planRowDimmed,
+  planRowPrice,
+  planRows,
+  planRowTag,
+  planRowVariant,
+  planRowWas,
+  rowLines,
   verdict,
-  wasText,
 } from './plan-format';
 
 /**
  * Where to buy what is on the list. Each open line gets the shop with the lowest price per kilo, litre or piece (the
  * promotions rule), and the top says whether one shop can price the whole list. The price per shop is the per-store
- * comparison row of price-comparison grocery apps: shop, price, the day it was read. A line that cannot be priced says
- * why and is never guessed.
+ * comparison row of price-comparison grocery apps: shop, price, the day it was read, and beside it what the household
+ * last paid there and when (the Shelf's "Last paid" wording). A line that cannot be priced says why and is never guessed.
  */
 @Component({
   selector: 'bk-plan-page',
@@ -103,18 +104,19 @@ import {
                     <span class="text-cmn-sm text-text-secondary">{{ why.detail }}</span>
                   </div>
                 }
-                @for (entry of stores(item); track entry.store) {
+                @for (row of rows(item); track row.store) {
                   <cmn-list-item-row
-                    [label]="entry.storeName"
-                    [sublabel]="detail(entry)"
-                    [dimmed]="!entry.best && entry.state !== 'priced'"
+                    [label]="row.storeName"
+                    [sublabel]="lines(row)"
+                    [dimmed]="dimmed(row)"
+                    class="[&_.truncate]:overflow-visible [&_.truncate]:whitespace-pre-line [&_.truncate]:break-words"
                   >
-                    @if (tag(entry); as text) {
-                      <cmn-tag [variant]="variant(entry)" meta>{{ text }}</cmn-tag>
+                    @if (tag(row); as text) {
+                      <cmn-tag [variant]="variant(row)" meta>{{ text }}</cmn-tag>
                     }
                     <span amount class="flex flex-col items-end text-cmn-sm">
-                      <span class="font-semibold text-text-primary">{{ price(entry) }}</span>
-                      @if (was(entry); as old) {
+                      <span class="font-semibold text-text-primary">{{ price(row) }}</span>
+                      @if (was(row); as old) {
                         <s class="text-cmn-xs text-text-secondary"
                           ><span class="sr-only">was </span>{{ old }}</s
                         >
@@ -133,7 +135,9 @@ import {
                 Prices as of {{ asOf() }}. The best shop for a line has the lowest price per kilo,
                 litre or piece, a card price included, among prices read in the last
                 {{ store.staleAfterDays() }} days that are in stock. Older prices and shops that are
-                out of stock are shown but never picked, and a line is never guessed.
+                out of stock are shown but never picked, and a line is never guessed. Last paid is
+                the price on your latest receipt at that shop; it is shown beside the offer and
+                never decides which shop is best.
               </p>
             </cmn-list-section>
           }
@@ -159,12 +163,13 @@ export class PlanPage implements OnInit {
   });
   protected readonly asOf = computed(() => shortDate(this.store.asOf()));
 
-  protected readonly stores = orderedStores;
-  protected readonly detail = rowDetail;
-  protected readonly price = priceText;
-  protected readonly was = wasText;
-  protected readonly tag = rowTag;
-  protected readonly variant = tagVariant;
+  protected readonly rows = planRows;
+  protected readonly lines = rowLines;
+  protected readonly dimmed = planRowDimmed;
+  protected readonly price = planRowPrice;
+  protected readonly was = planRowWas;
+  protected readonly tag = planRowTag;
+  protected readonly variant = planRowVariant;
 
   /** Prices change at most once a night, so the page re-reads when it opens and when it comes back into view. */
   public ngOnInit(): void {
