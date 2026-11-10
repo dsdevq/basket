@@ -702,6 +702,5 @@ unit that walk order will sort by; this change only keeps it. The sort is not bu
 - **Not verified live.** No shop was read for this change (the brief forbids it), and tesco.ie and dunnesstoresgrocery.com have
   not answered the author's PC so far. Aldi's fixture is a recorded breadcrumb; the Lidl, Tesco and Dunnes fixtures are
   hand-written from the schema.org shape and say so. A shop whose page has neither markup simply leaves the field empty.
-- **One additive migration, waiting for the owner's go:** `StoreListingCategory` (one nullable `varchar(200)` column on
-  `store_listing`; no rewrite, no backfill). It will sit beside `StoreListingImageUrl` from the Shelf change; the two are
-  independent and either can land first, but the model snapshot of the second to land needs a regenerate.
+- **One additive migration, `StoreListingCategory`:** one nullable `varchar(200)` column on `store_listing`; no rewrite, no
+  backfill. It follows `StoreListingImageUrl` (the product photo) and is independent of it.
