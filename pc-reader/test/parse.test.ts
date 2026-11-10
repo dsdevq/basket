@@ -130,3 +130,30 @@ test('a breadcrumb that is only the front page and the product leaves no categor
   const r = reading(readPage('tesco', TESCO, { status: 200, html }));
   assert.equal('category' in r, false);
 });
+
+test('tesco and dunnes: the photo is og:image, else the JSON-LD image, and only a plain https address', () => {
+  for (const [store, url, file] of [['tesco', TESCO, 'tesco-product-page.html'], ['dunnes', DUNNES, 'dunnes-product-page.html']] as const) {
+    const html = fixture(file);
+    const read = (page: string) => reading(readPage(store, url, { status: 200, html: page })).imageUrl;
+    assert.equal(read(html), undefined);
+
+    const og = (content: string) => html.replace('</head>', `<meta property="og:image" content="${content}"></head>`);
+    assert.equal(read(og('https://img.example.ie/p/1.jpg?a=1&amp;b=2')), 'https://img.example.ie/p/1.jpg?a=1&b=2');
+
+    const withLd = html.replace('"offers"', '"image":["https://img.example.ie/ld/1.jpg","https://img.example.ie/ld/2.jpg"],"offers"');
+    assert.equal(read(withLd), 'https://img.example.ie/ld/1.jpg');
+    assert.equal(read(withLd.replace('</head>', '<meta property="og:image" content="https://img.example.ie/og.jpg"></head>')), 'https://img.example.ie/og.jpg');
+
+    // A bad og:image is dropped, not a failed read; the JSON-LD image still serves.
+    assert.equal(read(og('http://img.example.ie/p/1.jpg')), undefined);
+    assert.equal(read(withLd.replace('</head>', '<meta property="og:image" content="/relative.jpg"></head>')), 'https://img.example.ie/ld/1.jpg');
+    assert.equal(read(og(`https://img.example.ie/${'a'.repeat(600)}`)), undefined);
+    assert.equal(read(og('https://user:pw@img.example.ie/p.jpg')), undefined);
+  }
+});
+
+test('dunnes: a sold-out reading still carries its photo', () => {
+  const html = fixture('dunnes-product-page-sold-out.html').replace('</head>', '<meta property="og:image" content="https://img.example.ie/swede.jpg"></head>');
+  const r = reading(readPage('dunnes', DUNNES, { status: 200, html }));
+  assert.deepEqual(r, { store: 'dunnes', url: DUNNES, title: 'Dunnes Stores Swede', inStock: false, imageUrl: 'https://img.example.ie/swede.jpg' });
+});

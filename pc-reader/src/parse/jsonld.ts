@@ -224,7 +224,8 @@ function samePath(href: string | undefined, url: string): boolean {
 /**
  * A product page read from its schema.org JSON-LD Product offer alone: price and stock from the offer, the name from the
  * page's first `h1` (the JSON-LD name when there is none). Nothing is read from the visible text, so a carousel or footer
- * with offers of its own cannot put another product's price on this one. A missing optional field is safe; an offer
+ * with offers of its own cannot put another product's price on this one. The photo is the page's `og:image`, else the
+ * JSON-LD `image`; an address that is not plain https is dropped and the reading is posted without it. A missing optional field is safe; an offer
  * recorded against the wrong product is not.
  */
 export function parseJsonLdOnly(store: StoreId, html: string, url: string): ParseResult {
@@ -247,6 +248,10 @@ export function parseJsonLdOnly(store: StoreId, html: string, url: string): Pars
   const category = readCategory(html, url, title);
   if (category) {
     reading.category = category;
+  }
+  const imageUrl = readOgImage(html) ?? ld?.image;
+  if (imageUrl !== undefined) {
+    reading.imageUrl = imageUrl;
   }
   return { kind: 'reading', reading };
 }
