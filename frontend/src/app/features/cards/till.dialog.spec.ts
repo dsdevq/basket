@@ -1,5 +1,5 @@
-import {TestBed} from '@angular/core/testing';
 import {DialogRef} from '@angular/cdk/dialog';
+import {TestBed} from '@angular/core/testing';
 import {CMN_DIALOG_DATA} from '@lifekit-hq/ui';
 
 import {BarcodeRenderer} from './barcode.component';
