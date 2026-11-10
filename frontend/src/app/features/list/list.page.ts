@@ -142,7 +142,7 @@ const REFRESH_MS = 15_000;
           [aria-label]="'More for ' + item.text"
           (clicked)="more(item)"
           actions
-          variant="secondary"
+          variant="ghost"
           icon="Ellipsis"
         />
       </cmn-list-item-row>
