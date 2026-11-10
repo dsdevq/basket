@@ -606,9 +606,28 @@ namespace Basket.Api.Data.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("closed_at");
 
+                    b.Property<string>("ExternalId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("external_id");
+
+                    b.Property<string>("Source")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("source");
+
+                    b.Property<decimal?>("Total")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("total");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ClosedAt");
+
+                    b.HasIndex("Source", "ExternalId")
+                        .IsUnique()
+                        .HasFilter("external_id IS NOT NULL");
 
                     b.ToTable("trip", (string)null);
                 });

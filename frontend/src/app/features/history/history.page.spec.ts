@@ -18,6 +18,8 @@ const TRIPS: Trip[] = [
   {
     id: 't2',
     closedAt: '2026-11-05T12:00:00Z',
+    source: null,
+    total: null,
     items: [
       {id: 'i1', text: 'Whole milk 2L', checkedAt: '2026-11-05T11:00:00Z', checkedBy: ANNA},
       {id: 'i2', text: 'Bananas', checkedAt: '2026-11-05T11:05:00Z', checkedBy: null},
@@ -26,6 +28,8 @@ const TRIPS: Trip[] = [
   {
     id: 't1',
     closedAt: '2026-10-29T12:00:00Z',
+    source: null,
+    total: null,
     items: [{id: 'i3', text: 'Rice', checkedAt: '2026-10-29T11:00:00Z', checkedBy: ANNA}],
   },
 ];
@@ -69,6 +73,23 @@ describe('HistoryPage', () => {
     expect(text).toContain('Whole milk 2L');
     expect(text).toContain('Ticked by Anna');
     expect(text.indexOf('5 Nov')).toBeLessThan(text.indexOf('29 Oct'));
+  });
+
+  it('marks a trip made from a Lidl Plus receipt with its total, and leaves the others alone', async () => {
+    const receipt: Trip = {
+      id: 't3',
+      closedAt: '2026-11-07T12:00:00Z',
+      source: 'lidl_plus',
+      total: 12.5,
+      items: [{id: 'i4', text: 'Butter', checkedAt: '2026-11-07T12:00:00Z', checkedBy: null}],
+    };
+    const {host} = await render([receipt, ...TRIPS]);
+
+    const text = host.textContent ?? '';
+    expect(text).toContain('Sat 7 Nov 2026 · 1 item · Lidl Plus €12.50');
+    expect(text).toContain('Thu 5 Nov 2026 · 2 items');
+    expect(text).not.toContain('Thu 5 Nov 2026 · 2 items · Lidl');
+    expect(text).not.toContain('Ticked by null');
   });
 
   it('puts a trip back on the list and goes to the list', async () => {

@@ -12,6 +12,10 @@ export interface TripItem {
 export interface Trip {
   readonly id: string;
   readonly closedAt: string;
+  /** `lidl_plus` for a trip made from a Lidl Plus receipt; null for one closed on the list. */
+  readonly source: 'lidl_plus' | null;
+  /** What the receipt came to; null for a trip closed on the list, which keeps no prices. */
+  readonly total: number | null;
   readonly items: readonly TripItem[];
 }
 

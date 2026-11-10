@@ -25,6 +25,10 @@ public static class PlanEndpoints
                 .ToListAsync(ct))
             .ToDictionary(o => o.ListingId);
 
-        return Results.Ok(PlanBuilder.Build(lines, products, listingRows.ToLookup(l => l.ProductId), latest, today));
+        var paid = (await db.PaidPrices.AsNoTracking().Where(p => productIds.Contains(p.ProductId)).ToListAsync(ct))
+            .GroupBy(p => (p.ProductId, p.Store))
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(p => p.PaidOn).First());
+
+        return Results.Ok(PlanBuilder.Build(lines, products, listingRows.ToLookup(l => l.ProductId), latest, today, paid));
     }
 }

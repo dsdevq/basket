@@ -43,6 +43,9 @@ public sealed class BasketFactory : WebApplicationFactory<Program>
     /// <summary>Lidl's sign-in service, as a test sets it up: what it answers and which tokens it was asked about.</summary>
     public FakeLidlPlusAuth Lidl { get; } = new();
 
+    /// <summary>Lidl Plus's receipts service, as a test sets it up: which receipts exist and which calls were made.</summary>
+    public FakeLidlPlusTickets Receipts { get; } = new();
+
     public int AuthRequestsPerMinute { get; init; } = 1000;
 
     public string? Bootstrap { get; init; } = BootstrapToken;
@@ -84,6 +87,7 @@ public sealed class BasketFactory : WebApplicationFactory<Program>
         builder.UseSetting("Auth:Origins:0", Origin);
         builder.UseSetting("Auth:AuthRequestsPerMinute", AuthRequestsPerMinute.ToString());
         builder.UseSetting("Hangfire:Enabled", "false");
+        builder.UseSetting("LidlPlus:ReceiptPauseMilliseconds", "0");
         if (Bootstrap is not null)
         {
             builder.UseSetting("Auth:BootstrapToken", Bootstrap);
@@ -100,6 +104,8 @@ public sealed class BasketFactory : WebApplicationFactory<Program>
             services.ConfigureDbContext<AppDbContext>(options => options.AddInterceptors(new CardInsertHook(this)));
             services.RemoveAll<ILidlPlusAuth>();
             services.AddSingleton<ILidlPlusAuth>(Lidl);
+            services.RemoveAll<ILidlPlusTickets>();
+            services.AddSingleton<ILidlPlusTickets>(Receipts);
             services.RemoveAll<TimeProvider>();
             services.AddSingleton<TimeProvider>(Clock);
             if (FleetAgentEnabled)

@@ -937,3 +937,72 @@ while a check is waiting on Lidl to save its answer.
 - **One migration, additive: `20261110134121_LidlPlusConnection`.** It creates `lidl_plus_connection` and nothing else; it touches no
   existing table. It sorts after `TripItemProduct`, the latest on main when this was generated. Other ships' migrations must order
   after whichever merges first.
+
+## Lidl Plus receipts: closed trips, shelf products and last paid prices (2026-11-10, issue #45, epic #26)
+
+Owner's words: "I want have buy lists. And the history of lists." With the connection from issue #15 in place, the receipts Lidl Plus
+holds for the account are pulled in on their own: each becomes a closed trip, its lines join the shelf, and what was paid is kept with its
+day. Builds on `LidlPlusConnectionService.AccessAsync`; the Lidl Plus offers (#14) and the Plan tab's display of last paid prices
+(`bsk-plan-lidl-last-paid`) are not here.
+
+- **Borrowed pattern, named: the receipts list of the Lidl Plus app.** The app lists the account's receipts newest first, each with
+  its day, shop and total, and opens one to show its lines. basket reads the same two things (the list, then each receipt) and shows
+  them in the History it already has (AnyList and OurGroceries' list history, see the trips section above); no new interaction is
+  invented. A receipt trip's heading reads `Thu 5 Nov 2026 · 12 items · Lidl Plus €23.40` and "Same as last time" works on it
+  like on any trip.
+- **A receipt is a closed trip, filed on the day it was printed.** `trip` gains three nullable columns: `source` (`lidl_plus`; null for
+  a trip closed on the list), `external_id` (Lidl's receipt id) and `total` (as printed). A partial unique index on
+  `(source, external_id)` means one trip per receipt, so a manual pull racing the nightly one cannot file it twice. `closed_at` is the
+  receipt's time, so receipts sort into the history among the trips closed by hand. A trip's lines are its receipt lines as `trip_item`
+  rows: text as printed, `checked_at` the receipt time, nobody as the ticker, and the product and shop (`lidl`) set, so reloading a
+  receipt puts product lines on the list that the Shelf tile marks "On the list". `GET /api/trips` returns `source` and `total` on every
+  trip (null for a trip closed on the list); nothing else about it changed.
+- **A line is a purchase when it has a name and came to money.** Zero and negative lines (a returned deposit, a refund, a discount
+  printed as its own line) and lines without a name are not trip items and set no price. The same name twice on one receipt is one
+  trip line. Quantities are not kept on the trip (the trip has none); the price is.
+- **Lines become shelf products by exact name, letter case aside; nothing is guessed.** A line whose name matches a product (any letter
+  case) is that product; otherwise a product with that name is added, recorded against the owner (as the fleet's adds are), up to the
+  existing 300-product guard (past it, the line is still on the trip as text). The receipt's name is Lidl's own ("Whole milk 2L"), not
+  the household's, so a household product with another name stays separate until the owner renames one; matching words to products
+  stays out, as for the plan. A product made this way has no store page, so the nightly price read ignores it.
+- **Seeded Lidl products appear on the Lidl shelf.** The Shelf's Lidl filter showed only products with a linked Lidl page. It now also
+  keeps the products with a known last paid price at that shop, and the card shows what was paid and when ("€2.19 / Last paid 3 Nov")
+  instead of a page reading; **All** shows them too. The list endpoint's `not_sold_there` check follows: a shop "sells" a product when its
+  page is linked **or** a receipt shows it was bought there, so tapping the card works; Tesco, Aldi and Dunnes are unchanged.
+- **Last paid price and date.** One `paid_price` row per product, shop and day (an existing table that stayed empty until now): the
+  price of one item, which is the line's amount over its quantity, or the price of a kilo for a weighed line. Receipts are filed oldest
+  first, so when two receipts of one day have the same product the later one is the price that stays. The day is the Dublin day of the
+  receipt. It reaches `GET /api/products` (`lastPaid`: `known` with price and day; `none` once Lidl Plus is connected but no receipt has
+  the product, which the Prices page leaves blank; `not_connected` before that) and **the plan API**: each plan line carries `lastPaid`,
+  the latest paid price at each shop it was bought at (shop, price, day), whether or not that shop's page is linked. It is information
+  only: it never decides the best shop or the coverage, and a product with only a paid price is still flagged `no_price`. The Plan tab
+  does not draw it yet.
+- **It pulls on its own, nightly, and the owner can pull now.** A recurring job runs at 05:00 Europe/Dublin (after the 03:00 price read
+  and the 04:30 invite cleanup) and does nothing until Lidl Plus is connected. `POST /api/lidl-plus/receipts/pull` (owner only, `no-store`)
+  does the same on demand and answers `{receipts, products, skipped, waiting}`: `404 not_connected`, `409 needs_new_token` (Lidl refused
+  or the saved token cannot be read), `409 no_owner`, `502 lidl_unavailable` (what was filed before Lidl stopped answering stays). There
+  is no Settings button: Settings is already drawn connected in the screen baselines, and a button there would change them for a route
+  nobody needs once the nightly job has run; add it if the first pull wants watching.
+- **A pull is idempotent and polite.** It reads every page of the list (a page of known receipts says nothing about older ones, which
+  an earlier capped pull may have left), but opens only receipts not yet filed, newest first, at most 30 per pull
+  (`LidlPlus:MaxNewReceiptsPerPull`), at most 50 list pages (`MaxReceiptPages`), one request at a time with 500 ms between them. A longer
+  history is taken over the following nights; `waiting` says how many are left. A receipt is filed in one save (trip, lines, new
+  products, paid prices), so it is there whole or not at all. A receipt in a shape basket cannot read is skipped, counted in `skipped`
+  and tried again next time; a Lidl failure stops the pull and keeps what was filed. A process-wide lock stops two pulls overlapping.
+  The access token goes in a header, is never logged or returned, and a test checks it against every rendered log line.
+- **Tests use fake Lidl responses only.** `FakeLidlPlusTickets` stands in for Lidl at the `ILidlPlusTickets` seam in the integration
+  tests (trip, products, paid prices, the plan and products responses, idempotency, the limit, failures mid-pull, owner-only, the job);
+  `LidlPlusTicketsClientTests` feeds recorded answers (decimal commas and numbers, bad shapes, refusals, network error) to the real
+  client. No test, and no build step, calls Lidl.
+- **Not verified live.** The receipts service address, the headers (`App`, `Operating-System`, `App-Version`) and the field names
+  (`tickets[].id`, `date`, `totalAmount`, `itemsLine[]` with `description`, `quantity`, `isWeight`, `currentUnitPrice`, `extendedAmount`
+  or `originalAmount`) follow the community `lidl-plus` client, not an official Lidl document, and nothing here has been run against
+  Lidl. Two readings to check against the first real receipts: whether `extendedAmount` is before or after a Lidl Plus coupon (basket
+  takes it as printed and does not net discount lines, so a paid price may be the price before a coupon), and the country (`LidlPlus:Country`,
+  `TicketsBase` and `Language` are options for that reason). An answer basket cannot read ends as `lidl_unavailable` or `skipped`,
+  never as a wrong price.
+- **One migration, additive: `20261110144147_LidlReceipts`.** It adds the three nullable columns and the partial unique index to `trip`
+  and touches no row. It sorts after `20261110134121_LidlPlusConnection`, the latest on main when this was generated; `Down` drops the
+  index and the columns. A migration waits for the owner's go before merge.
+- **Screens.** No route is added or removed, and the mocks' History has no receipt trip, so the baselines do not change; the Linux
+  baselines are drawn on CI only, as before.

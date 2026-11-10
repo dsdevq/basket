@@ -106,7 +106,9 @@ public static class ListEndpoints
                 }
 
                 shop = parsed;
-                if (!await db.StoreListings.AnyAsync(l => l.ProductId == productId && l.Store == parsed, ct))
+                // A shop sells it when its page is linked, or when a receipt shows the household bought it there.
+                if (!await db.StoreListings.AnyAsync(l => l.ProductId == productId && l.Store == parsed, ct)
+                    && !await db.PaidPrices.AnyAsync(p => p.ProductId == productId && p.Store == parsed, ct))
                 {
                     return Results.Json(new { error = "not_sold_there", message = $"{parsed.DisplayName()} is not linked for that product." }, statusCode: 400);
                 }

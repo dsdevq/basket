@@ -28,9 +28,12 @@ export interface Listing {
   readonly imageUrl: string | null;
 }
 
-/** The last price really paid; `not_connected` until the one-off Lidl Plus login exists. */
+/**
+ * The last price really paid, from Lidl Plus receipts: `known`, `none` (connected, but no receipt has this product) or
+ * `not_connected` (the Lidl Plus token has not been pasted yet).
+ */
 export interface Paid {
-  readonly state: 'not_connected' | 'known';
+  readonly state: 'not_connected' | 'none' | 'known';
   readonly price: number | null;
   readonly paidOn: string | null;
 }

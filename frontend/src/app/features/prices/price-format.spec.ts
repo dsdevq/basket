@@ -166,6 +166,10 @@ describe('price formatting', () => {
     expect(lastPaidLine(null)).toBe('');
   });
 
+  it('says nothing when Lidl Plus is connected but no receipt has the product', () => {
+    expect(lastPaidLine({state: 'none', price: null, paidOn: null})).toBe('');
+  });
+
   it('warns about a shop only when its last pull did not fully work', () => {
     const status = (outcome: 'ok' | 'blocked' | 'failed' | 'partial'): StoreStatus => ({
       store: 'lidl',

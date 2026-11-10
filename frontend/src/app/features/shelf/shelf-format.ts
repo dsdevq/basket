@@ -21,18 +21,29 @@ export function pickStore(filter: ShelfFilter): StoreId | null {
   return filter === 'all' ? null : filter;
 }
 
+/** A shop with no page linked for a product can still be where it was bought: a receipt gives its price and day. */
+function boughtThere(entry: ProductStore): boolean {
+  return entry.lastPaid?.state === 'known';
+}
+
 function cheapest(product: Product): ProductStore | null {
   const read = product.stores.filter(entry => entry.listing && entry.price);
   const current = read.filter(
     entry => entry.price?.state === 'current' && entry.price.best !== null
   );
   const lowest = [...current].sort((a, b) => (a.price?.best ?? 0) - (b.price?.best ?? 0))[0];
-  return lowest ?? read[0] ?? product.stores.find(entry => entry.listing) ?? null;
+  return (
+    lowest ??
+    read[0] ??
+    product.stores.find(entry => entry.listing) ??
+    product.stores.find(boughtThere) ??
+    null
+  );
 }
 
 /**
- * The cards for a filter. A shop's filter keeps the products that shop has a page for and shows that shop's reading and
- * photo. "All" keeps every product and shows the shop with the lowest current price, or the first with any reading.
+ * The cards for a filter. A shop's filter keeps the products that shop has a page for, or that a receipt shows were bought there
+ * (the Lidl Plus receipts seed the Lidl shelf), and shows that shop's reading and photo. "All" keeps every product and shows the shop with the lowest current price, or the first with any reading.
  */
 export function shelfTiles(products: readonly Product[], filter: ShelfFilter): ShelfTile[] {
   if (filter === 'all') {
@@ -46,7 +57,9 @@ export function shelfTiles(products: readonly Product[], filter: ShelfFilter): S
     });
   }
   return products.flatMap(product => {
-    const entry = product.stores.find(candidate => candidate.store === filter && candidate.listing);
+    const entry = product.stores.find(
+      candidate => candidate.store === filter && (candidate.listing || boughtThere(candidate))
+    );
     return entry ? [{product, entry, imageUrl: entry.listing?.imageUrl ?? null}] : [];
   });
 }
@@ -71,6 +84,18 @@ export function cardPrice(entry: ProductStore, filter: ShelfFilter): CardPrice {
     filter === 'all'
       ? `${entry.name} · ${what}`
       : `${what[0]?.toUpperCase() ?? ''}${what.slice(1)}`;
+  if (!price && !entry.listing && entry.lastPaid?.state === 'known') {
+    // Seeded from a receipt: no page to read, so the card shows what was paid and when.
+    return {
+      main: euro(entry.lastPaid.price),
+      was: null,
+      promo: null,
+      loyalty: null,
+      until: null,
+      seen: seen(`last paid ${shortDate(entry.lastPaid.paidOn)}`),
+      outOfStock: false,
+    };
+  }
   if (!price) {
     return {
       main: headline(entry),

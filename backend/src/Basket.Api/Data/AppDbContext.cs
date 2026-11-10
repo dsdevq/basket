@@ -65,6 +65,11 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             trip.ToTable("trip");
             trip.HasKey(t => t.Id);
             trip.HasIndex(t => t.ClosedAt);
+            trip.Property(t => t.Source).HasMaxLength(16);
+            trip.Property(t => t.ExternalId).HasMaxLength(64);
+            trip.Property(t => t.Total).HasPrecision(10, 2);
+            // One trip per receipt: importing the same receipt twice (a manual pull racing the nightly one) cannot file it twice.
+            trip.HasIndex(t => new { t.Source, t.ExternalId }).IsUnique().HasFilter("external_id IS NOT NULL");
         });
 
         builder.Entity<TripItem>(item =>

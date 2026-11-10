@@ -78,9 +78,14 @@ export function lastPaidLine(paid: Paid | null): string {
   if (!paid) {
     return '';
   }
-  return paid.state === 'known'
-    ? `Last paid ${euro(paid.price)} on ${shortDate(paid.paidOn)}`
-    : 'Last paid: not yet connected';
+  switch (paid.state) {
+    case 'known':
+      return `Last paid ${euro(paid.price)} on ${shortDate(paid.paidOn)}`;
+    case 'none':
+      return '';
+    default:
+      return 'Last paid: not yet connected';
+  }
 }
 
 function unreadLine(entry: ProductStore): string {

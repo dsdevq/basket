@@ -14,4 +14,21 @@ public sealed class LidlPlusOptions
     public string ClientId { get; set; } = "LidlPlusNativeClient";
 
     public string ClientSecret { get; set; } = "secret";
+
+    /// <summary>Lidl Plus's receipts service (the receipts list of the app).</summary>
+    public string TicketsBase { get; set; } = "https://tickets.lidlplus.com";
+
+    /// <summary>The country the Lidl Plus account belongs to; Lidl keeps receipts per country.</summary>
+    public string Country { get; set; } = "IE";
+
+    public string Language { get; set; } = "en-IE";
+
+    /// <summary>The pause between two requests to Lidl while receipts are pulled, so a first pull of years of receipts stays polite.</summary>
+    public int ReceiptPauseMilliseconds { get; set; } = 500;
+
+    /// <summary>The most pages of the receipts list one pull reads (about ten receipts a page).</summary>
+    public int MaxReceiptPages { get; set; } = 50;
+
+    /// <summary>The most new receipts one pull opens; a longer history is taken over the next nights.</summary>
+    public int MaxNewReceiptsPerPull { get; set; } = 30;
 }

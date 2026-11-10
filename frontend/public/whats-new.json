@@ -35,6 +35,10 @@
         {
           "text": "Settings now has a Lidl Plus section where you paste your Lidl Plus token once. basket checks it with Lidl, keeps it encrypted, and shows whether it still works.",
           "owner": true
+        },
+        {
+          "text": "Once Lidl Plus is connected, your Lidl receipts come in every night as past trips in History, with the day and the total. The things on them join the Shelf, and each remembers the last price you paid.",
+          "owner": false
         }
       ],
       "changes": []
