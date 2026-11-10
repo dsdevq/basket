@@ -9,6 +9,7 @@ const MAX_SHIFT = 0.1;
 const PAGES = [
   '/list',
   '/history',
+  '/shelf',
   '/prices',
   '/promotions',
   '/cards',
