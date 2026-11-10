@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Basket.Api.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20261110100000_Trips")]
-    partial class Trips
+    [Migration("20261110100000_LoyaltyCard")]
+    partial class LoyaltyCard
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -285,6 +285,43 @@ namespace Basket.Api.Data.Migrations
                     b.ToTable("list_item", (string)null);
                 });
 
+            modelBuilder.Entity("Basket.Api.Data.LoyaltyCard", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Format")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("format");
+
+                    b.Property<string>("NumberProtected")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)")
+                        .HasColumnName("number_protected");
+
+                    b.Property<string>("Store")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("store");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Store")
+                        .IsUnique();
+
+                    b.ToTable("loyalty_card", (string)null);
+                });
+
             modelBuilder.Entity("Basket.Api.Data.PaidPrice", b =>
                 {
                     b.Property<Guid>("Id")
@@ -511,58 +548,6 @@ namespace Basket.Api.Data.Migrations
                     b.ToTable("store_listing", (string)null);
                 });
 
-            modelBuilder.Entity("Basket.Api.Data.Trip", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<DateTimeOffset>("ClosedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("closed_at");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ClosedAt");
-
-                    b.ToTable("trip", (string)null);
-                });
-
-            modelBuilder.Entity("Basket.Api.Data.TripItem", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<DateTimeOffset?>("CheckedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("checked_at");
-
-                    b.Property<Guid?>("CheckedByUserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("checked_by_user_id");
-
-                    b.Property<string>("Text")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)")
-                        .HasColumnName("text");
-
-                    b.Property<Guid>("TripId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("trip_id");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CheckedByUserId");
-
-                    b.HasIndex("TripId");
-
-                    b.ToTable("trip_item", (string)null);
-                });
-
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>
                 {
                     b.Property<int>("Id")
@@ -774,20 +759,6 @@ namespace Basket.Api.Data.Migrations
                     b.HasOne("Basket.Api.Data.Product", null)
                         .WithMany()
                         .HasForeignKey("ProductId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("Basket.Api.Data.TripItem", b =>
-                {
-                    b.HasOne("Basket.Api.Data.AppUser", null)
-                        .WithMany()
-                        .HasForeignKey("CheckedByUserId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("Basket.Api.Data.Trip", null)
-                        .WithMany()
-                        .HasForeignKey("TripId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

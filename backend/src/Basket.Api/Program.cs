@@ -1,4 +1,5 @@
 using Basket.Api.Auth;
+using Basket.Api.Cards;
 using Basket.Api.Data;
 using Basket.Api.Infrastructure;
 using Basket.Api.Lists;
@@ -51,6 +52,7 @@ builder.Services.AddScoped<IStorePriceSource, LidlPriceSource>();
 builder.Services.AddScoped<PriceRecorder>();
 builder.Services.AddScoped<PricePullJob>();
 builder.Services.AddScoped<IngestTokenService>();
+builder.Services.AddSingleton<CardNumberProtector>();
 builder.Services.AddScoped<PriceIngest>();
 builder.Services.AddBasketAuth(builder.Configuration);
 builder.Services.Configure<SecurityOptions>(builder.Configuration.GetSection(SecurityOptions.Section));
@@ -98,6 +100,9 @@ app.UseForwardedHeaders();
 app.UseSerilogRequestLogging(options =>
 {
     RequestLogging.Configure(options);
+    // This host's own logger, not Serilog's process-wide static one: hosts built side by side (the integration tests)
+    // would otherwise log each other's requests to whichever logger was set last.
+    options.Logger = app.Services.GetRequiredService<Serilog.ILogger>();
     options.GetLevel = (context, _, ex) =>
         ex is not null || context.Response.StatusCode >= 500
             ? Serilog.Events.LogEventLevel.Error
@@ -133,6 +138,7 @@ api.MapListEndpoints();
 api.MapTripEndpoints();
 api.MapProductEndpoints();
 api.MapPromotionEndpoints();
+api.MapCardEndpoints();
 api.MapIngestEndpoints();
 api.MapFallback(() => Results.NotFound()).AllowAnonymous();
 

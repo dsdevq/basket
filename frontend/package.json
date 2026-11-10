@@ -37,6 +37,7 @@
     "@lifekit-hq/tokens": "^4.7.1",
     "@lifekit-hq/ui": "^4.7.1",
     "@ngrx/signals": "^22.0.1",
+    "bwip-js": "^4.11.4",
     "chart.js": "^4.5.1",
     "deep-chat": "^2.5.0",
     "lit": "^3.3.3",
