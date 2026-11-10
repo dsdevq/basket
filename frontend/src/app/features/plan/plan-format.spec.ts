@@ -157,15 +157,7 @@ describe('plan-format', () => {
         card: 'Lidl Plus',
         eachPrice: 0.99,
         unitPrice: 0.5,
-        validUntil: '2026-11-12',
       }),
-    });
-
-    it('says how long a promotion lasts, and nothing for a shelf price', () => {
-      expect(rowDetail(lidlOffer)).toBe('Seen 5 Nov · Lidl Plus price · until 12 Nov · €0.50/l');
-      expect(rowDetail(entry({offer: offer({validUntil: '2026-11-12'})}))).toBe(
-        'Seen 5 Nov · €0.65/l'
-      );
     });
 
     it('words a paid price the way the Shelf does, with its day', () => {
@@ -175,9 +167,7 @@ describe('plan-format', () => {
     it('puts the paid price on a second line of the shop that has the offer', () => {
       const [row] = planRows(line({stores: [lidlOffer], lastPaid: [paid()]}));
 
-      expect(rowLines(row)).toBe(
-        'Seen 5 Nov · Lidl Plus price · until 12 Nov · €0.50/l\nLast paid €1.19 on 3 Nov'
-      );
+      expect(rowLines(row)).toBe('Seen 5 Nov · Lidl Plus price · €0.50/l\nLast paid €1.19 on 3 Nov');
       expect(planRowPrice(row)).toBe('€0.99');
       expect(planRowTag(row)).toBe('Best');
     });

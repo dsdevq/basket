@@ -46,7 +46,6 @@ const RESPONSE: PlanResponse = {
             card: 'Lidl Plus',
             eachPrice: 0.99,
             unitPrice: 0.5,
-            validUntil: '2026-11-12',
           }),
         }),
         entry({
@@ -134,7 +133,7 @@ describe('PlanPage', () => {
     expect(rows).toHaveLength(2);
     expect(rows[0]).toContain('Lidl');
     expect(rows[0]).toContain('Best');
-    expect(rows[0]).toContain('Seen 5 Nov · Lidl Plus price · until 12 Nov · €0.50/l');
+    expect(rows[0]).toContain('Seen 5 Nov · Lidl Plus price · €0.50/l');
     expect(rows[0]).toContain('Last paid €1.19 on 3 Nov');
     expect(rows[0]).toContain('€0.99');
     expect(rows[0]).toContain('was €1.49');

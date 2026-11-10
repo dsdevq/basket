@@ -380,7 +380,6 @@ const MILK_LIDL = planShop(
     unit: 'l',
     unitPrice: 0.5,
     rank: 1,
-    validUntil: '2026-11-12',
   },
   true
 );

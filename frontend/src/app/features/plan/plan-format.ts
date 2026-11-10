@@ -119,9 +119,6 @@ export function rowDetail(entry: PlanStorePrice): string {
     if (offer.card && !offer.deal.includes(offer.card)) {
       parts.push(`needs ${offer.card}`);
     }
-    if (offer.isPromo && offer.validUntil) {
-      parts.push(`until ${shortDate(offer.validUntil)}`);
-    }
     if (offer.unitPrice !== null && offer.unit !== null) {
       parts.push(`${euro(offer.unitPrice)}${UNIT_SUFFIX[offer.unit]}`);
     }
