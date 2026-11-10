@@ -66,7 +66,7 @@ import {InviteSheetComponent} from './invite.sheet';
                   [aria-label]="'Cancel link ' + (pending.label || 'Invite link')"
                   (clicked)="revoke(pending)"
                   actions
-                  variant="secondary"
+                  variant="ghost"
                   icon="X"
                 />
               </cmn-list-item-row>

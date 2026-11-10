@@ -758,3 +758,18 @@ prices, and a fifth tab would leave six slots with More on a 390 px bar).
   right away) and the Carbon Loading pattern, as written up in lifekit-common's `docs/PHONE-CONTRACT.md`, "First paint".
   `e2e/cold-start.spec.ts` holds the audit's `basket-boot` probe: session delayed 900 ms, layout shift under 0.1 on every page
   at 390 and 1280.
+
+## Basket-side halves of the phone audit's Carbon findings (2026-11-10, issues #83, #86, #88)
+
+A phone audit of basket on the Carbon-aligned library filed missing icons and components that did not look right. Three small
+changes land here; the library halves are fixed in lifekit-common, not worked around.
+
+- **Icons the app uses outside the library's set (#83).** `BadgePercent` (the Promotions tab), `Store` (the Shelf tab),
+  `WalletCards` (the Cards tab and Add card), `Maximize2` (Show at till) and `RotateCcw` (Same as last time on History) are
+  registered with `provideLucideIcons` in `app.config.ts`, from `core/icons.ts`. Without that `<cmn-icon>` renders an empty box.
+  `tab-icons.spec.ts` renders the shell with the real app providers and fails on any tab icon that draws nothing.
+- **Row overflow and cancel-link buttons are `ghost` (#86).** The list item's and product's overflow (`Ellipsis`) and the pending
+  invite's cancel (`X`) are `variant="ghost"`, so they read as row furniture and not as a second primary action.
+- **Sheet bodies are padded `px-cmn-6 pt-cmn-4 pb-cmn-6` (#88).** All seven `*.sheet.ts` bodies carry the padding themselves so
+  the body lines up with the title and clears the header rule. This is a **stopgap until the library drawer pads its body**; when
+  it does, drop the class string from the seven sheets so the padding is not doubled.

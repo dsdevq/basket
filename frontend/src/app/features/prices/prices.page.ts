@@ -71,7 +71,7 @@ import {StoreLinkSheetComponent} from './store-link.sheet';
                 [aria-label]="'More for ' + product.name"
                 (clicked)="more(product)"
                 cmnListSectionAside
-                variant="secondary"
+                variant="ghost"
                 icon="Ellipsis"
               />
               @for (entry of product.stores; track entry.store) {
