@@ -47,7 +47,11 @@ function describe(error: unknown): string {
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <form [formGroup]="form" (ngSubmit)="add()" class="flex flex-col gap-cmn-3 px-cmn-4 pb-cmn-4">
+    <form
+      [formGroup]="form"
+      (ngSubmit)="add()"
+      class="flex flex-col gap-cmn-3 px-cmn-6 pt-cmn-4 pb-cmn-6"
+    >
       @if (problem()) {
         <cmn-alert [title]="problem()" variant="error" />
       }
