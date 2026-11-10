@@ -143,26 +143,6 @@ describe('PlanPage', () => {
     expect(rows[1]).not.toContain('Last paid');
   });
 
-  it('keeps the price paid at a shop with no page as a row, and the offer of a shop with a page next to what was paid', async () => {
-    const seeded = line({
-      id: 'd',
-      text: 'Chicken breast fillets',
-      flag: 'no_price',
-      lastPaid: [paid({price: 5.49, paidOn: '2026-11-02'})],
-    });
-    const {host} = await render({...RESPONSE, items: [...RESPONSE.items, seeded]});
-
-    const rows = [
-      ...(section(host, 'Chicken breast fillets')?.querySelectorAll('cmn-list-item-row') ?? []),
-    ].map(r => squash(r.textContent));
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toContain('Lidl');
-    expect(rows[0]).toContain('No page there');
-    expect(rows[0]).toContain('No page linked yet');
-    expect(rows[0]).toContain('Last paid €5.49 on 2 Nov');
-    expect(squash(section(host, 'Chicken breast fillets')?.textContent)).toContain('No price');
-  });
-
   it('keeps a price paid out of the answer on top', async () => {
     const {host} = await render(RESPONSE);
 

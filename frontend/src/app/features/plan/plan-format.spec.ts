@@ -4,10 +4,7 @@ import {
   flagText,
   orderedStores,
   paidText,
-  planRowDimmed,
-  planRowPrice,
   planRows,
-  planRowTag,
   priceText,
   rowDetail,
   rowLines,
@@ -168,8 +165,8 @@ describe('plan-format', () => {
       const [row] = planRows(line({stores: [lidlOffer], lastPaid: [paid()]}));
 
       expect(rowLines(row)).toBe('Seen 5 Nov · Lidl Plus price · €0.50/l\nLast paid €1.19 on 3 Nov');
-      expect(planRowPrice(row)).toBe('€0.99');
-      expect(planRowTag(row)).toBe('Best');
+      expect(priceText(row.entry)).toBe('€0.99');
+      expect(rowTag(row.entry)).toBe('Best');
     });
 
     it('leaves a shop it was never bought at with its reading alone', () => {
@@ -178,18 +175,6 @@ describe('plan-format', () => {
 
       expect(rows.map(r => r.paid?.store ?? null)).toEqual(['lidl', null]);
       expect(rowLines(rows[1])).toBe('Seen 5 Nov · €0.65/l');
-    });
-
-    it('keeps a price paid at a shop with no page as a row of its own, after the shops with a reading', () => {
-      const aldi = entry({store: 'aldi', storeName: 'Aldi'});
-      const rows = planRows(line({stores: [aldi], lastPaid: [paid()]}));
-
-      expect(rows.map(r => r.store)).toEqual(['aldi', 'lidl']);
-      const [, lidl] = rows;
-      expect(rowLines(lidl)).toBe('No page linked yet\nLast paid €1.19 on 3 Nov');
-      expect(planRowTag(lidl)).toBe('No page there');
-      expect(planRowPrice(lidl)).toBe('—');
-      expect(planRowDimmed(lidl)).toBe(true);
     });
 
     it('has no rows for a line with neither a reading nor a paid price', () => {

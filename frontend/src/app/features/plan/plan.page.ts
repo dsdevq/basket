@@ -26,14 +26,13 @@ import {
   blockerTag,
   type FlagText,
   flagText,
-  planRowDimmed,
-  planRowPrice,
   planRows,
-  planRowTag,
-  planRowVariant,
-  planRowWas,
+  priceText,
   rowLines,
+  rowTag,
+  tagVariant,
   verdict,
+  wasText,
 } from './plan-format';
 
 /**
@@ -104,19 +103,19 @@ import {
                     <span class="text-cmn-sm text-text-secondary">{{ why.detail }}</span>
                   </div>
                 }
-                @for (row of rows(item); track row.store) {
+                @for (row of rows(item); track row.entry.store) {
                   <cmn-list-item-row
-                    [label]="row.storeName"
+                    [label]="row.entry.storeName"
                     [sublabel]="lines(row)"
-                    [dimmed]="dimmed(row)"
+                    [dimmed]="!row.entry.best && row.entry.state !== 'priced'"
                     class="[&_.truncate]:overflow-visible [&_.truncate]:whitespace-pre-line [&_.truncate]:break-words"
                   >
-                    @if (tag(row); as text) {
-                      <cmn-tag [variant]="variant(row)" meta>{{ text }}</cmn-tag>
+                    @if (tag(row.entry); as text) {
+                      <cmn-tag [variant]="variant(row.entry)" meta>{{ text }}</cmn-tag>
                     }
                     <span amount class="flex flex-col items-end text-cmn-sm">
-                      <span class="font-semibold text-text-primary">{{ price(row) }}</span>
-                      @if (was(row); as old) {
+                      <span class="font-semibold text-text-primary">{{ price(row.entry) }}</span>
+                      @if (was(row.entry); as old) {
                         <s class="text-cmn-xs text-text-secondary"
                           ><span class="sr-only">was </span>{{ old }}</s
                         >
@@ -165,11 +164,10 @@ export class PlanPage implements OnInit {
 
   protected readonly rows = planRows;
   protected readonly lines = rowLines;
-  protected readonly dimmed = planRowDimmed;
-  protected readonly price = planRowPrice;
-  protected readonly was = planRowWas;
-  protected readonly tag = planRowTag;
-  protected readonly variant = planRowVariant;
+  protected readonly price = priceText;
+  protected readonly was = wasText;
+  protected readonly tag = rowTag;
+  protected readonly variant = tagVariant;
 
   /** Prices change at most once a night, so the page re-reads when it opens and when it comes back into view. */
   public ngOnInit(): void {

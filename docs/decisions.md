@@ -1029,17 +1029,15 @@ Epic #24: "I want to know what promotions are in the store and which promotion i
   offer price (`€0.99`, old price struck through) on the right.
 - **Last paid at any shop is shown, not only Lidl.** The server sends the latest receipt price per shop; today only Lidl receipts exist,
   and the page draws whatever shops come, so a later Tesco or Dunnes receipt needs no change here.
-- **A product bought at Lidl with no Lidl page keeps its row.** A product that came in on a receipt has no store page, so the plan
-  has no reading for it (`no_price`) and `stores` is empty. Its row is drawn from the paid price alone: shop name, `No page linked yet`
-  over `Last paid €5.49 on 2 Nov`, a dash where the price goes, and the tag `No page there` (the blocker tag's wording), dimmed like
-  any shop with nothing usable. Rows with a reading come first in the usual order, then these.
+- **A paid price needs a shop row to sit on.** The paid line is attached to the shop rows the Plan tab already draws; a shop the
+  product was bought at but has no reading for gets no row of its own, so its paid price is not drawn here (it stays on the Shelf).
 - **Information only.** The paid price never picks the best shop, never moves a line's flag and is not in the coverage answer on top;
   the rule card at the bottom says so. A weighed product's paid price is a kilo's, like on the Shelf. The date is the receipt's Dublin
   day (`paidOn`), never shifted by a time zone.
 - **Tests.** Unit: the wording and the row building (`plan-format.spec.ts`: offer beside last paid, a shop never
-  bought at, a paid-only row, no rows) and the page against a recorded response (`plan.page.spec.ts`). E2E: `plan-flow.spec.ts` asserts
-  the offer line, both paid lines and their days on a phone; the `plan` mock gains a milk `lastPaid` and a receipt-only
-  line, so the screen check (both templates, 390 and 1280) covers them. The `plan` baselines change and are rendered by the Update
+  bought at, no rows) and the page against a recorded response (`plan.page.spec.ts`). E2E: `plan-flow.spec.ts` asserts
+  the offer line, both paid lines and their days on a phone; the `plan` mock gains a milk `lastPaid`, so the screen
+  check (both templates, 390 and 1280) covers it. The `plan` baselines change and are rendered by the Update
   screen baselines workflow on the PR branch after the pipeline's push is final, never committed by hand; `plan-covered` changes with the
   shared milk line, `plan-empty` does not.
 - **Not in this change:** a Lidl offer fetch (the Lidl Plus offers feed stays out), a price-change figure against the last paid, the

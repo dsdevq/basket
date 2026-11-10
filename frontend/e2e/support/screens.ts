@@ -456,12 +456,6 @@ const PLAN = {
       stores: [planShop('aldi', 'upcoming', {price: 2.49}, null)],
     }),
     planLine('Bananas', {flag: 'unmatched'}),
-    // Came in on a Lidl Plus receipt: bought at Lidl, but no Lidl page to read a price from.
-    planLine('Chicken breast fillets', {
-      productId: 'p5',
-      flag: 'no_price',
-      lastPaid: [planPaid('lidl', 5.49, '2026-11-02')],
-    }),
   ],
   coverage: {
     singleStore: false,
@@ -477,11 +471,6 @@ const PLAN = {
         reason: 'no_price',
       },
       {itemId: 'plan-Bananas', text: 'Bananas', reason: 'unmatched'},
-      {
-        itemId: 'plan-Chicken breast fillets',
-        text: 'Chicken breast fillets',
-        reason: 'no_price',
-      },
     ],
   },
 };
