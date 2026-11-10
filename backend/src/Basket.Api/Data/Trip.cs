@@ -1,3 +1,5 @@
+using Basket.Api.Prices;
+
 namespace Basket.Api.Data;
 
 /// <summary>
@@ -24,4 +26,13 @@ public sealed class TripItem
 
     /// <summary>Who ticked it; null once that person's account is gone.</summary>
     public Guid? CheckedByUserId { get; set; }
+
+    /// <summary>
+    /// The product the list line was picked as, so reloading the trip puts a Shelf line back as that product. Null for a
+    /// free-text line, for a trip closed before lines carried one, and once the product is deleted.
+    /// </summary>
+    public Guid? ProductId { get; set; }
+
+    /// <summary>The shop the line was picked from (null when picked from "All"); only meaningful with <see cref="ProductId"/>.</summary>
+    public Store? Store { get; set; }
 }

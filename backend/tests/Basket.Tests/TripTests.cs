@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Basket.Api.Data;
 using Basket.Api.Lists;
+using Basket.Api.Prices;
 using Basket.Tests.Support;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
@@ -24,6 +25,33 @@ public sealed class TripTests
     private static async Task<string[]> TextsAsync(HttpClient client) =>
         (await client.GetFromJsonAsync<JsonElement>("/api/list")).GetProperty("items").EnumerateArray()
         .Select(i => i.GetProperty("text").GetString()!).ToArray();
+
+    /// <summary>Whole milk linked at Tesco and Aldi, the way the Shelf offers it.</summary>
+    private static async Task<Guid> SeedMilkAsync(BasketFactory factory) =>
+        await factory.WithDb(async db =>
+        {
+            var by = await db.Users.Select(u => u.Id).FirstAsync();
+            var milk = new Product { Id = Guid.NewGuid(), Name = "Whole milk 2L", AddedAt = DateTimeOffset.UtcNow, AddedByUserId = by };
+            db.Products.Add(milk);
+            db.StoreListings.AddRange(
+                new StoreListing { Id = Guid.NewGuid(), ProductId = milk.Id, Store = Store.Tesco, Url = "https://www.tesco.ie/groceries/en-IE/products/254317390", AddedAt = DateTimeOffset.UtcNow },
+                new StoreListing { Id = Guid.NewGuid(), ProductId = milk.Id, Store = Store.Aldi, Url = "https://www.aldi.ie/product/clonbawn-protein-milk-000000000000422541", AddedAt = DateTimeOffset.UtcNow });
+            await db.SaveChangesAsync();
+            return milk.Id;
+        });
+
+    /// <summary>Taps a Shelf tile: the product at a shop (or none), as the Shelf page posts it.</summary>
+    private static async Task<HttpResponseMessage> PickAsync(HttpClient client, Guid productId, string? store) =>
+        await client.PostAsJsonAsync("/api/list/items", new { productId, store });
+
+    private static async Task<Guid> CloseAsync(HttpClient client) =>
+        (await (await client.PostAsync("/api/list/close", null)).Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+
+    private static async Task<JsonElement[]> ItemsAsync(HttpClient client) =>
+        (await client.GetFromJsonAsync<JsonElement>("/api/list")).GetProperty("items").EnumerateArray().ToArray();
+
+    private static (string? Product, string? Store) Identity(JsonElement item) =>
+        (item.GetProperty("productId").GetString(), item.GetProperty("store").GetString());
 
     private static async Task<JsonElement> TripsAsync(HttpClient client, string query = "") =>
         await client.GetFromJsonAsync<JsonElement>("/api/trips" + query);
@@ -227,6 +255,133 @@ public sealed class TripTests
 
         full.StatusCode.Should().Be(HttpStatusCode.Conflict);
         (await full.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("error").GetString().Should().Be("list_full");
+    }
+
+    [Fact]
+    public async Task A_reloaded_shelf_line_keeps_its_product_and_shop_so_the_shelf_tile_adds_nothing_more()
+    {
+        await using var factory = new BasketFactory();
+        var (owner, _) = await factory.OwnerAsync();
+        var milk = await SeedMilkAsync(factory);
+        var picked = await (await PickAsync(owner, milk, "tesco")).Content.ReadFromJsonAsync<JsonElement>();
+        await TickAsync(owner, picked.GetProperty("id").GetGuid());
+        await TickAsync(owner, await AddAsync(owner, "Bread"));
+        var tripId = await CloseAsync(owner);
+        (await ItemsAsync(owner)).Should().BeEmpty();
+
+        var reload = await owner.PostAsync($"/api/trips/{tripId}/reload", null);
+
+        reload.StatusCode.Should().Be(HttpStatusCode.OK);
+        var items = await ItemsAsync(owner);
+        items.Select(i => i.GetProperty("text").GetString()).Should().BeEquivalentTo("Whole milk 2L", "Bread");
+        items.Select(Identity).Should().BeEquivalentTo(new[] { (milk.ToString(), "tesco"), ((string?)null, (string?)null) });
+
+        // The Shelf tile now finds the open line instead of adding a second one.
+        var tap = await PickAsync(owner, milk, "tesco");
+        tap.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await tap.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid()
+            .Should().Be(items.Single(i => i.GetProperty("productId").ValueKind == JsonValueKind.String).GetProperty("id").GetGuid());
+        (await ItemsAsync(owner)).Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task A_shelf_line_picked_from_all_shops_reloads_with_no_shop_and_the_trip_history_shows_only_text()
+    {
+        await using var factory = new BasketFactory();
+        var (owner, _) = await factory.OwnerAsync();
+        var milk = await SeedMilkAsync(factory);
+        await TickAsync(owner, (await (await PickAsync(owner, milk, null)).Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid());
+        var tripId = await CloseAsync(owner);
+
+        (await TripsAsync(owner)).GetProperty("trips")[0].GetProperty("items")[0].EnumerateObject().Select(p => p.Name)
+            .Should().BeEquivalentTo("id", "text", "checkedAt", "checkedBy");
+        await owner.PostAsync($"/api/trips/{tripId}/reload", null);
+
+        (await ItemsAsync(owner)).Select(Identity).Should().Equal((milk.ToString(), (string?)null));
+        (await PickAsync(owner, milk, null)).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await ItemsAsync(owner)).Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task A_trip_closed_before_lines_carried_a_product_reloads_as_free_text()
+    {
+        await using var factory = new BasketFactory();
+        var (owner, _) = await factory.OwnerAsync();
+        var tripId = Guid.NewGuid();
+        await factory.WithDb(async db =>
+        {
+            db.Trips.Add(new Trip { Id = tripId, ClosedAt = DateTimeOffset.UtcNow });
+            db.TripItems.Add(new TripItem { Id = Guid.NewGuid(), TripId = tripId, Text = "Whole milk 2L", CheckedAt = DateTimeOffset.UtcNow });
+            await db.SaveChangesAsync();
+            return 0;
+        });
+
+        (await owner.PostAsync($"/api/trips/{tripId}/reload", null)).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        (await ItemsAsync(owner)).Select(Identity).Should().Equal(((string?)null, (string?)null));
+    }
+
+    [Fact]
+    public async Task Reloading_skips_a_product_already_waiting_at_that_shop_even_when_its_text_differs_but_adds_it_for_another_shop()
+    {
+        await using var factory = new BasketFactory();
+        var (owner, _) = await factory.OwnerAsync();
+        var milk = await SeedMilkAsync(factory);
+        foreach (var shop in new[] { "tesco", "aldi" })
+        {
+            await TickAsync(owner, (await (await PickAsync(owner, milk, shop)).Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid());
+        }
+
+        var tripId = await CloseAsync(owner);
+        await PickAsync(owner, milk, "tesco");
+        await factory.WithDb(async db =>
+        {
+            await db.ListItems.ExecuteUpdateAsync(s => s.SetProperty(i => i.Text, "Milk, renamed"));
+            return 0;
+        });
+
+        var body = await (await owner.PostAsync($"/api/trips/{tripId}/reload", null)).Content.ReadFromJsonAsync<JsonElement>();
+
+        body.GetProperty("added").GetInt32().Should().Be(1);
+        body.GetProperty("alreadyOnList").GetInt32().Should().Be(1);
+        (await ItemsAsync(owner)).Select(Identity).Should().BeEquivalentTo(new[] { (milk.ToString(), "tesco"), (milk.ToString(), "aldi") });
+    }
+
+    [Fact]
+    public async Task Reloading_twice_at_once_leaves_one_line_for_the_product()
+    {
+        await using var factory = new BasketFactory();
+        var (owner, _) = await factory.OwnerAsync();
+        var (her, _) = await factory.MemberAsync(owner, "Her");
+        var milk = await SeedMilkAsync(factory);
+        await TickAsync(owner, (await (await PickAsync(owner, milk, "tesco")).Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid());
+        var tripId = await CloseAsync(owner);
+
+        var results = await Task.WhenAll(owner.PostAsync($"/api/trips/{tripId}/reload", null), her.PostAsync($"/api/trips/{tripId}/reload", null));
+
+        results.Should().OnlyContain(r => r.StatusCode == HttpStatusCode.OK);
+        (await ItemsAsync(owner)).Select(Identity).Should().Equal((milk.ToString(), "tesco"));
+    }
+
+    [Fact]
+    public async Task A_product_deleted_after_the_trip_closed_reloads_as_free_text()
+    {
+        await using var factory = new BasketFactory();
+        var (owner, _) = await factory.OwnerAsync();
+        var milk = await SeedMilkAsync(factory);
+        await TickAsync(owner, (await (await PickAsync(owner, milk, "tesco")).Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid());
+        var tripId = await CloseAsync(owner);
+        await factory.WithDb(async db =>
+        {
+            await db.Products.Where(p => p.Id == milk).ExecuteDeleteAsync();
+            return 0;
+        });
+
+        (await owner.PostAsync($"/api/trips/{tripId}/reload", null)).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var item = (await ItemsAsync(owner)).Single();
+        item.GetProperty("text").GetString().Should().Be("Whole milk 2L");
+        Identity(item).Should().Be(((string?)null, (string?)null));
     }
 
     [Fact]

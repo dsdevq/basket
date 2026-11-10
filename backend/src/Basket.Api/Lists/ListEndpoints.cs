@@ -179,7 +179,7 @@ public static class ListEndpoints
         return id is { } found ? ToResponse(await Project(db, found).SingleAsync(ct)) : null;
     }
 
-    private static bool IsUniqueViolation(DbUpdateException ex) =>
+    internal static bool IsUniqueViolation(DbUpdateException ex) =>
         ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation };
 
     private static async Task<IResult> SetChecked(

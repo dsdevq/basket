@@ -645,7 +645,8 @@ Issues 37 (close the trip) and 38 (history and reload), built on the list as it 
 a planned store or the shelf. Patterns borrowed: AnyList and OurGroceries ("clear crossed-off items" and the list history).
 
 - **A closed trip is a date, the ticked items and who ticked them, nothing more.** Two new tables, `trip` (`id`, `closed_at`) and
-  `trip_item` (`id`, `trip_id`, `text`, `checked_at`, `checked_by_user_id`). No shops, prices or planned store: marking a planned
+  `trip_item` (`id`, `trip_id`, `text`, `checked_at`, `checked_by_user_id`; `product_id` and `store` were added later, see the
+  2026-11-10 follow-up below). No prices or planned store: marking a planned
   store on a trip (issue 36) stays out. `trip_item` rows go with their trip; a deleted account leaves `checked_by_user_id` empty
   and the history then shows the item without a name.
 - **The close is an explicit action.** "Done shopping" sits on the Ticked section of the List tab and asks for a confirm that says
@@ -668,8 +669,13 @@ a planned store or the shelf. Patterns borrowed: AnyList and OurGroceries ("clea
   skipped, so a second tap adds nothing; a ticked line with the same text does not count as waiting. The 500-item cap of the list
   applies: over it the call answers 409 `list_full` and adds nothing. The trip stays in the history. The page then returns to the
   List tab and a toast says how many were added.
-- **Free text, as the list is.** Reloading copies the typed text; there is no link to a product, so a later change to the
-  catalogue never rewrites a past trip.
+- **Text, plus the product and shop of a Shelf line (2026-11-10 follow-up).** Reloading copies the typed text, and a trip item
+  closed from a Shelf line also keeps that line's `product_id` and `store` (nullable columns on `trip_item`, migration
+  `20261110130000_TripItemProduct`, additive; the product link is set null if the product is deleted). Reload restores both onto the new
+  line, so the Shelf tile marks it "On the list" instead of adding a second one, and a product line counts as already waiting when
+  an open line has the same product and shop, whatever its text. A free-text line, and every trip closed before this change, has
+  neither and reloads as text exactly as before; old trips are not backfilled and free text is not matched to products. The
+  history response and screen are unchanged. A later change to the catalogue still never rewrites a past trip's text.
 - **Migration: additive only.** `20261110110000_Trips` creates the two tables and their indexes and touches no existing table
   or row, so it merges under the standing authority for additive migrations. It is dated after `20261110100000_LoyaltyCard` so it applies
   after it; `Down` drops both tables. Backend tests run it from empty on every class.
