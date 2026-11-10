@@ -1005,8 +1005,10 @@ day. Builds on `LidlPlusConnectionService.AccessAsync`; the Lidl Plus offers (#1
   takes it as printed and does not net discount lines, so a paid price may be the price before a coupon), and the country (`LidlPlus:Country`,
   `TicketsBase` and `Language` are options for that reason). An answer basket cannot read ends as `lidl_unavailable` or `skipped`,
   never as a wrong price.
-- **One migration, additive: `20261110144147_LidlReceipts`.** It adds the three nullable columns and the partial unique index to `trip`
-  and touches no row. It sorts after `20261110134121_LidlPlusConnection`, the latest on main when this was generated; `Down` drops the
-  index and the columns. A migration waits for the owner's go before merge.
+- **One migration, additive: `20261110144147_LidlReceipts`.** It adds the three nullable columns and the partial unique index to `trip`,
+  adds the nullable `paid_at` column to `paid_price`, and replaces the `paid_price` index on `(product_id, store, paid_on)` with a unique
+  one. It touches no row. The unique index build would fail on duplicate `paid_price` rows; the table was empty before this change, so
+  none are expected. It sorts after `20261110134121_LidlPlusConnection`, the latest on main when this was generated; `Down` drops the
+  new indexes and columns and restores the non-unique `paid_price` index. A migration waits for the owner's go before merge.
 - **Screens.** No route is added or removed, and the mocks' History has no receipt trip, so the baselines do not change; the Linux
   baselines are drawn on CI only, as before.
