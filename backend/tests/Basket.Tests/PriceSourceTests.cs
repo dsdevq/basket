@@ -34,6 +34,7 @@ public sealed class PriceSourceTests
         var quote = pull.Listings[skewers.ListingId].Quote!;
         quote.Price.Should().Be(2.19m);
         quote.LoyaltyPrice.Should().Be(2.19m);
+        quote.ImageUrl.Should().Be("https://www.lidl.ie/assets/gcpa9b8e188dc8a48039b8b578c2c9466bf.png");
         fetcher.Requested.Should().Equal(OffersPage);
     }
 
@@ -51,6 +52,7 @@ public sealed class PriceSourceTests
         pull.Outcome.Should().Be(PullOutcome.Ok);
         pull.Listings[aubergine.ListingId].Quote!.Price.Should().BeNull("Lidl lists no price this week, which is itself the reading");
         pull.Listings[aubergine.ListingId].Quote!.Title.Should().Be("Aubergine");
+        pull.Listings[aubergine.ListingId].Quote!.ImageUrl.Should().Be("https://www.lidl.ie/assets/gcpbc4f96d4506e494eabf4ba0c20bb0335.png");
         fetcher.Requested.Should().Equal(OffersPage, AubergineUrl);
     }
 

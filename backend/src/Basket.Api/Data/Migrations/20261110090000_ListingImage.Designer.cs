@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Basket.Api.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20261109232031_LoyaltyCard")]
-    partial class LoyaltyCard
+    [Migration("20261110090000_ListingImage")]
+    partial class ListingImage
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -285,43 +285,6 @@ namespace Basket.Api.Data.Migrations
                     b.ToTable("list_item", (string)null);
                 });
 
-            modelBuilder.Entity("Basket.Api.Data.LoyaltyCard", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<string>("Format")
-                        .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("character varying(16)")
-                        .HasColumnName("format");
-
-                    b.Property<string>("NumberProtected")
-                        .IsRequired()
-                        .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)")
-                        .HasColumnName("number_protected");
-
-                    b.Property<string>("Store")
-                        .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("character varying(16)")
-                        .HasColumnName("store");
-
-                    b.Property<DateTimeOffset>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Store")
-                        .IsUnique();
-
-                    b.ToTable("loyalty_card", (string)null);
-                });
-
             modelBuilder.Entity("Basket.Api.Data.PaidPrice", b =>
                 {
                     b.Property<Guid>("Id")
@@ -504,6 +467,11 @@ namespace Basket.Api.Data.Migrations
                     b.Property<DateTimeOffset>("AddedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("added_at");
+
+                    b.Property<string>("ImageUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("image_url");
 
                     b.Property<DateTimeOffset?>("LastCheckedAt")
                         .HasColumnType("timestamp with time zone")

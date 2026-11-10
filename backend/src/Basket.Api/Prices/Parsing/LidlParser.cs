@@ -62,8 +62,14 @@ public static class LidlParser
             promo,
             PageData.CalendarDate(tile, [.. window, "startDate"]) ?? PageData.CalendarDate(tile, "storeStartDate"),
             PageData.CalendarDate(tile, [.. window, "endDate"]) ?? PageData.CalendarDate(tile, "storeEndDate"),
-            InStock: true);
+            InStock: true,
+            ImageUrl: TileImage(tile));
     }
+
+    /// <summary>The tile's own photo, or the first of its gallery.</summary>
+    private static string? TileImage(JsonElement tile) =>
+        PageData.ImageUrl(tile.TryGetProperty("image", out var image) ? image : null)
+        ?? PageData.ImageUrl(tile.TryGetProperty("imageList", out var list) ? list : null);
 
     /// <summary>A product page: name, price when Lidl lists one, and whether it is in stock.</summary>
     public static PriceQuote ParseProductPage(string html)
@@ -83,6 +89,7 @@ public static class LidlParser
             PromoText: null,
             ValidFrom: null,
             ValidUntil: null,
-            InStock: price is not null && availability is not null && availability.EndsWith("InStock", StringComparison.Ordinal));
+            InStock: price is not null && availability is not null && availability.EndsWith("InStock", StringComparison.Ordinal),
+            ImageUrl: PageData.ImageUrl(product.TryGetProperty("image", out var image) ? image : null) ?? PageData.OgImage(html));
     }
 }

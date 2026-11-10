@@ -120,7 +120,7 @@ planning record so this repo carries its own reasons; the M1 section holds the c
 - **One write-only endpoint, `POST /api/ingest/prices`.** The PC-side reader posts `{"prices": [...]}`, up to 200 readings
   (256 KB), each naming `store` (`tesco` or `aldi`), the product page `url` that is already linked to a product, and
   what the page said (`price`, `wasPrice`, `loyaltyPrice`, `loyaltyScheme`, `promoText`, `validFrom`, `validUntil`,
-  `inStock`, `title`). Readings go through `PriceRecorder`, so they become the same one-per-listing-per-Dublin-day
+  `inStock`, `title`, and optionally `imageUrl`, see "The product photo" below). Readings go through `PriceRecorder`, so they become the same one-per-listing-per-Dublin-day
   `price_observation` rows as the nightly Lidl job's, and the Prices page shows them the same way. Two products may link
   the same page; a reading for that URL is recorded against each of them and counts as one accepted reading.
 - **Dated by the server.** The reader cannot set `observedAt`: the server stamps the moment of the post. A reader that
@@ -592,9 +592,47 @@ number under it).
   `e2e/support/screens.ts`) are covered by the screen check, the route scan and the 390 / 1280 baselines. The Linux baselines
   for the new screens, and for More and every other screen that now has a Cards tab, are rendered by the "Update screen
   baselines" workflow on CI (`update-baselines` label), not from a local run.
-- **One migration, additive: `20261109232031_LoyaltyCard`.** It creates `loyalty_card` (and its unique index on `store`) and nothing else;
-  it touches no existing table. Needs the owner's go before merge, and it sorts after `IngestToken`, the latest on main when
-  this was written. Other ships' migrations must order after whichever merges first.
+- **One migration, additive: `20261110100000_LoyaltyCard`.** It creates `loyalty_card` (and its unique index on `store`) and nothing else;
+  it touches no existing table. It sorts after `ListingImage`, the latest on main when this was regenerated (the timestamp is set by hand
+  to order after it). Other ships' migrations must order after whichever merges first.
 - **Out of scope.** The Lidl Plus token connection and receipts (their own tasks). Scanning a card with the camera to add it
   (Stocard has it): `BarcodeDetector` is missing on iOS Safari, and the number is typed once per shop. Whether the Lidl Plus
   QR text is static or rotates is not verified here: a rotating one would not scan from a stored copy.
+
+## The product photo (2026-11-10, issue #30, part of epic #21)
+
+Owner's words: "lets have tiles, photos, price (promotion if applicable) and so on - that would be the card." The shelf shows a
+product as a card with a photo, so the nightly read keeps each store listing's photo address.
+
+- **One nullable column, `store_listing.image_url` (`StoreListing.ImageUrl`).** The address only, never the picture: basket
+  fetches, resizes and stores no image bytes, and the shelf's browser loads it from the shop's own image host. Up to 500
+  characters (`ImageUrls.MaxLength`). Per listing, not per product, because each shop shows its own photo.
+- **Addresses are checked once, in `ImageUrls.TryNormalize`:** absolute `https` only, at most 500 characters, no login in the
+  address, no control characters. Nothing else (data:, javascript:, http:, a relative path) is stored. Which host it points
+  at is not restricted: shops serve photos from their own CDNs (lidl.ie, aldi.cx, tesco.com) and an allow-list would break
+  the first time one moves.
+- **An absent photo never clears one.** `PriceRecorder` sets `ImageUrl` only when the reading carries a usable address, so a
+  page that shows no photo this night, or a reader that does not send the field, leaves the stored one alone. A changed
+  address replaces it, which is the "refreshed when the store changes it". Relinking a listing to a different page clears
+  it with the title and readings (another page is another product).
+- **Ingest takes `imageUrl` as an optional field** on `POST /api/ingest/prices`, for the owner's `bsk_` token and the fleet
+  identity alike (it is the same endpoint and the same validation). Absent or blank is fine. An address that is not a plain
+  https address within the cap is ignored exactly as `PriceRecorder` ignores it, and the reading's price, was-price and promo
+  are still recorded: a photo address never costs a price. Any stored photo stays. The reader's own check (`toImageUrl`)
+  uses the same rules as `ImageUrls.TryNormalize` (https only, no login, no control characters, within the cap), so a
+  shop quirk is dropped at the reader rather than sent.
+- **Capture.** Lidl, read by the VPS job: the offer tile's `image` (else the first of its `imageList`), and on a product page
+  the JSON-LD `image` (first of the gallery; a string, a list or an object with a `url`), else the page's `og:image`. Aldi
+  answers the VPS with "Access Denied", so it is read by the PC reader, not the VPS job: `pc-reader` takes the JSON-LD `image`,
+  else `og:image`, and sends it as `imageUrl`. The brief for this change said both were VPS reads; Aldi's capture is in the
+  reader that actually reads Aldi. Tesco and Dunnes capture is the same small change in `pc-reader/src/parse/` and is left for
+  its own ship; the contract already accepts it. Aldi's JSON-LD image is a 300-pixel-wide rendition; no larger one is on the page.
+- **Not here:** no screen, no matching, no search-add, and the product list API does not return the address yet (the shelf
+  ship adds `ImageUrl` to its responses and, if it landed first, owns the column: this change checked main for an existing
+  `ImageUrl` before adding its migration, and none was there).
+- **Migration `20261110090000_ListingImage`:** additive, one nullable `character varying(500)` column, no backfill, no index.
+  Existing rows are null and fill in on the next read (Lidl that night, Aldi at the next PC run). Rollback is dropping the
+  column. It needs the owner's go before merge.
+- **Tests** cover the Lidl tile and product-page capture (including `og:image` and bad addresses), the recorder's keep/replace
+  rule, ingest with the field present, absent, blank, and a bad address (over the cap, not https) ignored with the price kept and any
+  stored photo left alone, relinking clearing it, and the reader's address check and the Aldi parser.

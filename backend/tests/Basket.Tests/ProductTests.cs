@@ -85,10 +85,20 @@ public sealed class ProductTests : IClassFixture<BasketFactory>
         });
 
         (await owner.PutAsJsonAsync($"/api/products/{id}/stores/lidl", new { url = "https://www.lidl.ie/p/vitasia-10-chicken-breast-skewers/p11115738" })).EnsureSuccessStatusCode();
+        await _factory.WithDb(async db =>
+        {
+            (await db.StoreListings.SingleAsync(l => l.Id == listingId)).ImageUrl = "https://www.lidl.ie/assets/skewers.png";
+            await db.SaveChangesAsync();
+            return 0;
+        });
+
+        (await owner.PutAsJsonAsync($"/api/products/{id}/stores/lidl", new { url = "https://www.lidl.ie/p/vitasia-10-chicken-breast-skewers/p11115738" })).EnsureSuccessStatusCode();
         (await _factory.WithDb(db => db.PriceObservations.CountAsync(o => o.ListingId == listingId))).Should().Be(1, "the same page keeps its history");
+        (await _factory.WithDb(db => db.StoreListings.Where(l => l.Id == listingId).Select(l => l.ImageUrl).SingleAsync())).Should().NotBeNull("and its photo");
 
         (await owner.PutAsJsonAsync($"/api/products/{id}/stores/lidl", new { url = "https://www.lidl.ie/p/aubergine/p11214436" })).EnsureSuccessStatusCode();
         (await _factory.WithDb(db => db.PriceObservations.CountAsync(o => o.ListingId == listingId))).Should().Be(0, "another page is another product");
+        (await _factory.WithDb(db => db.StoreListings.Where(l => l.Id == listingId).Select(l => l.ImageUrl).SingleAsync())).Should().BeNull("its photo goes with it");
         (await _factory.WithDb(db => db.StoreListings.CountAsync(l => l.ProductId == id))).Should().Be(1);
     }
 

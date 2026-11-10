@@ -211,6 +211,7 @@ public static class ProductEndpoints
         {
             // A different page is a different product: forget what the old one said.
             listing.Title = null;
+            listing.ImageUrl = null;
             listing.LastCheckedAt = null;
             listing.LastError = null;
             await db.PriceObservations.Where(o => o.ListingId == listing.Id).ExecuteDeleteAsync(ct);
