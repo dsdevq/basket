@@ -100,6 +100,9 @@ app.UseForwardedHeaders();
 app.UseSerilogRequestLogging(options =>
 {
     RequestLogging.Configure(options);
+    // This host's own logger, not Serilog's process-wide static one: hosts built side by side (the integration tests)
+    // would otherwise log each other's requests to whichever logger was set last.
+    options.Logger = app.Services.GetRequiredService<Serilog.ILogger>();
     options.GetLevel = (context, _, ex) =>
         ex is not null || context.Response.StatusCode >= 500
             ? Serilog.Events.LogEventLevel.Error
