@@ -12,9 +12,17 @@ export interface PendingPage {
 
 const SHELL_ROUTE = APP_ROUTES.find(route => route.path === '' && route.children);
 
-function childFor(segment: string): Route | undefined {
+function matches(pattern: string, path: string): boolean {
+  const want = pattern.split('/');
+  const have = path.split('/');
+  return (
+    want.length === have.length && want.every((part, i) => part.startsWith(':') || part === have[i])
+  );
+}
+
+function childFor(path: string): Route | undefined {
   const children = SHELL_ROUTE?.children ?? [];
-  const child = children.find(route => route.path === segment);
+  const child = children.find(route => route.path !== undefined && matches(route.path, path));
   return child?.redirectTo === undefined
     ? child
     : children.find(route => route.path === child.redirectTo);

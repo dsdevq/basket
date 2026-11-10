@@ -1,11 +1,22 @@
 import {expect, test} from '@playwright/test';
 
+import {signedIn} from './support/screens';
+
 // The phone UX audit's `basket-boot` probe: a cold start with the session call held for 900 ms. The
 // shell draws at once, so the page that arrives moves nothing (Apple HIG, Loading and Launching).
 const SESSION_DELAY_MS = 900;
 const MAX_SHIFT = 0.1;
-const SESSION = {authenticated: true, user: {id: 'u1', displayName: 'Denys', role: 'owner'}};
-const PAGES = ['/list', '/prices', '/more', '/people', '/settings'];
+const PAGES = [
+  '/list',
+  '/history',
+  '/prices',
+  '/promotions',
+  '/cards',
+  '/cards/tesco',
+  '/more',
+  '/people',
+  '/settings',
+];
 
 for (const [name, viewport] of [
   ['phone', {width: 390, height: 844}],
@@ -18,14 +29,13 @@ for (const [name, viewport] of [
       test(`${path}: a slow session call shifts the layout by less than ${MAX_SHIFT}`, async ({
         page,
       }) => {
+        await signedIn(page);
         await page.route('**/api/session', async route => {
           await new Promise(resolve => setTimeout(resolve, SESSION_DELAY_MS));
-          await route.fulfill({json: SESSION});
+          await route.fulfill({
+            json: {authenticated: true, user: {id: 'u1', displayName: 'Denys', role: 'owner'}},
+          });
         });
-        await page.route('**/api/list', r => r.fulfill({json: {items: []}}));
-        await page.route('**/api/products', r => r.fulfill({json: {products: [], stores: []}}));
-        await page.route('**/api/members', r => r.fulfill({json: []}));
-        await page.route('**/api/invites', r => r.fulfill({json: []}));
         await page.addInitScript(() => {
           const w = window as unknown as {__shift: number};
           w.__shift = 0;
