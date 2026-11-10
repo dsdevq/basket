@@ -23,6 +23,7 @@ public sealed class AuthGuardTests : IClassFixture<BasketFactory>
     [InlineData("GET", "/api/products")]
     [InlineData("GET", "/api/promotions")]
     [InlineData("GET", "/api/plan")]
+    [InlineData("GET", "/api/plan/by-shop")]
     [InlineData("POST", "/api/products")]
     [InlineData("DELETE", "/api/products/00000000-0000-0000-0000-000000000001")]
     [InlineData("PUT", "/api/products/00000000-0000-0000-0000-000000000001/stores/lidl")]

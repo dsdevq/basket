@@ -30,3 +30,17 @@ test('the Plan tab is in the tab bar, Prices is behind More, and the plan says w
   await tabs.getByRole('button', {name: 'More'}).click();
   await expect(page.getByRole('link', {name: 'Prices'})).toBeVisible();
 });
+
+test('the Plan tab leads to the list priced at each shop, with what each lacks and the split', async ({
+  page,
+}) => {
+  await signedIn(page);
+  await page.goto('/plan');
+
+  await page.getByRole('button', {name: 'By shop'}).click();
+  await expect(page).toHaveURL(/\/plan\/by-shop$/);
+  await expect(page.getByTestId('verdict')).toContainText('No shop prices the whole list');
+  await expect(page.getByText('Not priced at Lidl')).toBeVisible();
+  await expect(page.getByText('Split: buy at Aldi')).toBeVisible();
+  await expect(page.getByText('Seen 6 Nov').first()).toBeVisible();
+});
