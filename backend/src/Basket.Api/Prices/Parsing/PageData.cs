@@ -46,7 +46,7 @@ internal static partial class PageData
     /// The leading "Home" crumb is dropped, and so is the last crumb when it is the product (its name, or its address, is the
     /// page's). Null when the page has no breadcrumb or nothing is left of it.
     /// </summary>
-    public static string? BreadcrumbCategory(string html, string? productName = null)
+    public static string? BreadcrumbCategory(string html, string? productName = null, string? productUrl = null)
     {
         foreach (Match block in JsonLdBlock().Matches(html))
         {
@@ -81,8 +81,9 @@ internal static partial class PageData
                     crumbs.RemoveAt(0);
                 }
 
-                if (crumbs.Count > 0 && productName is not null
-                    && string.Equals(crumbs[^1].Name, productName, StringComparison.OrdinalIgnoreCase))
+                if (crumbs.Count > 0
+                    && ((productName is not null && string.Equals(crumbs[^1].Name, productName, StringComparison.OrdinalIgnoreCase))
+                        || SamePath(crumbs[^1].Item, productUrl)))
                 {
                     crumbs.RemoveAt(crumbs.Count - 1);
                 }
@@ -94,6 +95,12 @@ internal static partial class PageData
 
         return null;
     }
+
+    private static bool SamePath(string? first, string? second) =>
+        Uri.TryCreate(first, UriKind.Absolute, out var a)
+        && Uri.TryCreate(second, UriKind.Absolute, out var b)
+        && a.AbsolutePath != "/"
+        && a.AbsolutePath == b.AbsolutePath;
 
     private static bool IsFrontPage(string? item, string name) =>
         string.Equals(name, "Home", StringComparison.OrdinalIgnoreCase)

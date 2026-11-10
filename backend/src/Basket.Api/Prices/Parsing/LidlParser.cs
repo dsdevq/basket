@@ -92,6 +92,6 @@ public static class LidlParser
             ValidUntil: null,
             InStock: price is not null && availability is not null && availability.EndsWith("InStock", StringComparison.Ordinal),
             ImageUrl: PageData.ImageUrl(product.TryGetProperty("image", out var image) ? image : null) ?? PageData.OgImage(html),
-            Category: PageData.BreadcrumbCategory(html, name));
+            Category: PageData.BreadcrumbCategory(html, name, PageData.String(product, "url")));
     }
 }

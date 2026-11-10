@@ -156,6 +156,15 @@ public sealed class PriceParserTests
     }
 
     [Fact]
+    public void Lidl_product_page_drops_the_last_crumb_by_address_when_its_name_differs_from_the_product()
+    {
+        var html = Fixtures.Read("lidl-product-page-breadcrumb.html").Replace(
+            "\"name\":\"10 Chicken Breast Skewers\",\"item\"", "\"name\":\"Chicken Skewers\",\"item\"");
+
+        LidlParser.ParseProductPage(html).Category.Should().Be("Food & Drink > Meat & Poultry");
+    }
+
+    [Fact]
     public void A_page_without_a_breadcrumb_has_no_category()
     {
         LidlParser.ParseProductPage(Fixtures.Read("lidl-product-page.html")).Category.Should().BeNull();
