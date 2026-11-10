@@ -771,8 +771,9 @@ the library's own switcher into Settings and sets the default.
 - **Lifekit is the default** (the owner's 2026-11-08 pick): `<html data-preset="lifekit">` in `index.html`, which is the
   library's documented way for an app to ship a default (`PresetService` keeps an offered `data-preset` already on the page when
   nothing is stored). The generated `theme-init` block is untouched.
-- **Kept the way the library keeps it:** per device, in `localStorage` under `cmn-preset`, not on the account. That matches the
-  Appearance caption "On this device"; there is no backend change and no migration.
+- **Kept the way the library keeps it:** per device, in `localStorage` under `cmn-preset`, not on the account; there is no
+  backend change and no migration. Because a Carbon pick does not persist (below), basket's Appearance caption reads "The look of
+  the app" rather than "On this device", and the what's-new note says only that the look can be changed, not that it is remembered.
 - **Known gap in the library, not worked around here:** `PresetService` stores no key for Carbon (it removes `cmn-preset` and
   `data-preset`). With the app default Lifekit on the page, a device that picked Carbon holds the choice only until the next
   reload, which comes back as Lifekit. Fixing it means the library remembering an explicit Carbon choice; basket does not
