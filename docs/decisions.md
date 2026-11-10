@@ -574,7 +574,7 @@ number under it).
   is imported on first use: the initial bundle is unchanged (1.40 MB raw), the extra lazy chunk is 184 kB over the wire and
   the service worker prefetches it like any page chunk. Module size is 4 px (10 for QR) so a phone scales the picture down and
   never up. A number the format cannot draw shows an error and no code; it is never drawn wrong.
-- **Where it lives: a third tab, and one screen per card.** `Cards` joins List and Prices in the tab bar (at the till it must be
+- **Where it lives: a fourth tab, and one screen per card.** `Cards` joins List, Prices and Promotions in the tab bar (at the till it must be
   one tap). `/cards` is a list of the four shops (name, masked number and code, or "Not added yet"); a row opens the code or,
   for a shop with no card, the add sheet. `/cards/:store` shows the card: the code and the number in groups of four as a preview,
   then "Show at till", "Change number or code" and "Remove card" (with a confirmation). Both are on `cmn-page` (`list` and
