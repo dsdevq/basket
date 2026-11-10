@@ -23,6 +23,10 @@
         {
           "text": "You can open What's new from the account menu or the More page to see what changed.",
           "owner": false
+        },
+        {
+          "text": "You can pick the look of the app, Lifekit or Carbon, in Settings under Appearance. Lifekit is the default.",
+          "owner": false
         }
       ],
       "changes": []
