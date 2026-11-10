@@ -14,6 +14,4 @@ public sealed class LidlPlusOptions
     public string ClientId { get; set; } = "LidlPlusNativeClient";
 
     public string ClientSecret { get; set; } = "secret";
-
-    public int RequestTimeoutSeconds { get; set; } = 20;
 }

@@ -189,8 +189,18 @@ public sealed class LidlPlusConnectionService(AppDbContext db, LidlPlusTokenProt
         }
     }
 
-    public async Task<bool> DisconnectAsync(CancellationToken ct) =>
-        await db.LidlPlusConnections.ExecuteDeleteAsync(ct) > 0;
+    public async Task<bool> DisconnectAsync(CancellationToken ct)
+    {
+        await Exchange.WaitAsync(ct);
+        try
+        {
+            return await db.LidlPlusConnections.ExecuteDeleteAsync(ct) > 0;
+        }
+        finally
+        {
+            Exchange.Release();
+        }
+    }
 
     private LidlPlusStatus Describe(LidlPlusConnection row)
     {

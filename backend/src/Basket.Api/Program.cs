@@ -61,7 +61,7 @@ builder.Services.AddHttpClient<ILidlPlusAuth, LidlPlusAuthClient>((services, cli
 {
     var options = services.GetRequiredService<Microsoft.Extensions.Options.IOptions<LidlPlusOptions>>().Value;
     client.BaseAddress = new Uri(options.AccountsBase.TrimEnd('/') + "/");
-    client.Timeout = TimeSpan.FromSeconds(options.RequestTimeoutSeconds);
+    client.Timeout = TimeSpan.FromSeconds(20);
     client.MaxResponseContentBufferSize = 64 * 1024;
     client.DefaultRequestHeaders.UserAgent.ParseAdd("basket/1.0 (a household app keeping its own Lidl Plus sign-in alive)");
     client.DefaultRequestHeaders.Accept.ParseAdd("application/json");
