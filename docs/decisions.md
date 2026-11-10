@@ -625,17 +625,18 @@ product as a card with a photo, so the nightly read keeps each store listing's p
   the JSON-LD `image` (first of the gallery; a string, a list or an object with a `url`), else the page's `og:image`. Aldi
   answers the VPS with "Access Denied", so it is read by the PC reader, not the VPS job: `pc-reader` takes the JSON-LD `image`,
   else `og:image`, and sends it as `imageUrl`. The brief for this change said both were VPS reads; Aldi's capture is in the
-  reader that actually reads Aldi. Tesco and Dunnes capture is the same small change in `pc-reader/src/parse/` and is left for
-  its own ship; the contract already accepts it. Aldi's JSON-LD image is a 300-pixel-wide rendition; no larger one is on the page.
+  reader that actually reads Aldi. Tesco and Dunnes are read by the PC reader too: their shared JSON-LD parser
+  (`parseJsonLdOnly`) takes the same Product `image`, else `og:image`, and sends it as `imageUrl`; like the rest of those two
+  parsers it is checked against hand-written fixtures, not a live page. Aldi's JSON-LD image is a 300-pixel-wide rendition; no larger one is on the page.
 - **Not here:** no screen, no matching, no search-add, and the product list API does not return the address yet (the shelf
   ship adds `ImageUrl` to its responses and, if it landed first, owns the column: this change checked main for an existing
   `ImageUrl` before adding its migration, and none was there).
 - **Migration `20261110090000_ListingImage`:** additive, one nullable `character varying(500)` column, no backfill, no index.
-  Existing rows are null and fill in on the next read (Lidl that night, Aldi at the next PC run). Rollback is dropping the
+  Existing rows are null and fill in on the next read (Lidl that night, Aldi, Tesco and Dunnes at the next PC run). Rollback is dropping the
   column. It needs the owner's go before merge.
 - **Tests** cover the Lidl tile and product-page capture (including `og:image` and bad addresses), the recorder's keep/replace
   rule, ingest with the field present, absent, blank, and a bad address (over the cap, not https) ignored with the price kept and any
-  stored photo left alone, relinking clearing it, and the reader's address check and the Aldi parser.
+  stored photo left alone, relinking clearing it, and the reader's address check and the Aldi, Tesco and Dunnes parsers.
 
 ## Done shopping and the history of trips (2026-11-10)
 
