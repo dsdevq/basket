@@ -15,7 +15,7 @@ export type ProductAction = 'delete';
   imports: [ButtonComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="flex flex-col gap-cmn-3 px-cmn-4 pb-cmn-4">
+    <div class="flex flex-col gap-cmn-3 px-cmn-6 pt-cmn-4 pb-cmn-6">
       <p class="text-cmn-xs text-text-secondary">
         Deleting {{ data.product.name }} also removes its shop links and price history.
       </p>

@@ -29,7 +29,7 @@ import {HttpStatus, statusOf} from '../../core/http-status';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (created(); as invite) {
-      <div class="flex flex-col gap-cmn-3 px-cmn-4 pb-cmn-4">
+      <div class="flex flex-col gap-cmn-3 px-cmn-6 pt-cmn-4 pb-cmn-6">
         <p class="text-cmn-sm text-text-primary">
           Send this link to {{ invite.label || 'them' }}. It works once and stops on
           {{ invite.expiresAt | date: 'EEE d MMM, HH:mm' }}.
@@ -69,7 +69,7 @@ import {HttpStatus, statusOf} from '../../core/http-status';
       <form
         [formGroup]="form"
         (ngSubmit)="create()"
-        class="flex flex-col gap-cmn-3 px-cmn-4 pb-cmn-4"
+        class="flex flex-col gap-cmn-3 px-cmn-6 pt-cmn-4 pb-cmn-6"
       >
         @if (problem()) {
           <cmn-alert [title]="problem()" variant="error" />

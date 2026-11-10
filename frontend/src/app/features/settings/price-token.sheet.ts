@@ -26,7 +26,7 @@ import {PriceRelayApi} from './price-relay.api';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (created(); as made) {
-      <div class="flex flex-col gap-cmn-3 px-cmn-4 pb-cmn-4">
+      <div class="flex flex-col gap-cmn-3 px-cmn-6 pt-cmn-4 pb-cmn-6">
         <p class="text-cmn-sm text-text-primary">
           Paste this into the price reader on {{ made.label || 'your PC' }}. basket will not show it
           again, so copy it now. It can only send Tesco and Aldi prices; it can read nothing.
@@ -57,7 +57,7 @@ import {PriceRelayApi} from './price-relay.api';
       <form
         [formGroup]="form"
         (ngSubmit)="create()"
-        class="flex flex-col gap-cmn-3 px-cmn-4 pb-cmn-4"
+        class="flex flex-col gap-cmn-3 px-cmn-6 pt-cmn-4 pb-cmn-6"
       >
         @if (problem()) {
           <cmn-alert [title]="problem()" variant="error" />
