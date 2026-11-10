@@ -4,7 +4,9 @@ export const HttpStatus = {
   unauthorized: 401,
   notFound: 404,
   conflict: 409,
+  unprocessable: 422,
   tooManyRequests: 429,
+  badGateway: 502,
 } as const;
 
 /** The HTTP status of a failed call, or 0 when the error is not an HTTP one. */
