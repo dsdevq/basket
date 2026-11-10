@@ -2,6 +2,7 @@ import {provideHttpClient, withInterceptors} from '@angular/common/http';
 import {type ApplicationConfig, ErrorHandler} from '@angular/core';
 import {provideRouter, TitleStrategy, withComponentInputBinding} from '@angular/router';
 import {
+  provideAppMark,
   provideDesignPresets,
   provideLucideIcons,
   provideToastPreferenceErrors,
@@ -21,6 +22,7 @@ export const appConfig: ApplicationConfig = {
     provideRouter(APP_ROUTES, withComponentInputBinding()),
     provideHttpClient(withInterceptors([sessionInterceptor])),
     provideLucideIcons(APP_ICONS),
+    provideAppMark('bk'),
     provideToastPreferenceErrors(),
     provideDesignPresets({id: 'lifekit', label: 'Lifekit'}),
     provideWhatsNew({version: APP_VERSION, storageKey: 'basket.whatsNew.lastSeen'}),

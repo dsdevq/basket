@@ -1,4 +1,4 @@
-import {BadgePercent, Maximize2, RotateCcw, Store, WalletCards} from 'lucide-angular';
+import {RotateCcw, Store} from 'lucide-angular';
 
 // eslint-disable-next-line @typescript-eslint/naming-convention -- Lucide icon names are PascalCase
-export const APP_ICONS = {BadgePercent, Maximize2, RotateCcw, Store, WalletCards};
+export const APP_ICONS = {RotateCcw, Store};
