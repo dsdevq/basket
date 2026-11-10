@@ -104,9 +104,9 @@ was blocked or a page was unreadable or refused (`unknown_listing` etc.), `1` co
 
 On 2026-11-07 tesco.ie answered every fresh, reader-made Chrome profile with Akamai's "Access Denied" (as it does the VPS),
 while a long-used Chrome profile was served a real page. So the Tesco parser follows the page's schema.org markup and is
-tested on hand-written fixtures only. It reads the price, name and stock from the JSON-LD offer and nothing from the visible
-text, so Tesco's was price, Clubcard price and offer dates are not posted until a live page shows where they can be read
-safely. The Aldi parser is tested on trimmed copies of live pages.
+tested on hand-written fixtures only. It reads the price, name and stock from the JSON-LD offer, the category from the page's
+breadcrumb, and nothing else from the visible text, so Tesco's was price, Clubcard price and offer dates are not posted
+until a live page shows where they can be read safely. The Aldi parser is tested on trimmed copies of live pages.
 
 ### The one manual step: open the reader's profile by hand once
 
@@ -137,8 +137,8 @@ profile locked, run `npm run profile` again and close Chrome normally.
 Dunnes' grocery shop, dunnesstoresgrocery.com, answers the VPS and a plain request from the author's PC alike with
 Cloudflare's "Just a moment..." challenge (2026-11-08, HTTP 403, `cf-mitigated: challenge`), so no real Dunnes product page
 has been read. The parser follows the page's schema.org JSON-LD offer, as Tesco's does, and is tested on hand-written
-fixtures only (plus the recorded challenge page, which must stop the shop). It posts the price, name and stock; the was
-price and promo text are not posted until a live page shows where they can be read safely. Dunnes has no card price in
+fixtures only (plus the recorded challenge page, which must stop the shop). It posts the price, name, stock and category (the page's breadcrumb); the
+was price and promo text are not posted until a live page shows where they can be read safely. Dunnes has no card price in
 basket. Whether Cloudflare serves the reader's Chrome profile is not known: the first run stops on a refusal and reports
 it as in "A blocked run". Nothing is built to get past it; `npm run profile` and its manual step below are written for
 Tesco and are not a Dunnes workaround. `npm start -- --store dunnes` runs only Dunnes.
