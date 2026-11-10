@@ -23,6 +23,10 @@
         {
           "text": "You can open What's new from the account menu or the More page to see what changed.",
           "owner": false
+        },
+        {
+          "text": "The app now uses the Lifekit look. You can change the look in Settings under Appearance.",
+          "owner": false
         }
       ],
       "changes": []

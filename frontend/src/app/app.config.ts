@@ -1,7 +1,7 @@
 import {provideHttpClient, withInterceptors} from '@angular/common/http';
 import {type ApplicationConfig, ErrorHandler} from '@angular/core';
 import {provideRouter, TitleStrategy, withComponentInputBinding} from '@angular/router';
-import {provideToastPreferenceErrors, provideWhatsNew} from '@lifekit-hq/ui';
+import {provideDesignPresets, provideToastPreferenceErrors, provideWhatsNew} from '@lifekit-hq/ui';
 
 import {APP_ROUTES} from './app.routes';
 import {sessionInterceptor} from './core/auth/session.interceptor';
@@ -15,6 +15,7 @@ export const appConfig: ApplicationConfig = {
     provideRouter(APP_ROUTES, withComponentInputBinding()),
     provideHttpClient(withInterceptors([sessionInterceptor])),
     provideToastPreferenceErrors(),
+    provideDesignPresets({id: 'lifekit', label: 'Lifekit'}),
     provideWhatsNew({version: APP_VERSION, storageKey: 'basket.whatsNew.lastSeen'}),
     {provide: ErrorHandler, useClass: CrashErrorHandler},
     provideMountMarker(),

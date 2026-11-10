@@ -18,7 +18,7 @@ import {PriceRelaySectionComponent} from './price-relay.section';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <cmn-page kind="list">
-      <cmn-settings-section heading="Appearance" caption="On this device">
+      <cmn-settings-section heading="Appearance" caption="The look of the app">
         <cmn-appearance-settings [appSeed]="seed" />
       </cmn-settings-section>
 
