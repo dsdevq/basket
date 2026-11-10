@@ -915,7 +915,8 @@ read through it is not here: receipts import (#45) and the Lidl Plus offers (#14
 - **Lidl rotates the refresh token, so the replacement is saved first.** When Lidl's answer carries a new `refresh_token` it replaces
   the stored one in the same call, before the access token is handed to anyone: losing it would end the connection. An answer
   without one means Lidl kept the old token. The exchange is behind a process-wide lock (basket runs as one instance), so two
-  exchanges of the same token cannot race and have Lidl refuse the second.
+  exchanges of the same token cannot race and have Lidl refuse the second. Disconnect takes the same lock, so it cannot delete the row
+while a check is waiting on Lidl to save its answer.
 - **The states.** `not_connected`, `connected`, `needs_new_token` (Lidl refused the saved token the last time it was used: the
   row keeps a `problem` of `token_rejected`, Lidl is not asked again, and a new paste clears it) and `unreadable`. An unreachable
   Lidl changes nothing: a check answers `502`, and the connection stays `connected`, because a network error says nothing about
