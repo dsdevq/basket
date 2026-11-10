@@ -645,7 +645,8 @@ Issues 37 (close the trip) and 38 (history and reload), built on the list as it 
 a planned store or the shelf. Patterns borrowed: AnyList and OurGroceries ("clear crossed-off items" and the list history).
 
 - **A closed trip is a date, the ticked items and who ticked them, nothing more.** Two new tables, `trip` (`id`, `closed_at`) and
-  `trip_item` (`id`, `trip_id`, `text`, `checked_at`, `checked_by_user_id`). No shops, prices or planned store: marking a planned
+  `trip_item` (`id`, `trip_id`, `text`, `checked_at`, `checked_by_user_id`; `product_id` and `store` were added later, see the
+  2026-11-10 follow-up below). No prices or planned store: marking a planned
   store on a trip (issue 36) stays out. `trip_item` rows go with their trip; a deleted account leaves `checked_by_user_id` empty
   and the history then shows the item without a name.
 - **The close is an explicit action.** "Done shopping" sits on the Ticked section of the List tab and asks for a confirm that says
