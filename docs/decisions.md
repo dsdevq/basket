@@ -447,7 +447,3 @@ Owner's goal: ticking and removing a list item should be one gesture on a phone 
 - **Delete skips the sheet.** The sheet's Delete button was already the confirmation; a swipe reveals a labelled Delete that must
   be pressed, so it is the same two deliberate steps. The store still rolls the row back if the server refuses.
 - No server change, no migration.
-- **Crash screen sizes follow the drift check.** The crash screen's heading went from 24px to 28px and the Reload button's radius
-  from `8px` to `var(--radius-md,8px)` only because `lifekit-chrome-check drift` rejects 24px (the type ramp is
-  12/14/16/20/28/32/42px) and a raw 8px radius after the 4.7.1 bump. 28px is the nearest ramp step that keeps the heading
-  above the body text.
