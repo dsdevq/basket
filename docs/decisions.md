@@ -716,5 +716,3 @@ unit that walk order will sort by; this change only keeps it. The sort is not bu
   right away) and the Carbon Loading pattern, as written up in lifekit-common's `docs/PHONE-CONTRACT.md`, "First paint".
   `e2e/cold-start.spec.ts` holds the audit's `basket-boot` probe: session delayed 900 ms, layout shift under 0.1 on every page
   at 390 and 1280.
-- **The crash-screen restyle (28px heading, pill Reload) is forced by `lifekit-chrome-check` drift after the 4.7.1 bump,**
-  not by the shell change; `public/boot-guard.js` is left as it was.
