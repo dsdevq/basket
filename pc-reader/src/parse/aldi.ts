@@ -1,10 +1,11 @@
 import { parse } from 'node-html-parser';
 import type { ParseResult, Reading } from '../types.ts';
-import { readJsonLdProduct, toMoney } from './jsonld.ts';
+import { readJsonLdProduct, readOgImage, toMoney } from './jsonld.ts';
 
 /**
  * An aldi.ie product page. The price, stock and name come from the page's schema.org JSON-LD; the was price and the
- * discount badge from the price block (`base-price`) next to the title. Aldi has no loyalty scheme.
+ * discount badge from the price block (`base-price`) next to the title. Aldi has no loyalty scheme. The photo is the
+ * JSON-LD `image` (first of the gallery), or the page's `og:image` when the JSON-LD has none.
  */
 export function parseAldi(html: string, url: string): ParseResult {
   const root = parse(html);
@@ -39,6 +40,10 @@ export function parseAldi(html: string, url: string): ParseResult {
   }
   if (inStock !== undefined) {
     reading.inStock = inStock;
+  }
+  const imageUrl = ld?.image ?? readOgImage(html);
+  if (imageUrl !== undefined) {
+    reading.imageUrl = imageUrl;
   }
   return { kind: 'reading', reading };
 }

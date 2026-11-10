@@ -26,6 +26,52 @@ public sealed class PriceParserTests
     }
 
     [Fact]
+    public void Lidl_offer_tile_keeps_the_photo_address_and_a_product_page_the_first_gallery_image()
+    {
+        Offers["11115738"].ImageUrl.Should().Be("https://www.lidl.ie/assets/gcpa9b8e188dc8a48039b8b578c2c9466bf.png");
+
+        LidlParser.ParseProductPage(Fixtures.Read("lidl-product-page.html")).ImageUrl
+            .Should().Be("https://www.lidl.ie/assets/gcpb5678e59619845ec8710bd6e485f4e3d.png");
+        LidlParser.ParseProductPage(Fixtures.Read("lidl-product-page-no-price.html")).ImageUrl
+            .Should().Be("https://www.lidl.ie/assets/gcpbc4f96d4506e494eabf4ba0c20bb0335.png");
+    }
+
+    [Fact]
+    public void A_product_page_without_json_ld_images_falls_back_to_og_image_and_never_to_a_bad_address()
+    {
+        const string Ld = """<script type="application/ld+json">{"@type":"Product","name":"Milk","image":"IMG"}</script>""";
+        const string Og = """<meta property="og:image" content="https://www.lidl.ie/assets/og.png?a=1&amp;b=2" />""";
+
+        LidlParser.ParseProductPage(Ld.Replace("\"IMG\"", "[]") + Og).ImageUrl.Should().Be("https://www.lidl.ie/assets/og.png?a=1&b=2");
+        LidlParser.ParseProductPage(Ld.Replace("\"IMG\"", "{\"url\":\"https://www.lidl.ie/assets/obj.png\"}")).ImageUrl.Should().Be("https://www.lidl.ie/assets/obj.png");
+        LidlParser.ParseProductPage(Ld.Replace("IMG", "http://www.lidl.ie/assets/plain.png")).ImageUrl.Should().BeNull("only https is kept");
+        LidlParser.ParseProductPage(Ld.Replace("IMG", "/assets/relative.png")).ImageUrl.Should().BeNull("a relative address is no address");
+        LidlParser.ParseProductPage(Ld.Replace("IMG", "")).ImageUrl.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("https://www.lidl.ie/assets/a.png", true)]
+    [InlineData("  https://dm.emea.cms.aldi.cx/is/image/x/Protein%20Milk  ", true)]
+    [InlineData("http://www.lidl.ie/assets/a.png", false)]
+    [InlineData("//www.lidl.ie/assets/a.png", false)]
+    [InlineData("javascript:alert(1)", false)]
+    [InlineData("data:image/png;base64,AAAA", false)]
+    [InlineData("https://user:pw@www.lidl.ie/a.png", false)]
+    [InlineData("", false)]
+    [InlineData(null, false)]
+    public void Only_a_plain_https_address_is_a_photo_address(string? raw, bool ok) =>
+        ImageUrls.TryNormalize(raw, out var url).Should().Be(ok, url);
+
+    [Fact]
+    public void A_photo_address_over_the_cap_is_refused()
+    {
+        var url = "https://www.lidl.ie/" + new string('a', ImageUrls.MaxLength);
+
+        ImageUrls.TryNormalize(url, out _).Should().BeFalse();
+        ImageUrls.TryNormalize(url[..ImageUrls.MaxLength], out _).Should().BeTrue();
+    }
+
+    [Fact]
     public void Lidl_offer_window_is_the_prices_own_not_the_tiles_store_dates()
     {
         // Oracle: regionsPrices.1 in the recorded tiles. The skewers' 2.19 runs 26 Aug - 11 Nov while the tile's

@@ -15,6 +15,8 @@ export interface Reading {
   validFrom?: string;
   validUntil?: string;
   inStock?: boolean;
+  /** The product photo's address (https, at most 500 characters); the server stores the address, never the picture. */
+  imageUrl?: string;
 }
 
 export interface WorkItem {

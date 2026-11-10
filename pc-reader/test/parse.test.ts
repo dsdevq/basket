@@ -16,7 +16,7 @@ function reading(result: ParseResult) {
 
 test('aldi: the recorded product page gives its price, title and stock', () => {
   const r = reading(readPage('aldi', ALDI, { status: 200, html: fixture('aldi-product-page.html') }));
-  assert.deepEqual(r, { store: 'aldi', url: ALDI, title: 'CLONBAWN Protein Milk', price: 1.49, inStock: true });
+  assert.deepEqual(r, { store: 'aldi', url: ALDI, title: 'CLONBAWN Protein Milk', price: 1.49, inStock: true, imageUrl: 'https://dm.emea.cms.aldi.cx/is/image/aldiprodeu/product/jpg/scaleWidth/300/d458166c-11f4-413b-be01-a553ebe074ce/Protein%20Milk' });
 });
 
 test('aldi: an on-offer page carries the was price and the discount badge', () => {
@@ -35,6 +35,24 @@ test('aldi: a sold-out product without a price is a valid out-of-stock reading',
   const r = reading(readPage('aldi', ALDI, { status: 200, html: fixture('aldi-product-page-sold-out.html') }));
   assert.equal(r.price, undefined);
   assert.equal(r.inStock, false);
+});
+
+test('aldi: the photo is the JSON-LD image, else og:image, and only a plain https address', () => {
+  const html = fixture('aldi-product-page.html');
+  const ld = /<script type="application\/ld\+json">.*?<\/script>/gs;
+  const withOg = html.replace(ld, '').replace('</head>', '<meta property="og:image" content="https://dm.emea.cms.aldi.cx/is/image/og.jpg?a=1&amp;b=2"></head>');
+  assert.equal(reading(readPage('aldi', ALDI, { status: 200, html: withOg })).imageUrl, 'https://dm.emea.cms.aldi.cx/is/image/og.jpg?a=1&b=2');
+
+  const insecure = html.replace('"image":["https://', '"image":["http://');
+  assert.equal(reading(readPage('aldi', ALDI, { status: 200, html: insecure })).imageUrl, undefined);
+  const none = html.replace(/"image":\[[^\]]*\],?/, '');
+  assert.equal(reading(readPage('aldi', ALDI, { status: 200, html: none })).imageUrl, undefined);
+  const withNewline = html.replace('Protein%20Milk"', 'Protein\\nMilk"');
+  assert.equal(reading(readPage('aldi', ALDI, { status: 200, html: withNewline })).imageUrl, undefined);
+  const withTab = html.replace('Protein%20Milk"', 'Protein\\tMilk"');
+  assert.equal(reading(readPage('aldi', ALDI, { status: 200, html: withTab })).imageUrl, undefined);
+  const tooLong = html.replace('Protein%20Milk"', `${'a'.repeat(600)}"`);
+  assert.equal(reading(readPage('aldi', ALDI, { status: 200, html: tooLong })).imageUrl, undefined);
 });
 
 test('tesco: the price, title and stock come from the JSON-LD offer, and offer wording in the text is not read', () => {

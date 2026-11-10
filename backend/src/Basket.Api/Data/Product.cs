@@ -30,6 +30,12 @@ public sealed class StoreListing
     /// <summary>The shop's own name for it, learned on the first successful read.</summary>
     public string? Title { get; set; }
 
+    /// <summary>
+    /// Where the shop shows this product's photo (an https address, never the bytes), kept from the last read that
+    /// carried one. A read without a photo leaves it as it was.
+    /// </summary>
+    public string? ImageUrl { get; set; }
+
     public DateTimeOffset AddedAt { get; set; }
 
     public DateTimeOffset? LastCheckedAt { get; set; }
