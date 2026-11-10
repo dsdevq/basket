@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Basket.Api.Data;
 using Basket.Api.Prices;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace Basket.Api.Cards;
 
@@ -19,6 +20,8 @@ public sealed record CardResponse(string Store, string Name, string Format, stri
 /// </summary>
 public static class CardEndpoints
 {
+    private const string StoreIndex = "IX_loyalty_card_store";
+
     public static void MapCardEndpoints(this IEndpointRouteBuilder api)
     {
         var cards = api.MapGroup("/cards").AddEndpointFilter(NoStore);
@@ -118,7 +121,7 @@ public static class CardEndpoints
         {
             await db.SaveChangesAsync(ct);
         }
-        catch (DbUpdateException) when (created)
+        catch (DbUpdateException ex) when (created && IsStoreAlreadyTaken(ex))
         {
             // The other person added this shop's card in the same moment; the unique index let one through.
             return Results.Json(new { error = "card_exists", message = $"{shop.DisplayName()} already has a card. Open it to change it." }, statusCode: 409);
@@ -128,6 +131,9 @@ public static class CardEndpoints
             new CardResponse(Key(shop), shop.DisplayName(), CardNumbers.FormatName(format), number, now),
             statusCode: created ? 201 : 200);
     }
+
+    private static bool IsStoreAlreadyTaken(DbUpdateException ex) =>
+        ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: StoreIndex };
 
     private static async Task<IResult> DeleteCard(string store, AppDbContext db, CancellationToken ct) =>
         !Stores.TryParse(store, out var shop) ? UnknownStore()

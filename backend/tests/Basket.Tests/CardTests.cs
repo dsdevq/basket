@@ -202,6 +202,65 @@ public sealed class CardTests : IClassFixture<BasketFactory>
     }
 
     [Fact]
+    public async Task Two_people_adding_the_same_shop_at_once_leave_one_card_and_the_loser_is_told_it_exists()
+    {
+        var owner = await CleanOwnerAsync();
+        var userId = await _factory.WithDb(db => db.Users.Select(u => u.Id).FirstAsync());
+        _factory.BeforeCardInsert = () => _factory.WithDb(async db =>
+        {
+            db.LoyaltyCards.Add(new LoyaltyCard
+            {
+                Id = Guid.NewGuid(), Store = Store.Tesco, Format = CardFormat.Code128, NumberProtected = "the-other-persons",
+                AddedAt = DateTimeOffset.UtcNow, UpdatedAt = DateTimeOffset.UtcNow, AddedByUserId = userId,
+            });
+            await db.SaveChangesAsync();
+            return 0;
+        });
+
+        try
+        {
+            var lost = await owner.PutAsJsonAsync("/api/cards/tesco", new { number = TescoNumber });
+
+            lost.StatusCode.Should().Be(HttpStatusCode.Conflict);
+            (await Body(lost)).GetProperty("error").GetString().Should().Be("card_exists");
+            (await _factory.WithDb(db => db.LoyaltyCards.CountAsync())).Should().Be(1);
+        }
+        finally
+        {
+            _factory.BeforeCardInsert = null;
+        }
+    }
+
+    [Fact]
+    public async Task A_database_failure_other_than_a_duplicate_shop_is_not_reported_as_an_existing_card()
+    {
+        var owner = await CleanOwnerAsync();
+        var (her, _) = await _factory.MemberAsync(owner, "Leaves mid-save");
+        // The person saving is deleted between sign-in and the insert: a foreign-key failure, not a duplicate shop.
+        _factory.BeforeCardInsert = () => _factory.WithDb(db => db.Users.Where(u => u.DisplayName == "Leaves mid-save").ExecuteDeleteAsync());
+
+        try
+        {
+            HttpResponseMessage? response = null;
+            try
+            {
+                response = await her.PutAsJsonAsync("/api/cards/aldi", new { number = "123456789" });
+            }
+            catch (Exception)
+            {
+                // The host lets an unexpected failure surface; that is the outcome wanted, anything but a 409.
+            }
+
+            response?.StatusCode.Should().Be(HttpStatusCode.InternalServerError);
+            (await _factory.WithDb(db => db.LoyaltyCards.CountAsync())).Should().Be(0);
+        }
+        finally
+        {
+            _factory.BeforeCardInsert = null;
+        }
+    }
+
+    [Fact]
     public async Task A_number_that_cannot_be_decrypted_is_reported_not_guessed()
     {
         var owner = await CleanOwnerAsync();
