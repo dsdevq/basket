@@ -134,9 +134,7 @@ import {
                 Prices as of {{ asOf() }}. The best shop for a line has the lowest price per kilo,
                 litre or piece, a card price included, among prices read in the last
                 {{ store.staleAfterDays() }} days that are in stock. Older prices and shops that are
-                out of stock are shown but never picked, and a line is never guessed. Last paid is
-                the price on your latest receipt at that shop; it is shown beside the offer and
-                never decides which shop is best.
+                out of stock are shown but never picked, and a line is never guessed.
               </p>
             </cmn-list-section>
           }
