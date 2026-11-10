@@ -300,8 +300,6 @@ change borrows one named pattern; the audit is the 2026-11-07 phone UX audit (39
   menu with nothing to fetch, and People and Settings are pushed screens, so none of them registers a reload.
   `PricesStore.load` drops a response that a later load or a local remove has overtaken (as `ListStore.load` does), so a
   slow pull cannot bring a deleted product back.
-- **The crash screen's heading and button changed only because `lifekit-chrome-check drift` required it after the 4.7.1 bump.**
-  The heading moved from 24px to 28px (the type ramp) and the button from an 8px radius to a pill (the radius scale); nothing else about it changed.
 - **Sign-in leads with the explanation and one primary action (Carbon Empty states; HIG Onboarding).** A `cmn-empty-state`
   (icon, "The shopping list for the two of you", "Sign in with the passkey on this phone. There is no password.", the
   passkey button in its `cta` slot) in the middle of the screen, the invite hint under it. The join and unreachable
