@@ -236,7 +236,9 @@ describe('PlanPage', () => {
       'Kerrygold butter 227g'
     );
     expect(text(host, '[data-testid="rule"]')).toContain('the two shops that together do');
-    expect(text(host, '[data-testid="rule"]')).toContain('the shop of the two with the lower price');
+    expect(text(host, '[data-testid="rule"]')).toContain(
+      'the shop of the two with the lower price'
+    );
   });
 
   it('proposes no pair when the server sends none', async () => {
