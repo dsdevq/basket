@@ -81,7 +81,8 @@ anything else stops the run before a browser opens, naming the entry. Query stri
 - Each page's price, name and stock are posted as read, with the was price and promo text where the shop's markup gives
   them (Aldi only; see the Tesco and Dunnes sections below); basket dates the reading itself. Aldi pages also post the product
   photo's address (the JSON-LD `image`, else `og:image`; https only, otherwise left out), never the picture; see
-  [docs/decisions.md](../docs/decisions.md) ("The product photo"). A page it cannot read (shop changed its
+  [docs/decisions.md](../docs/decisions.md) ("The product photo"). Every shop's page also posts its category, the breadcrumb
+  as a path ("Chilled Food > Milk"), when the page has one; see "Each store page keeps its category" there. A page it cannot read (shop changed its
   markup, 404) is reported and nothing is posted for it.
 
 ## A blocked run

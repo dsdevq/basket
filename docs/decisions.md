@@ -120,7 +120,7 @@ planning record so this repo carries its own reasons; the M1 section holds the c
 - **One write-only endpoint, `POST /api/ingest/prices`.** The PC-side reader posts `{"prices": [...]}`, up to 200 readings
   (256 KB), each naming `store` (`tesco` or `aldi`), the product page `url` that is already linked to a product, and
   what the page said (`price`, `wasPrice`, `loyaltyPrice`, `loyaltyScheme`, `promoText`, `validFrom`, `validUntil`,
-  `inStock`, `title`, and optionally `imageUrl`, see "The product photo" below). Readings go through `PriceRecorder`, so they become the same one-per-listing-per-Dublin-day
+  `inStock`, `title`, and optionally `imageUrl` and `category`, see "The product photo" and "Each store page keeps its category" below). Readings go through `PriceRecorder`, so they become the same one-per-listing-per-Dublin-day
   `price_observation` rows as the nightly Lidl job's, and the Prices page shows them the same way. Two products may link
   the same page; a reading for that URL is recorded against each of them and counts as one accepted reading.
 - **Dated by the server.** The reader cannot set `observedAt`: the server stamps the moment of the post. A reader that
