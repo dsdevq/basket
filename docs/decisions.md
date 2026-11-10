@@ -912,7 +912,9 @@ changes land here; the library halves are fixed in lifekit-common, not worked ar
 - **Icons the app uses outside the library's set (#83).** `BadgePercent` (the Promotions tab), `Store` (the Shelf tab),
   `WalletCards` (the Cards tab and Add card), `Maximize2` (Show at till) and `RotateCcw` (Same as last time on History) are
   registered with `provideLucideIcons` in `app.config.ts`, from `core/icons.ts`. Without that `<cmn-icon>` renders an empty box.
-  `tab-icons.spec.ts` renders the shell with the real app providers and fails on any tab icon that draws nothing.
+  `tab-icons.spec.ts` renders the shell with the real app providers and fails on any tab icon that draws nothing. Since
+  `@lifekit-hq/ui` 4.8.0 the library ships `BadgePercent`, `WalletCards` and `Maximize2`, so only `Store` and `RotateCcw` stay
+  registered (see "Adopting `@lifekit-hq/ui` 4.8.0" above).
 - **Row overflow and cancel-link buttons are `ghost` (#86).** The list item's and product's overflow (`Ellipsis`) and the pending
   invite's cancel (`X`) are `variant="ghost"`, so they read as row furniture and not as a second primary action.
 - **Sheet bodies are padded `px-cmn-6 pt-cmn-4 pb-cmn-6` (#88).** All seven `*.sheet.ts` bodies carry the padding themselves so
