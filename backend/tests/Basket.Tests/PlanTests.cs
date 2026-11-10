@@ -590,6 +590,55 @@ public sealed class PlanTests : IClassFixture<BasketFactory>
     }
 
     [Fact]
+    public async Task The_endpoint_proposes_the_cheapest_two_shop_split_when_no_one_shop_covers_the_list()
+    {
+        var (owner, _) = await _factory.OwnerAsync();
+        var today = PriceRecorder.DublinDay(_factory.Clock.GetUtcNow());
+        await _factory.WithDb(async db =>
+        {
+            await db.ListItems.ExecuteDeleteAsync();
+            await db.Products.ExecuteDeleteAsync();
+            var user = await db.Users.Select(u => u.Id).FirstAsync();
+            var at = DateTimeOffset.UtcNow;
+            async Task Line(string name, params (Store Store, decimal Price, decimal? Card)[] reads)
+            {
+                var product = new Product { Id = Guid.NewGuid(), Name = name, AddedAt = at, AddedByUserId = user };
+                db.Products.Add(product);
+                db.ListItems.Add(new ListItem { Id = Guid.NewGuid(), Text = name, ProductId = product.Id, AddedAt = at, AddedByUserId = user });
+                foreach (var (store, price, card) in reads)
+                {
+                    var listing = new StoreListing { Id = Guid.NewGuid(), ProductId = product.Id, Store = store, Url = "https://example.test/" + Guid.NewGuid(), AddedAt = at };
+                    db.StoreListings.Add(listing);
+                    db.PriceObservations.Add(new PriceObservation
+                    {
+                        Id = Guid.NewGuid(), ListingId = listing.Id, ObservedOn = today, ObservedAt = _factory.Clock.GetUtcNow(),
+                        Price = price, LoyaltyPrice = card, LoyaltyScheme = card is null ? null : "Clubcard", InStock = true,
+                    });
+                }
+
+                await db.SaveChangesAsync();
+            }
+
+            await Line("Milk 1L", (Store.Lidl, 1.20m, null), (Store.Tesco, 1.30m, 1.00m));
+            await Line("Eggs 12 pack", (Store.Aldi, 3.00m, null), (Store.Dunnes, 3.40m, null));
+            await Line("Butter 250g", (Store.Aldi, 2.00m, null), (Store.Tesco, 2.30m, null));
+            return 0;
+        });
+
+        var plan = await owner.GetFromJsonAsync<JsonElement>("/api/plan");
+
+        var coverage = plan.GetProperty("coverage");
+        coverage.GetProperty("singleStore").GetBoolean().Should().BeFalse();
+        var split = coverage.GetProperty("split");
+        split.GetProperty("total").GetDecimal().Should().Be(6.00m, "milk at Tesco on the Clubcard price 1.00, eggs and butter at Aldi 5.00");
+        split.GetProperty("cards").EnumerateArray().Select(c => c.GetString()).Should().Equal("Clubcard");
+        var groups = split.GetProperty("groups").EnumerateArray().ToList();
+        groups.Select(g => g.GetProperty("store").GetString()).Should().Equal("aldi", "tesco");
+        groups[0].GetProperty("lines").EnumerateArray().Select(l => l.GetProperty("text").GetString()).Should().Equal("Eggs 12 pack", "Butter 250g");
+        groups[1].GetProperty("total").GetDecimal().Should().Be(1.00m);
+    }
+
+    [Fact]
     public async Task The_endpoint_refuses_the_anonymous()
     {
         (await _factory.NewBrowser().GetAsync("/api/plan")).StatusCode.Should().Be(System.Net.HttpStatusCode.Unauthorized);
