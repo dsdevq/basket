@@ -16,7 +16,10 @@ defineRouteScans(
         await page.clock.install({time: FROZEN_NOW});
         await route.setup(page);
       },
-      ready: page => page.locator('cmn-page').first().waitFor(),
+      ready: async page => {
+        await page.locator('cmn-page').first().waitFor();
+        await route.reveal?.(page);
+      },
     })),
   }
 );

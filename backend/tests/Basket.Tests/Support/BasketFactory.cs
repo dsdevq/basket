@@ -6,6 +6,8 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Time.Testing;
@@ -30,6 +32,12 @@ public sealed class BasketFactory : WebApplicationFactory<Program>
     private readonly string _database = $"basket_test_{Guid.NewGuid():N}";
 
     public FakeTimeProvider Clock { get; } = new(DateTimeOffset.UtcNow);
+
+    /// <summary>What every test host has logged so far; see <see cref="LogCapture"/>.</summary>
+    public LogCapture Logs => LogCapture.Shared;
+
+    /// <summary>Runs on its own connection just before a new loyalty card is written, so a test can cause the moment the insert meets.</summary>
+    public Func<Task>? BeforeCardInsert { get; set; }
 
     public int AuthRequestsPerMinute { get; init; } = 1000;
 
@@ -84,6 +92,8 @@ public sealed class BasketFactory : WebApplicationFactory<Program>
 
         builder.ConfigureTestServices(services =>
         {
+            services.AddSingleton<Serilog.Core.ILogEventSink>(Logs);
+            services.ConfigureDbContext<AppDbContext>(options => options.AddInterceptors(new CardInsertHook(this)));
             services.RemoveAll<TimeProvider>();
             services.AddSingleton<TimeProvider>(Clock);
             if (FleetAgentEnabled)
@@ -181,5 +191,21 @@ public sealed class BasketFactory : WebApplicationFactory<Program>
         var client = NewBrowser();
         var (passkey, _) = await RegisterAsync(client, token, name);
         return (client, passkey);
+    }
+}
+
+file sealed class CardInsertHook(BasketFactory factory) : SaveChangesInterceptor
+{
+    public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
+        DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+    {
+        var inserting = eventData.Context!.ChangeTracker.Entries<LoyaltyCard>().Any(e => e.State == EntityState.Added);
+        if (inserting && factory.BeforeCardInsert is { } hook)
+        {
+            factory.BeforeCardInsert = null;
+            await hook();
+        }
+
+        return result;
     }
 }
