@@ -1,6 +1,6 @@
 # pc-reader
 
-Reads Tesco, Aldi and Dunnes product pages in an ordinary browser on **your own PC and home connection** and posts the
+Reads Aldi and Dunnes product pages (and Tesco's, while it is not paused, see below) in an ordinary browser on **your own PC and home connection** and posts the
 prices to basket's write-only ingest endpoint (`POST /api/ingest/prices`). tesco.ie, aldi.ie and dunnesstoresgrocery.com
 refuse the VPS, so this is how those three shops get prices (see [docs/decisions.md](../docs/decisions.md), "M2 decisions",
 "Price ingest decisions" and "Dunnes: the server cannot read it, the PC reader does").
@@ -125,7 +125,8 @@ cd pc-reader && npm run profile
 It opens your installed Chrome as a plain browser (no Playwright, no automation flags) on the reader's own profile
 directory, the same `BASKET_READER_PROFILE` the reader uses, at https://www.tesco.ie. Browse tesco.ie as you normally
 would, accept the cookie banner, sign in to Clubcard only if you want Clubcard prices, then **close Chrome** (the reader
-cannot open the profile while Chrome has it open). Then retry Tesco once:
+cannot open the profile while Chrome has it open). Then, with Tesco back in `ENABLED_STORES` (it is paused otherwise and
+`--store tesco` would read nothing), retry Tesco once:
 
 ```sh
 npm start -- --store tesco
