@@ -6,6 +6,10 @@ refuse the VPS, so this is how those three shops get prices (see [docs/decisions
 "Price ingest decisions" and "Dunnes: the server cannot read it, the PC reader does").
 A product whose shop has not been read yet shows "Waiting for the next PC read" in basket.
 
+**Tesco is paused for now.** The reader skips Tesco entries (from the catalog or the URL file) with one log line per run, not
+an error, and reads Aldi and Dunnes as usual. To read Tesco again, add `'tesco'` back to `ENABLED_STORES` in `src/types.ts`.
+The Tesco parser, fixtures and tests are kept.
+
 It is a small Node program: Chrome (installed on the PC, with a profile of its own) loads each page, a parser reads what
 the page says, and the readings go to basket in batches. Nothing is scheduled; you run it when the PC is on.
 
@@ -101,7 +105,7 @@ Progress goes to stderr, the JSON summary to stdout. Exit code: `0` every page r
 was blocked or a page was unreadable or refused (`unknown_listing` etc.), `1` could not start, basket could not be reached, or basket refused a batch
 (bad token, rate limit).
 
-## Tesco: not yet checked against a live page
+## Tesco: not yet checked against a live page (paused, see above)
 
 On 2026-11-07 tesco.ie answered every fresh, reader-made Chrome profile with Akamai's "Access Denied" (as it does the VPS),
 while a long-used Chrome profile was served a real page. So the Tesco parser follows the page's schema.org markup and is
