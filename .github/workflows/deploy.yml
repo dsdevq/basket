@@ -1,14 +1,21 @@
 name: Deploy to VPS
 
-# Builds the image on the box from the pushed commit and restarts the basket stack. The runner is
-# self-hosted on the VPS (labels below); until one is registered for this repo the job just queues.
-# The secrets live in ~/.config/basket/env on the box, never in GitHub (see docs/vps-setup.md).
+# Deploys the image CI published for one commit (ghcr.io/dsdevq/basket:<full SHA>), by that SHA. Nothing is built on
+# the box and no npm token is needed. The runner is self-hosted on the VPS (labels below). The secrets are the
+# SOPS-encrypted docker/.env.sops in the repo, decrypted by docker/deploy.sh (see docs/vps-setup.md).
 on:
+  # A push to main deploys once the whole CI run succeeded, image publish included.
   workflow_run:
     workflows: [CI]
     types: [completed]
     branches: [main]
+  # Manual deploy or rollback: `sha` names the commit whose image to deploy.
   workflow_dispatch:
+    inputs:
+      sha:
+        description: Full commit SHA to deploy (rollback). Empty = the head of the selected branch.
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -24,9 +31,26 @@ jobs:
       group: deploy
       cancel-in-progress: false
     steps:
+      # The workflow's own ref supplies the compose file and deploy script; the SHA only selects which image runs,
+      # so a rollback redeploys an older image under the current config.
       - uses: actions/checkout@v7
-        with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
-      - run: docker/deploy.sh
+      - name: Resolve the commit to deploy
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_SHA: ${{ inputs.sha }}
+          RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+          REF_SHA: ${{ github.sha }}
+        run: |
+          sha="${INPUT_SHA:-${RUN_SHA:-$REF_SHA}}"
+          sha="$(tr -d '[:space:]' <<< "$sha" | tr 'A-F' 'a-f')"
+          if ! [[ $sha =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::the commit to deploy must be a full 40-character SHA"
+            exit 1
+          fi
+          echo "IMAGE_TAG=$sha" >> "$GITHUB_ENV"
+          echo "deploying $sha"
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - run: docker/deploy.sh

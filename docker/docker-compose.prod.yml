@@ -1,10 +1,12 @@
 # basket - production stack on the VPS. Project name `basket`: always run it with `-p basket` (the name below
 # also pins it), so it never collides with another stack on the box.
 #
-#   docker compose -f docker/docker-compose.prod.yml --env-file ~/.config/basket/env up -d --build
+#   IMAGE_TAG=<full commit SHA> docker/deploy.sh
 #
-# The env file holds the secrets and is NOT in git (~/.config/basket/env; see docs/vps-setup.md and
-# docker/.env.example). docker/deploy.sh wraps the command above.
+# The app runs the image CI published for one commit, ghcr.io/dsdevq/basket:<IMAGE_TAG>; the deploy pulls it and builds
+# nothing. The `build:` block stays for the break-glass build on the host (see docker/deploy.sh); IMAGE_TAG unset means
+# a locally built `:local`. The secrets are docker/.env.sops (SOPS + age), which deploy.sh decrypts into the git-ignored
+# docker/.env; see docs/vps-setup.md and docker/.env.example.
 # The app listens on 127.0.0.1:3310 only; Tailscale Funnel (port 10000) is the one public way in.
 name: basket
 
@@ -15,7 +17,7 @@ services:
       dockerfile: docker/Dockerfile
       secrets:
         - npm_token
-    image: basket-app:${IMAGE_TAG:-local}
+    image: ghcr.io/dsdevq/basket:${IMAGE_TAG:-local}
     container_name: basket-app
     restart: unless-stopped
     depends_on:
@@ -94,7 +96,8 @@ networks:
     external: true
 
 secrets:
-  # The npm registry token for the image build only (@lifekit-hq/* on GitHub Packages): export NODE_AUTH_TOKEN.
+  # The npm registry token for the break-glass host build only (@lifekit-hq/* on GitHub Packages): export NODE_AUTH_TOKEN.
+  # CI passes its own token; a normal deploy builds nothing.
   npm_token:
     environment: NODE_AUTH_TOKEN
 

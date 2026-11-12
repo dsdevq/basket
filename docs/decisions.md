@@ -56,9 +56,14 @@ planning record so this repo carries its own reasons; the M1 section holds the c
   the allowed origin includes `:10000`.
 - **One container serves both.** The .NET API serves the Angular build from `wwwroot` (one image, one port 3310, no
   nginx). Hashed assets are cached immutably; `index.html` is not.
-- **Deploy secrets are an env file outside git** (`~/.config/basket/env`, mode 600) holding the database password and
-  the bootstrap token. SOPS/age was left out for M1: the file has three values, all generated on the box, and none
-  needs to be shared or recovered from git. Move to SOPS if the set grows or a second operator appears.
+- **Deploy secrets are SOPS + age** (`docker/.env.sops`, committed encrypted; `docker/deploy.sh` decrypts it on the box
+  with firstmate's key, as finance-sentry does). M1 kept an env file outside git (`~/.config/basket/env`) because it had
+  three values, all generated on the box, and named the OIDC client secret (issued in Logto, not generated on the box) as
+  the trigger to move. Moved on 2026-11-12 as part of deploying like the rest of the family.
+- **The image is built once by CI and pulled by SHA.** The `image builds` job in `ci.yml` builds `ghcr.io/dsdevq/basket`
+  natively on arm64 and, on a push to `main`, publishes `:<full commit SHA>`. The deploy workflow starts when that CI run
+  succeeds and pulls that SHA, so the box builds nothing and needs no `NODE_AUTH_TOKEN`; a rollback is a deploy of an
+  older SHA. The compose file keeps its `build:` block as the break-glass path.
 - **Memory budget:** app container 256 MB, Postgres 192 MB (`shared_buffers=48MB`, 30 connections). Hangfire runs 2
   workers; its only M1 job purges dead invites nightly at 04:30 Europe/Dublin.
 - **Polling, not SignalR or push.** The list must show the other person's changes, so it polls every 15 seconds while the
