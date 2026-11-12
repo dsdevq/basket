@@ -1,0 +1,30 @@
+name: Release Please
+
+# Maintains the release PR (version bump in frontend/package.json, its lockfile and core/version.ts, plus
+# CHANGELOG.md) from the conventional commit titles on main, through the lifekit-hq/.github reusable
+# template, on the release-bot app token so the release PR gets real CI (a GITHUB_TOKEN push fires no
+# workflows, so that PR could never get its checks or merge). Once that PR merges, release-please tags
+# the release and publishes the GitHub release. Deploys are not release-gated: every merge to main
+# still deploys (deploy.yml).
+#
+# Off until the release bot app is installed on this repo and RELEASE_APP_ID (variable) and
+# RELEASE_APP_PRIVATE_KEY (secret) are set; until then the job is skipped, not failed.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # manual regenerate, used to rehearse the release PR path
+
+permissions: {}
+
+jobs:
+  release-please:
+    if: vars.RELEASE_APP_ID != ''
+    permissions:
+      contents: write
+      pull-requests: write
+    uses: lifekit-hq/.github/.github/workflows/release-please.yml@v1
+    with:
+      app-id: ${{ vars.RELEASE_APP_ID }}
+    secrets:
+      app-private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
