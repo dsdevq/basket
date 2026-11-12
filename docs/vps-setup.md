@@ -46,9 +46,10 @@ is temporary: the separate follow-up item `bsk-fam-b6b` has the operator produce
 required, and deletes the fallback branch from `deploy.sh` and the old env file.
 
 To accept the fleet's machine identity, also add `FLEET_AGENT_AUTHORITY` and `FLEET_AGENT_BACKCHANNEL_AUTHORITY` (not
-secrets; `docker/.env.example` and `docs/decisions.md` "Fleet identity" say what each is). The app joins the external
-Docker network `identity-oidc`, which lifekit-stack creates (`up` fails if it is missing). Both empty
-keeps the path off.
+secrets; `docker/.env.example` and `docs/decisions.md` "Fleet identity" say what each is). Both empty keeps the path off.
+
+The app joins the external Docker networks `identity-oidc` and `lifekit-shared` (the box Prometheus scrapes
+`/metrics` over the latter). lifekit-stack's deploy creates both; `deploy.sh` does not, and `up` fails if either is missing.
 
 Sign-in through the org Logto is a separate optional path: the five `AUTH_OIDC_*` values in `docker/.env.example` (the
 client secret is a secret) switch it on, and all empty keeps sign-in passkey-only. Leave them empty in production until
