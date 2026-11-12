@@ -47,8 +47,8 @@ required, and deletes the fallback branch from `deploy.sh` and the old env file.
 
 To accept the fleet's machine identity, also add `FLEET_AGENT_AUTHORITY` and `FLEET_AGENT_BACKCHANNEL_AUTHORITY` (not
 secrets; `docker/.env.example` and `docs/decisions.md` "Fleet identity" say what each is). The app joins the external
-Docker network `identity-oidc`, which lifekit-stack creates; check that `docker network inspect identity-oidc` works
-before the deploy. Both empty keeps the path off.
+Docker network `identity-oidc`, which lifekit-stack creates (`docker/deploy.sh` creates it when missing). Both empty
+keeps the path off.
 
 Sign-in through the org Logto is a separate optional path: the five `AUTH_OIDC_*` values in `docker/.env.example` (the
 client secret is a secret) switch it on, and all empty keeps sign-in passkey-only. Leave them empty in production until
@@ -58,7 +58,7 @@ the account-linking step ships (`docs/decisions.md` "Org sign-in").
 
 ```sh
 echo "$GHCR_TOKEN" | docker login ghcr.io -u <user> --password-stdin   # read:packages; the workflow does this itself
-IMAGE_TAG=<full commit SHA> docker/deploy.sh   # pulls the image, starts basket-app + basket-db, waits for "healthy"
+IMAGE_TAG=<full commit SHA> docker/deploy.sh   # platform contract (static), pulls the image, starts basket-app + basket-db, waits for "healthy", platform contract (live)
 ```
 
 The normal route is the **Deploy to VPS** workflow (`.github/workflows/deploy.yml`) on a self-hosted runner: it starts
@@ -98,8 +98,9 @@ channel. After the owner exists, `BOOTSTRAP_TOKEN` does nothing; remove it from 
 The deploy workflow runs on `runs-on: [self-hosted, lifekit-vps, basket]`. **No runner is registered for this repo
 yet** - until one is, the deploy job queues and nothing deploys (CI itself runs on GitHub-hosted runners and is
 unaffected). Registering one is a box-side action for the captain/firstmate (same pattern as the finance-sentry runner:
-labels `lifekit-vps` and `basket`, the deploy user, Docker access). The runner needs `docker`, `docker compose` and
-`curl`, `sops` and firstmate's age key. The workflow logs in to ghcr with `GITHUB_TOKEN`, so the `ghcr.io/dsdevq/basket`
+labels `lifekit-vps` and `basket`, the deploy user, Docker access). The runner needs `docker`, `docker compose`,
+`curl`, `python3`, `sops` and firstmate's age key, plus the contract checker at `/srv/lifekit-stack/scripts/platform-contract.py`.
+The workflow logs in to ghcr with `GITHUB_TOKEN`, so the `ghcr.io/dsdevq/basket`
 package must let this repo's Actions read it (package settings > "Manage Actions access"; CI creates the package on its
 first push). The image build in CI also reads the `@lifekit-hq` packages with `GITHUB_TOKEN`.
 
