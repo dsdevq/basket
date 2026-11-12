@@ -2,7 +2,10 @@ using Microsoft.AspNetCore.Identity;
 
 namespace Basket.Api.Data;
 
-/// <summary>A person who can sign in. There is no password and no email: a passkey is the only credential.</summary>
+/// <summary>
+/// A person who can sign in. There is no password. A passkey is a credential, and so is a login with the org identity
+/// provider (a <c>user_logins</c> row), which also brings the email.
+/// </summary>
 public sealed class AppUser : IdentityUser<Guid>
 {
     public string DisplayName { get; set; } = string.Empty;

@@ -7,8 +7,8 @@ planning record so this repo carries its own reasons; the M1 section holds the c
 
 | # | Call | Effect on the code |
 |---|---|---|
-| Q1 | Her phone reaches basket over a **public Tailscale Funnel**, and the app does its own sign-in. | The app is on the open internet: sign-in, invite and write routes are hardened and rate limited (see M1 below). Funnel serves HTTPS on port **10000** (443 stays with xui). |
-| Q2 | Sign-in is a **one-time invite link, then a passkey** (ASP.NET Core Identity, .NET 10). | No passwords anywhere. Invites last 24 hours, work once and are stored hashed. |
+| Q1 | **Superseded 2026-11-12 (see "Org sign-in").** Her phone reaches basket over a **public Tailscale Funnel**, and the app does its own sign-in. | The app is on the open internet: sign-in, invite and write routes are hardened and rate limited (see M1 below). Funnel serves HTTPS on port **10000** (443 stays with xui). |
+| Q2 | **Superseded 2026-11-12 (see "Org sign-in"): basket signs in through the org Logto.** Sign-in is a **one-time invite link, then a passkey** (ASP.NET Core Identity, .NET 10). | No passwords anywhere. Invites last 24 hours, work once and are stored hashed. |
 | Q3 | **One shared list.** Plan-a-shop is later a view of it, not a second list. | A single `list_item` table, no per-user lists. |
 | Q4 | A Lidl price is **this week's offer plus the last price paid**, shown with its date. | M3-M4. Lidl publishes no everyday prices online. |
 | Q5 | The **Lidl refresh token lives encrypted in basket's database**, seeded by one paste in Settings - **not in SOPS**. | M4. The token rotates, so a static SOPS file would go stale; ASP.NET Data Protection (keys already persisted for the cookie) is the intended encryption. SOPS still holds the deploy secrets. |
@@ -71,6 +71,58 @@ planning record so this repo carries its own reasons; the M1 section holds the c
   page is visible (two people do not need SignalR); push belongs with a later milestone. M1 had no service worker; the
   shell-only one is "Offline shell and update prompt" below.
 - **Generic lifekit icons.** The app uses the library's `lk` brand set until basket gets a mark of its own.
+
+## Org sign-in: basket is a Logto client like the rest of the family (2026-11-12, supersedes Q2)
+
+Owner, 2026-11-12: "Currently we have some passkeys there, but my expectation for basket was that we have logto gateway, why dont
+we use it ? Why do we invent login ? Basket should be just in our ecosystem, reflecting 90% of stuff, including login, settings
+and so on. Design and stuff like that. The only difference is domain basket application is about. Everything else - it should be
+the same as our apps. Like its one family bro, family of products. Same UI, same UX, same library, everything is the same. Only
+difference is basket use cases and business logic." And on reach: "my gf is on tailnet bro, we have her account for finance
+sentry." Q2 (invite link, then a passkey) was chosen because her phone was assumed to be off the tailnet; it is not, so the
+reason is gone and the org identity provider is the sign-in. This is the backend step (A2); the family sign-in pages, linking
+the two existing passkey accounts, the tailnet-only cutover and removing the passkey code are separate steps that follow.
+
+- **Off until configured.** `Auth:Oidc` (compose: `AUTH_OIDC_AUTHORITY`, `AUTH_OIDC_CLIENT_ID`, `AUTH_OIDC_CLIENT_SECRET`,
+  `AUTH_OIDC_PUBLIC_BASE_URL`, `AUTH_OIDC_BACKCHANNEL_AUTHORITY`, all empty by default) switches it on only when the first four
+  are set. Until then nothing is registered, the `/api/auth/oidc/*` endpoints answer 404 and sign-in is passkey-only exactly as
+  before. The fleet path (`FleetAgent:*`) is a separate scheme and is unchanged.
+- **The same shape as finance-sentry.** An OpenID Connect scheme named `lifekit` (code flow with PKCE, confidential client, scopes
+  `openid email profile roles`, response mode `query` so sign-in stays a GET navigation and the CSP's `form-action 'self'` needs
+  no exception). `OidcLoginOptions`, `OidcLoginExtensions` and `OidcAuthorityRewriteHandler` are ported from there: the container
+  reaches Logto at `http://logto:3001/oidc` (`AUTH_OIDC_BACKCHANNEL_AUTHORITY`) for discovery, keys, token and userinfo, while the
+  issuer and the browser's authorize redirect stay on the tailnet address (`AUTH_OIDC_AUTHORITY`). The accepted issuer is pinned to
+  that address, as the fleet path pins its own.
+- **Endpoints.** `GET /api/auth/oidc/start?returnUrl=` challenges the scheme; the provider returns to `/api/auth/oidc/signin` (the
+  redirect URI to register; the handler completes the code exchange) and the handler hands over to `GET /api/auth/oidc/callback`,
+  which decides the account. A return URL must be an absolute path on this app (`//host` and backslash forms are ignored).
+  `POST /api/auth/sign-out` ends the basket session as before; when the session came from the provider it answers `200
+  {endSessionUrl}` (RP-initiated logout with the `id_token_hint` kept at sign-in) for the SPA to navigate to, otherwise `204`.
+  A refused sign-in redirects to `/access-denied`; a failed handshake to `/sign-in?error=OIDC_FAILED`; the provider returns to
+  `/sign-in?info=signed_out` after sign-out. Those pages are the frontend step's.
+- **Which account.** A linked `sub` (an Identity `user_logins` row, provider `lifekit`) signs in, with or without the role. Otherwise
+  a **verified** email that matches exactly one account links to it, unless that account is already linked to another `sub`.
+  Otherwise holding the provider role `basket` (`RequiredRole`) creates a Member, display name from `name`, else the email's local
+  part. Otherwise access is denied. An unverified email never links and never creates, even with the role; two accounts holding
+  the same email are never guessed between. Existing accounts are not role-checked, as in finance-sentry.
+- **The email.** It is stored on `users.email` when an account is created or linked from the provider, and a linked account that
+  has none takes the provider's verified one (it never replaces one). `/api/session` returns `email` (null for an account that has
+  none, such as a passkey-only one). No migration: `users.email` and `user_logins` are already in the Identity schema.
+- **Basket's own session stays.** After the callback the person holds the same `__Host-basket` Identity cookie (30-day sliding) as
+  a passkey sign-in; finance-sentry's access JWT and refresh cookie are not ported, they serve its JwtBearer default scheme and
+  MCP tokens. The only extra cookie that outlives the handshake is `__Host-basket-oidc-id`, the ID token (data-protected,
+  HttpOnly, Strict) kept so sign-out can send the hint; sign-out deletes it.
+- **Cookies of their own.** Browsers share cookies across the ports of one host, and finance-sentry lives on the same host, so the
+  external-login cookie (`basket-oidc-external`) and the OIDC correlation (`basket-oidc-correlation.`) and nonce
+  (`basket-oidc-nonce.`) cookies are renamed from the defaults other apps use. The correlation and nonce cookies are SameSite=Lax
+  because the provider returns by a cross-site GET.
+- **Until the linking step lands**, a person with the role whose email matches no account (the two existing accounts have none)
+  would get a new Member next to the old account. That is why the path stays off in production until the linking step ships.
+- **Tests** use an in-process fake provider (`FakeIdentityProvider`): a signing key generated per run, discovery, keys, the token
+  exchange with the client secret and PKCE checked, and userinfo, all on the back-channel host through the real rewrite handler.
+  They run the real OpenID Connect handler end to end and cover role present, role absent, unverified email, a verified email
+  linking, a linked `sub`, a second `sub` refused, duplicate emails, a forged or foreign-issuer callback, the cookie names, the
+  back channel, the logout URL with the hint, and the path off.
 
 ## Several passkeys per person
 

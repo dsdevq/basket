@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using Basket.Api.Data;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
@@ -17,7 +18,7 @@ public sealed record SignInRequest(string? CredentialJson);
 
 public sealed record CreateInviteRequest(string? Label);
 
-public sealed record SessionUser(Guid Id, string DisplayName, string Role);
+public sealed record SessionUser(Guid Id, string DisplayName, string Role, string? Email = null);
 
 public sealed record SessionResponse(bool Authenticated, SessionUser? User);
 
@@ -50,6 +51,7 @@ public static class AuthEndpoints
         auth.MapPost("/passkey-failure", PasskeyFailureReport.Handle);
         auth.MapPost("/sign-in/options", SignInOptions);
         auth.MapPost("/sign-in", SignIn);
+        auth.MapOidcEndpoints();
         api.MapPost("/auth/sign-out", SignOut).RequireAuthorization();
 
         var owner = api.MapGroup("/invites").RequireAuthorization(Policies.Owner);
@@ -73,7 +75,8 @@ public static class AuthEndpoints
     internal static SessionUser ToSessionUser(ClaimsPrincipal principal) => new(
         Guid.Parse(principal.FindFirstValue(ClaimTypes.NameIdentifier)!),
         principal.FindFirstValue(Policies.DisplayNameClaim) ?? string.Empty,
-        principal.IsInRole(Roles.Owner) ? Roles.Owner : Roles.Member);
+        principal.IsInRole(Roles.Owner) ? Roles.Owner : Roles.Member,
+        principal.FindFirstValue(ClaimTypes.Email));
 
     private static async Task<IResult> CheckInvite(InviteRequest request, InviteService invites, CancellationToken ct)
     {
@@ -198,10 +201,18 @@ public static class AuthEndpoints
         return Results.NoContent();
     }
 
-    private static async Task<IResult> SignOut(SignInManager<AppUser> signIn)
+    private static async Task<IResult> SignOut(
+        HttpContext http,
+        SignInManager<AppUser> signIn,
+        IOptions<OidcLoginOptions> oidc,
+        IDataProtectionProvider protection,
+        ILogger<ExternalLoginService> log)
     {
         await signIn.SignOutAsync();
-        return Results.NoContent();
+
+        // A session that came from the org sign-in ends there too; otherwise the next sign-in would re-enter silently.
+        var provider = await OidcEndpoints.EndProviderSessionAsync(http, oidc.Value, protection, log);
+        return provider is null ? Results.NoContent() : Results.Ok(provider);
     }
 
     private static async Task<IResult> ListInvites(InviteService invites, CancellationToken ct)

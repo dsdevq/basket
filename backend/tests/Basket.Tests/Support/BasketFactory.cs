@@ -4,6 +4,7 @@ using Basket.Api.Auth;
 using Basket.Api.Data;
 using Basket.Api.LidlPlus;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -21,7 +22,7 @@ namespace Basket.Tests.Support;
 /// The whole app on an in-memory server over a throwaway Postgres database. Point <c>BASKET_TEST_POSTGRES</c>
 /// at a server the test user may create databases on (CI and scripts/test-backend.sh both do).
 /// </summary>
-public sealed class BasketFactory : WebApplicationFactory<Program>
+public class BasketFactory : WebApplicationFactory<Program>
 {
     public const string Origin = "https://basket.test";
     public const string BootstrapToken = "test-bootstrap-token-0123456789abcdef0123456789";
@@ -61,6 +62,9 @@ public sealed class BasketFactory : WebApplicationFactory<Program>
 
     public FleetTokens Fleet { get; } = new();
 
+    /// <summary>The org identity provider the app is configured to sign people in through. Null = the sign-in path is off.</summary>
+    public FakeIdentityProvider? IdentityProvider { get; init; }
+
     public BasketFactory()
     {
         using var connection = new NpgsqlConnection(_adminConnection);
@@ -74,6 +78,7 @@ public sealed class BasketFactory : WebApplicationFactory<Program>
     {
         await base.DisposeAsync();
         Fleet.Dispose();
+        IdentityProvider?.Dispose();
         NpgsqlConnection.ClearAllPools();
         await using var connection = new NpgsqlConnection(_adminConnection);
         await connection.OpenAsync();
@@ -101,8 +106,25 @@ public sealed class BasketFactory : WebApplicationFactory<Program>
             builder.UseSetting("FleetAgent:Authority", FleetTokens.Issuer);
         }
 
+        if (IdentityProvider is not null)
+        {
+            builder.UseSetting("Auth:Oidc:Authority", FakeIdentityProvider.Authority);
+            builder.UseSetting("Auth:Oidc:BackchannelAuthority", FakeIdentityProvider.Backchannel);
+            builder.UseSetting("Auth:Oidc:ClientId", FakeIdentityProvider.ClientId);
+            builder.UseSetting("Auth:Oidc:ClientSecret", FakeIdentityProvider.ClientSecret);
+            builder.UseSetting("Auth:Oidc:PublicBaseUrl", Origin);
+        }
+
         builder.ConfigureTestServices(services =>
         {
+            if (IdentityProvider is { } provider)
+            {
+                // The container's own back channel, replaced by the in-process provider; the rewrite handler stays in front of it.
+                services.Configure<OpenIdConnectOptions>(OidcLoginOptions.Scheme, options =>
+                    options.BackchannelHttpHandler = new OidcAuthorityRewriteHandler(
+                        FakeIdentityProvider.Authority, FakeIdentityProvider.Backchannel, provider));
+            }
+
             services.AddSingleton<Serilog.Core.ILogEventSink>(Logs);
             services.ConfigureDbContext<AppDbContext>(options => options.AddInterceptors(new SaveHooks(this)));
             services.RemoveAll<ILidlPlusAuth>();
