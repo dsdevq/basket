@@ -382,6 +382,167 @@ public sealed class PlanTests : IClassFixture<BasketFactory>
         coverage.Blockers.Should().ContainSingle().Which.Should().Be(new PlanBlocker(line.Id, "candles", PlanFlags.Unmatched));
     }
 
+    // ---- the two-shop split -------------------------------------------------------------------------------------
+
+    [Fact]
+    public void When_no_one_shop_covers_the_list_the_cheapest_pair_of_shops_that_does_is_proposed_with_dated_prices()
+    {
+        var shelf = new Shelf();
+        var milk = shelf.Product("Milk 1L");
+        var eggs = shelf.Product("Eggs 12 pack");
+        var butter = shelf.Product("Butter 250g");
+        foreach (var product in new[] { milk, eggs, butter })
+        {
+            shelf.Line(product);
+        }
+
+        shelf.Read(milk, Store.Lidl, o => o.Price = 1.20m);
+        shelf.Read(milk, Store.Tesco, o => { o.Price = 1.30m; o.LoyaltyPrice = 1.00m; o.LoyaltyScheme = "Clubcard"; }, Today.AddDays(-1));
+        shelf.Read(eggs, Store.Aldi, o => o.Price = 3.00m, Today.AddDays(-2));
+        shelf.Read(eggs, Store.Dunnes, o => o.Price = 3.40m);
+        shelf.Read(butter, Store.Aldi, o => o.Price = 2.00m, Today.AddDays(-2));
+        shelf.Read(butter, Store.Tesco, o => o.Price = 2.30m);
+
+        var split = shelf.Build().Coverage.Split;
+
+        split.Should().NotBeNull();
+        split!.Groups.Select(g => g.Store).Should().Equal("aldi", "tesco");
+        split.Groups.Single(g => g.Store == "aldi").Lines.Select(l => (l.Text, l.Price, l.ObservedOn))
+            .Should().Equal(("Eggs 12 pack", 3.00m, Today.AddDays(-2)), ("Butter 250g", 2.00m, Today.AddDays(-2)));
+        var tesco = split.Groups.Single(g => g.Store == "tesco");
+        tesco.Lines.Should().ContainSingle().Which.Should().Match<ByShopLine>(l => l.Text == "Milk 1L" && l.Price == 1.00m && l.Card == "Clubcard" && l.ObservedOn == Today.AddDays(-1));
+        tesco.Total.Should().Be(1.00m);
+        split.Total.Should().Be(6.00m, "the card price counts: milk at Tesco 1.00, eggs and butter at Aldi 5.00");
+        split.OldestSeenOn.Should().Be(Today.AddDays(-2));
+    }
+
+    [Fact]
+    public void The_pair_is_chosen_by_the_lowest_total_not_by_the_shops_with_most_lines()
+    {
+        var shelf = new Shelf();
+        var milk = shelf.Product("Milk 1L");
+        var eggs = shelf.Product("Eggs 12 pack");
+        shelf.Line(milk);
+        shelf.Line(eggs);
+        shelf.Read(milk, Store.Lidl, o => o.Price = 1.00m);
+        shelf.Read(eggs, Store.Aldi, o => o.Price = 3.00m);
+        shelf.Read(milk, Store.Tesco, o => o.Price = 1.50m);
+        shelf.Read(eggs, Store.Tesco, o => o.Price = 3.10m);
+        shelf.Read(eggs, Store.Dunnes, o => o.Price = 2.50m);
+
+        var plan = shelf.Build();
+
+        // Tesco alone covers the list at 4.60, so no split is proposed.
+        plan.Coverage.SingleStore.Should().BeTrue();
+        plan.Coverage.Split.Should().BeNull();
+
+        var third = shelf.Product("Butter 250g");
+        shelf.Line(third);
+        shelf.Read(third, Store.Aldi, o => o.Price = 2.00m);
+        shelf.Read(third, Store.Dunnes, o => o.Price = 2.00m);
+
+        var split = shelf.Build().Coverage.Split;
+
+        split.Should().NotBeNull();
+        split!.Groups.Select(g => (g.Store, g.Total)).Should().Equal(("lidl", 1.00m), ("dunnes", 4.50m));
+        split.Total.Should().Be(5.50m);
+    }
+
+    [Fact]
+    public void A_tie_goes_to_the_first_pair_in_the_fixed_shop_order()
+    {
+        var shelf = new Shelf();
+        var milk = shelf.Product("Milk 1L");
+        var eggs = shelf.Product("Eggs 12 pack");
+        shelf.Line(milk);
+        shelf.Line(eggs);
+        shelf.Read(milk, Store.Lidl, o => o.Price = 1.00m);
+        shelf.Read(milk, Store.Tesco, o => o.Price = 1.00m);
+        shelf.Read(eggs, Store.Aldi, o => o.Price = 2.00m);
+        shelf.Read(eggs, Store.Dunnes, o => o.Price = 2.00m);
+
+        shelf.Build().Coverage.Split!.Groups.Select(g => g.Store).Should().Equal("lidl", "aldi");
+    }
+
+    [Fact]
+    public void Within_the_pair_a_line_goes_to_the_shop_with_the_lower_unit_price_even_when_its_pack_costs_more()
+    {
+        var shelf = new Shelf();
+        var milk = shelf.Product("Milk");
+        var eggs = shelf.Product("Eggs 12 pack");
+        var butter = shelf.Product("Butter 250g");
+        shelf.Line(milk);
+        shelf.Line(eggs);
+        shelf.Line(butter);
+        shelf.Read(milk, Store.Lidl, o => o.Price = 1.20m, title: "Milk 1L"); // 1.20/l
+        shelf.Read(milk, Store.Aldi, o => o.Price = 2.20m, title: "Milk 2L"); // 1.10/l: dearer pack, cheaper litre
+        shelf.Read(eggs, Store.Lidl, o => o.Price = 3.00m);
+        shelf.Read(butter, Store.Aldi, o => o.Price = 2.00m);
+
+        var split = shelf.Build().Coverage.Split;
+
+        split!.Groups.Select(g => g.Store).Should().Equal("lidl", "aldi");
+        split.Groups.Single(g => g.Store == "aldi").Lines.Select(l => (l.Text, l.Price)).Should().Equal(("Milk", 2.20m), ("Butter 250g", 2.00m));
+        split.Total.Should().Be(7.20m, "the Aldi litre is cheaper, so the milk is bought there at its 2.20 pack: 2.20 + eggs 3.00 + butter 2.00");
+    }
+
+    [Fact]
+    public void A_pair_whose_shops_both_price_a_line_that_cannot_be_compared_is_not_a_candidate()
+    {
+        var shelf = new Shelf();
+        var skewers = shelf.Product("Chicken skewers");
+        var eggs = shelf.Product("Eggs 12 pack");
+        var butter = shelf.Product("Butter 250g");
+        shelf.Line(skewers);
+        shelf.Line(eggs);
+        shelf.Line(butter);
+        shelf.Read(skewers, Store.Lidl, o => o.Price = 2.19m); // no size anywhere
+        shelf.Read(skewers, Store.Aldi, o => o.Price = 2.50m);
+        shelf.Read(eggs, Store.Lidl, o => o.Price = 3.00m);
+        shelf.Read(butter, Store.Aldi, o => o.Price = 2.00m);
+
+        shelf.Build().Coverage.Split.Should().BeNull("choosing between the two skewers would be a guess");
+
+        shelf.Read(eggs, Store.Dunnes, o => o.Price = 3.10m);
+        shelf.Read(butter, Store.Dunnes, o => o.Price = 2.10m);
+
+        var split = shelf.Build().Coverage.Split;
+
+        split!.Groups.Select(g => g.Store).Should().Equal("lidl", "dunnes");
+        split.Total.Should().Be(7.29m, "Dunnes does not price the skewers, so there is nothing to rank them against: skewers 2.19 and eggs 3.00 at Lidl, butter 2.10 at Dunnes");
+    }
+
+    [Fact]
+    public void No_split_is_proposed_when_a_line_has_no_price_anywhere_or_the_list_is_empty()
+    {
+        var shelf = new Shelf();
+        var milk = shelf.Product("Milk 1L");
+        var eggs = shelf.Product("Eggs 12 pack");
+        shelf.Line(milk);
+        shelf.Line(eggs);
+        shelf.Read(milk, Store.Lidl, o => o.Price = 1.20m);
+        shelf.Read(eggs, Store.Aldi, o => o.Price = 3.00m);
+        shelf.FreeText("birthday candles");
+
+        shelf.Build().Coverage.Split.Should().BeNull("a split that leaves the candles out would not cover the list");
+        new Shelf().Build().Coverage.Split.Should().BeNull();
+    }
+
+    [Fact]
+    public void Old_and_out_of_stock_prices_never_count_towards_a_split()
+    {
+        var shelf = new Shelf();
+        var milk = shelf.Product("Milk 1L");
+        var eggs = shelf.Product("Eggs 12 pack");
+        shelf.Line(milk);
+        shelf.Line(eggs);
+        shelf.Read(milk, Store.Lidl, o => o.Price = 1.20m);
+        shelf.Read(eggs, Store.Aldi, o => o.Price = 3.00m, Today.AddDays(-10));
+        shelf.Read(eggs, Store.Tesco, o => { o.Price = 2.00m; o.InStock = false; });
+
+        shelf.Build().Coverage.Split.Should().BeNull();
+    }
+
     // ---- the endpoint -------------------------------------------------------------------------------------------
 
     [Fact]
@@ -425,6 +586,54 @@ public sealed class PlanTests : IClassFixture<BasketFactory>
         coverage.GetProperty("singleStore").GetBoolean().Should().BeFalse();
         coverage.GetProperty("closestStore").GetString().Should().Be("lidl");
         coverage.GetProperty("blockers").EnumerateArray().Single().GetProperty("reason").GetString().Should().Be("unmatched");
+    }
+
+    [Fact]
+    public async Task The_endpoint_proposes_the_cheapest_two_shop_split_when_no_one_shop_covers_the_list()
+    {
+        var (owner, _) = await _factory.OwnerAsync();
+        var today = PriceRecorder.DublinDay(_factory.Clock.GetUtcNow());
+        await _factory.WithDb(async db =>
+        {
+            await db.ListItems.ExecuteDeleteAsync();
+            await db.Products.ExecuteDeleteAsync();
+            var user = await db.Users.Select(u => u.Id).FirstAsync();
+            var at = DateTimeOffset.UtcNow;
+            async Task Line(string name, params (Store Store, decimal Price, decimal? Card)[] reads)
+            {
+                var product = new Product { Id = Guid.NewGuid(), Name = name, AddedAt = at, AddedByUserId = user };
+                db.Products.Add(product);
+                db.ListItems.Add(new ListItem { Id = Guid.NewGuid(), Text = name, ProductId = product.Id, AddedAt = at, AddedByUserId = user });
+                foreach (var (store, price, card) in reads)
+                {
+                    var listing = new StoreListing { Id = Guid.NewGuid(), ProductId = product.Id, Store = store, Url = "https://example.test/" + Guid.NewGuid(), AddedAt = at };
+                    db.StoreListings.Add(listing);
+                    db.PriceObservations.Add(new PriceObservation
+                    {
+                        Id = Guid.NewGuid(), ListingId = listing.Id, ObservedOn = today, ObservedAt = _factory.Clock.GetUtcNow(),
+                        Price = price, LoyaltyPrice = card, LoyaltyScheme = card is null ? null : "Clubcard", InStock = true,
+                    });
+                }
+
+                await db.SaveChangesAsync();
+            }
+
+            await Line("Milk 1L", (Store.Lidl, 1.20m, null), (Store.Tesco, 1.30m, 1.00m));
+            await Line("Eggs 12 pack", (Store.Aldi, 3.00m, null), (Store.Dunnes, 3.40m, null));
+            await Line("Butter 250g", (Store.Aldi, 2.00m, null), (Store.Tesco, 2.30m, null));
+            return 0;
+        });
+
+        var plan = await owner.GetFromJsonAsync<JsonElement>("/api/plan");
+
+        var coverage = plan.GetProperty("coverage");
+        coverage.GetProperty("singleStore").GetBoolean().Should().BeFalse();
+        var split = coverage.GetProperty("split");
+        split.GetProperty("total").GetDecimal().Should().Be(6.00m, "milk at Tesco on the Clubcard price 1.00, eggs and butter at Aldi 5.00");
+        var groups = split.GetProperty("groups").EnumerateArray().ToList();
+        groups.Select(g => g.GetProperty("store").GetString()).Should().Equal("aldi", "tesco");
+        groups[0].GetProperty("lines").EnumerateArray().Select(l => l.GetProperty("text").GetString()).Should().Equal("Eggs 12 pack", "Butter 250g");
+        groups[1].GetProperty("total").GetDecimal().Should().Be(1.00m);
     }
 
     [Fact]

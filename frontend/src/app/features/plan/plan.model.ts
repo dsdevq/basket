@@ -1,5 +1,6 @@
 import type {StoreId} from '../prices/prices.model';
 import type {PromoOffer} from '../promotions/promotions.model';
+import type {ByShopGroup} from './by-shop.model';
 
 /** Why a line has no best shop; absent when it has one. */
 export type PlanFlag = 'unmatched' | 'no_price' | 'stale' | 'out_of_stock' | 'not_comparable';
@@ -53,6 +54,18 @@ export interface PlanBlocker {
   readonly reason: PlanBlockReason;
 }
 
+/**
+ * The cheapest two shops that together price every open line, when no one shop does. Each line is bought at the shop with the
+ * lower unit price (one pack, a card price or a multi-buy counted); `groups` are the shops with their lines, dated prices and subtotals,
+ * the shape of the By shop split.
+ */
+export interface PlanPairSplit {
+  readonly total: number;
+  /** The day of the oldest price in the total. */
+  readonly oldestSeenOn: string | null;
+  readonly groups: readonly ByShopGroup[];
+}
+
 export interface PlanCoverage {
   /** True when at least one shop prices every open line. */
   readonly singleStore: boolean;
@@ -62,6 +75,8 @@ export interface PlanCoverage {
   /** When not `singleStore`: the shop pricing the most lines (null when none prices any). */
   readonly closestStore: StoreId | null;
   readonly blockers: readonly PlanBlocker[];
+  /** When not `singleStore`: the cheapest two shops that together price every line; null when no two shops can. */
+  readonly split: PlanPairSplit | null;
 }
 
 export interface PlanResponse {

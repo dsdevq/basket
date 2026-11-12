@@ -13,7 +13,7 @@ we buy, and the four shops' **loyalty cards** as barcodes to show at the till. O
   software authenticator).
 - `backend/src/Basket.Api/Prices` - M2: the nightly Hangfire price pull (Lidl), its parsers and polite fetcher, the
   product and price endpoints, `Prices/Promotions` (the Promotions view, under More: current promos ranked by unit price, rule in [decisions](docs/decisions.md)), and `Prices/Ingest`: the token-signed write-only endpoint the owner's PC posts Tesco, Aldi and Dunnes prices to. Tests use recorded shop pages in `backend/tests/Basket.Tests/Fixtures`, never the network.
-- `backend/src/Basket.Api/Plan` - `GET /api/plan`: the best shop per list line and whether one shop covers the whole list; unmatched or stale lines are flagged, never guessed (rule in [decisions](docs/decisions.md)). The Plan tab shows it, and its "By shop" page (`GET /api/plan/by-shop`) prices the whole list at each shop, with what each lacks and the cheapest split.
+- `backend/src/Basket.Api/Plan` - `GET /api/plan`: the best shop per list line and whether one shop covers the whole list (if none does, the cheapest two-shop split that does); unmatched or stale lines are flagged, never guessed (rule in [decisions](docs/decisions.md)). The Plan tab shows it, and its "By shop" page (`GET /api/plan/by-shop`) prices the whole list at each shop, with what each lacks and the cheapest split.
 - `pc-reader/` - the small Node program that reads Aldi and Dunnes product pages (Tesco is paused) in a browser on the owner's PC and posts
   them to the ingest endpoint ([README](pc-reader/README.md)).
 - `frontend/` - Angular 22 on [lifekit-common](https://github.com/lifekit-hq/lifekit-common) (`@lifekit-hq/ui`,

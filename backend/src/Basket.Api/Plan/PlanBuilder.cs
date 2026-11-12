@@ -85,14 +85,16 @@ public sealed record PlanBlocker(Guid ItemId, string Text, string Reason);
 /// <summary>
 /// Whether one shop prices every open line. <see cref="Store"/> is that shop when <see cref="SingleStore"/> (<see cref="CoveredBy"/>
 /// lists all that do); otherwise <see cref="ClosestStore"/> is the shop pricing the most lines and <see cref="Blockers"/> the lines
-/// it cannot price.
+/// it cannot price. When no one shop covers the list, <see cref="Split"/> is the cheapest two shops that together do (see
+/// <see cref="PairSplitBuilder"/>), or null when no two shops can.
 /// </summary>
 public sealed record PlanCoverage(
     bool SingleStore,
     string? Store,
     IReadOnlyList<string> CoveredBy,
     string? ClosestStore,
-    IReadOnlyList<PlanBlocker> Blockers);
+    IReadOnlyList<PlanBlocker> Blockers,
+    PlanPairSplit? Split = null);
 
 public sealed record PlanResponse(DateOnly AsOf, int StaleAfterDays, IReadOnlyList<PlanItem> Items, PlanCoverage Coverage);
 
@@ -235,7 +237,7 @@ public static class PlanBuilder
             .Where(i => closest is null || !PricedAt(i, closest))
             .Select(i => new PlanBlocker(i.Id, i.Text, Reason(i, closest)))
             .ToList();
-        return new PlanCoverage(false, null, [], closest, blockers);
+        return new PlanCoverage(false, null, [], closest, blockers, PairSplitBuilder.Build(items));
     }
 
     private static bool PricedAt(PlanItem item, string store) =>

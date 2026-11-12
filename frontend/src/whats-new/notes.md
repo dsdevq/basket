@@ -12,3 +12,4 @@
 - Settings now has a Lidl Plus section where you paste your Lidl Plus token once. basket checks it with Lidl, keeps it encrypted, and shows whether it still works. (owner)
 - Once Lidl Plus is connected, your Lidl receipts come in every night as past trips in History, with the day and the total. The things on them join the Shelf, and each remembers the last price you paid.
 - The Plan tab now has a By shop view: your whole list priced at each of the four shops, what each shop lacks, and the cheapest way to split it between shops. Card prices and offers count, every price shows the day it was seen, and old or missing prices are marked, never guessed.
+- When no one shop prices your whole list, the Plan tab now suggests the cheapest two shops that together do, with what to buy at each, the total, card prices and offers counted, and the day every price was seen.

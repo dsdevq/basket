@@ -1,3 +1,4 @@
+import type {PlanCoverage, PlanPairSplit} from './plan.model';
 import {entry, line, offer, paid} from './plan-fixtures';
 import {
   blockerTag,
@@ -101,7 +102,14 @@ describe('plan-format', () => {
   });
 
   describe('the answer on top', () => {
-    const none = {singleStore: false, store: null, coveredBy: [], closestStore: null, blockers: []};
+    const none: PlanCoverage = {
+      singleStore: false,
+      store: null,
+      coveredBy: [],
+      closestStore: null,
+      blockers: [],
+      split: null,
+    };
 
     it('names the one shop that covers the list', () => {
       const answer = verdict({...none, singleStore: true, store: 'lidl', coveredBy: ['lidl']}, 3);
@@ -133,6 +141,29 @@ describe('plan-format', () => {
       expect(answer.status).toEqual({tone: 'warning', label: 'No one shop covers it'});
       expect(answer.pills.map(p => p.label)).toEqual(['Closest: Tesco', '2 lines block it']);
       expect(answer.caveat).toBe('Tesco has a fresh price for 3 of 5 lines.');
+    });
+
+    it('proposes the cheapest two shops when no one shop covers the list', () => {
+      const split: PlanPairSplit = {
+        total: 3.9,
+        oldestSeenOn: '2026-11-05',
+        groups: [],
+      };
+      const groups = [
+        {store: 'lidl' as const, storeName: 'Lidl', total: 0.99, lines: []},
+        {store: 'aldi' as const, storeName: 'Aldi', total: 2.91, lines: []},
+      ];
+      const answer = verdict({...none, closestStore: 'lidl', split: {...split, groups}}, 2);
+
+      expect(answer.status).toEqual({tone: 'warning', label: 'No one shop covers it'});
+      expect(answer.pills.map(p => p.label)).toEqual([
+        'Best two: Lidl + Aldi',
+        '€3.90',
+        'Closest: Lidl',
+      ]);
+      expect(answer.caveat).toBe(
+        'Lidl and Aldi together have a fresh price for every line, €3.90 in all, the oldest seen 5 Nov.'
+      );
     });
 
     it('says so when no shop prices any line', () => {

@@ -19,7 +19,8 @@ import {
 } from '@lifekit-hq/ui';
 import {fromEvent} from 'rxjs';
 
-import {shortDate, STORE_NAMES} from '../prices/price-format';
+import {euro, shortDate, STORE_NAMES} from '../prices/price-format';
+import {lineDetail} from './by-shop-format';
 import type {PlanBlocker, PlanItem} from './plan.model';
 import {PlanStore} from './plan.store';
 import {
@@ -95,6 +96,21 @@ import {
               </cmn-list-section>
             }
 
+            @for (group of splitGroups(); track group.store) {
+              <cmn-list-section
+                [heading]="'Buy at ' + group.storeName + ' · ' + money(group.total)"
+                card
+              >
+                @for (bought of group.lines; track bought.itemId) {
+                  <cmn-list-item-row [label]="bought.text" [sublabel]="detail(bought)">
+                    <span amount class="font-semibold text-text-primary text-cmn-sm">{{
+                      money(bought.price)
+                    }}</span>
+                  </cmn-list-item-row>
+                }
+              </cmn-list-section>
+            }
+
             @for (item of store.items(); track item.id) {
               <cmn-list-section [heading]="item.text" card>
                 @if (flag(item); as why) {
@@ -135,6 +151,11 @@ import {
                 litre or piece, a card price included, among prices read in the last
                 {{ store.staleAfterDays() }} days that are in stock. Older prices and shops that are
                 out of stock are shown but never picked, and a line is never guessed.
+                @if (splitGroups().length) {
+                  When no one shop prices every line, the two shops that together do for the lowest
+                  total are proposed: each line is bought at the shop of the two with the lower
+                  price per kilo, litre or piece, a card price or a multi-buy included.
+                }
               </p>
             </cmn-list-section>
           }
@@ -158,8 +179,11 @@ export class PlanPage implements OnInit {
     const closest = this.store.coverage()?.closestStore;
     return closest ? `Not priced at ${STORE_NAMES[closest]}` : 'Not priced at any shop';
   });
+  protected readonly splitGroups = computed(() => this.store.coverage()?.split?.groups ?? []);
   protected readonly asOf = computed(() => shortDate(this.store.asOf()));
 
+  protected readonly money = euro;
+  protected readonly detail = lineDetail;
   protected readonly rows = planRows;
   protected readonly lines = rowLines;
   protected readonly price = priceText;

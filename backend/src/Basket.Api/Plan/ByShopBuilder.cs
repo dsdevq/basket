@@ -89,9 +89,9 @@ public static class ByShopBuilder
         foreach (var item in items)
         {
             var entry = item.Stores.FirstOrDefault(s => s.Store == slug);
-            if (entry is { State: PlanStoreStates.Priced, Offer: not null })
+            if (Priced(item, slug) is { } usable)
             {
-                priced.Add((item, entry));
+                priced.Add((item, usable));
             }
             else
             {
@@ -113,6 +113,13 @@ public static class ByShopBuilder
             priced.Select(p => p.Entry.Offer!.Card).OfType<string>().Distinct().Order().ToList(),
             missing);
     }
+
+    /// <summary>
+    /// What a shop charges for a line today: its entry when the plan calls it priced there (fresh, in stock, offer current), else
+    /// null. The one rule for "this shop prices this line", shared with the two-shop split.
+    /// </summary>
+    internal static PlanStorePrice? Priced(PlanItem item, string slug) =>
+        item.Stores.FirstOrDefault(s => s.Store == slug) is { State: PlanStoreStates.Priced, Offer: not null } entry ? entry : null;
 
     /// <summary>The line's own reason when it is free text; otherwise what this shop says about it, or that it has no page for it.</summary>
     private static string MissingReason(PlanItem item, PlanStorePrice? entry) =>
@@ -155,7 +162,7 @@ public static class ByShopBuilder
         return new ByShopSplit(total, complete, complete && cheapest is not null ? total - cheapest.Total : null, groups, unplaced);
     }
 
-    private static ByShopLine Line(PlanItem item, PlanStorePrice entry)
+    internal static ByShopLine Line(PlanItem item, PlanStorePrice entry)
     {
         var offer = entry.Offer!;
         return new ByShopLine(item.Id, item.Text, offer.EachPrice, offer.Deal, offer.IsPromo, offer.Card, offer.PackSize, offer.UnitPrice, offer.Unit, offer.ObservedOn);
