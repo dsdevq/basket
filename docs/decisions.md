@@ -434,10 +434,11 @@ Owner's goal: the same layout and the same things across the lifekit apps, reuse
 the What's new feature of `@lifekit-hq/ui` and `@lifekit-hq/tokens` (convention: lifekit-common `docs/WHATS-NEW.md`, the pattern
 finance-sentry first had), bumped to 4.7.1.
 
-- **No app-local copy.** `provideWhatsNew` gets basket's version (`src/app/core/version.ts`, checked against `package.json` and
-  the notes file by a spec) and a `basket.whatsNew.lastSeen` marker. The sheet, the list, the dot and the seen marker are the library's.
-- **Notes.** `src/whats-new/notes.md`, plain second person; `lifekit-whats-new` runs before `start`, `build` and `build:prod`,
-  and `--check` runs in `npm run lint`, so CI fails when the committed `public/whats-new.json` is stale.
+- **No app-local copy.** `provideWhatsNew` gets basket's version (`src/app/core/version.ts`, checked against `package.json`
+  by a spec) and a `basket.whatsNew.lastSeen` marker. The sheet, the list, the dot and the seen marker are the library's.
+- **Notes.** `src/whats-new/notes.md`, plain second person; `lifekit-whats-new` runs before `start`, `build` and `build:prod`
+  to generate `public/whats-new.json` (no longer committed or linted, and fed by `CHANGELOG.md`: see "Releases: release-please and the
+  weekly release").
 - **Where it shows.** An account-menu item (`whatsNewMenuItem`) in the app shell and on the More page, with the dot until the
   sheet is opened. A first run on a device counts as seen, so a new person is not greeted with a dot.
 - No database change.
