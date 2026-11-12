@@ -99,7 +99,8 @@
             "tsConfig": "tsconfig.spec.json",
             "runner": "vitest",
             "buildTarget": "basket:build:development",
-            "coverageExclude": ["src/main.ts"]
+            "setupFiles": ["src/test-setup.ts"],
+            "coverageExclude": ["src/main.ts", "src/test-setup.ts"]
           },
           "configurations": {
             "ci": {

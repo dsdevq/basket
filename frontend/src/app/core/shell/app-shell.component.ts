@@ -1,37 +1,16 @@
 import {
   ChangeDetectionStrategy,
   Component,
-  computed,
   CUSTOM_ELEMENTS_SCHEMA,
   inject,
   input,
 } from '@angular/core';
-import {Router, RouterOutlet} from '@angular/router';
+import {RouterOutlet} from '@angular/router';
 import {AppUpdateService} from '@lifekit-hq/core/pwa';
-import {
-  ACCOUNT_SIGN_OUT_ID,
-  accountMenu,
-  type AppLayoutAccount,
-  AppLayoutComponent,
-  CmnWhatsNewService,
-  type MenuItem,
-  type NavItem,
-  PageComponent,
-  SkeletonComponent,
-  WHATS_NEW_MENU_ID,
-  whatsNewMenuItem,
-} from '@lifekit-hq/ui';
+import {AppLayoutComponent, type MenuItem, PageComponent, SkeletonComponent} from '@lifekit-hq/ui';
 
-import {SessionStore} from '../auth/session.store';
 import type {PendingPage} from './pending-route';
-
-const LIST: NavItem = {label: 'List', icon: 'ShoppingBasket', route: '/list'};
-const SHELF: NavItem = {label: 'Shelf', icon: 'Store', route: '/shelf'};
-const PLAN: NavItem = {label: 'Plan', icon: 'ListChecks', route: '/plan'};
-const PRICES: NavItem = {label: 'Prices', icon: 'Tag', route: '/prices'};
-const PROMOTIONS: NavItem = {label: 'Promotions', icon: 'BadgePercent', route: '/promotions'};
-const CARDS: NavItem = {label: 'Cards', icon: 'WalletCards', route: '/cards'};
-const PEOPLE: NavItem = {label: 'People', icon: 'Users', route: '/people'};
+import {ShellChromeService} from './shell-chrome.service';
 
 /** The signed-in frame: the lifekit app layout with List, Shelf, Plan and Cards as the tabs and Prices, Promotions, People and Settings behind More. */
 @Component({
@@ -41,12 +20,17 @@ const PEOPLE: NavItem = {label: 'People', icon: 'Users', route: '/people'};
   schemas: [CUSTOM_ELEMENTS_SCHEMA],
   template: `
     <cmn-app-layout
-      [navItems]="navItems()"
-      [tabRoutes]="tabRoutes"
-      [account]="account()"
+      [navItems]="chrome.navItems()"
+      [paletteItems]="chrome.paletteItems()"
+      [tabRoutes]="chrome.tabRoutes"
+      [account]="chrome.account()"
       [accountPending]="!!pending()"
+      [versionLabel]="chrome.versionLabel"
+      [versionDot]="chrome.versionDot()"
       [phoneOverlay]="true"
       (avatarMenuSelect)="onMenu($event)"
+      (paletteAction)="onPaletteAction($event)"
+      (versionClick)="chrome.openWhatsNew()"
       brand="basket"
       moreRoute="/more"
     >
@@ -56,6 +40,7 @@ const PEOPLE: NavItem = {label: 'People', icon: 'Users', route: '/people'};
           [ready]="update.updateReady()"
           (lk-update-prompt-reload)="update.reload()"
         />
+        <lk-install-hint />
       </div>
       @if (pending(); as page) {
         <cmn-page [kind]="page.kind" [title]="page.title" fill>
@@ -70,43 +55,19 @@ const PEOPLE: NavItem = {label: 'People', icon: 'Users', route: '/people'};
   `,
 })
 export class AppShellComponent {
-  private readonly session = inject(SessionStore);
-  private readonly router = inject(Router);
-  private readonly whatsNew = inject(CmnWhatsNewService);
-
   /** The page to hold while the session call is out; unset once the routed page can show. */
   public readonly pending = input<PendingPage | null>(null);
 
+  protected readonly chrome = inject(ShellChromeService);
   protected readonly update = inject(AppUpdateService);
 
-  protected readonly tabRoutes = [LIST.route, SHELF.route, PLAN.route, CARDS.route];
-  protected readonly navItems = computed<NavItem[]>(() =>
-    this.session.isOwner()
-      ? [LIST, SHELF, PLAN, PRICES, CARDS, PROMOTIONS, PEOPLE]
-      : [LIST, SHELF, PLAN, PRICES, CARDS, PROMOTIONS]
-  );
-  protected readonly account = computed<AppLayoutAccount | undefined>(() => {
-    const user = this.session.user();
-    return user
-      ? {
-          label: user.displayName,
-          name: user.displayName,
-          menuItems: accountMenu({
-            settingsRoute: '/settings',
-            extras: [whatsNewMenuItem(this.whatsNew.hasUnread())],
-          }),
-        }
-      : undefined;
-  });
-
+  /** The layout navigates to Settings itself; the app handles What's new and Sign out. */
   protected async onMenu(item: MenuItem): Promise<void> {
-    if (item.id === WHATS_NEW_MENU_ID) {
-      this.whatsNew.open();
-      return;
-    }
-    if (item.id === ACCOUNT_SIGN_OUT_ID) {
-      await this.session.signOut();
-      await this.router.navigateByUrl('/sign-in');
-    }
+    await this.chrome.handle(item.id);
+  }
+
+  /** The layout navigates to pages and applies the appearance entries itself. */
+  protected async onPaletteAction(id: string): Promise<void> {
+    await this.chrome.handle(id);
   }
 }

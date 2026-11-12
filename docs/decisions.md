@@ -340,7 +340,7 @@ not a new one.
   downloaded and Reload activates it; the service re-checks when the app returns to the foreground, and is created at start-up
   so an update found on the sign-in page is not lost. The prompt does not interrupt: nothing reloads by itself, so a half-typed
   item is never lost.
-- **Not done here.** The install hint (`lk-install-hint`), push, background sync and the iOS launch screen are separate; the
+- **Not done here.** The install hint (`lk-install-hint`; added to the notice slot on 2026-11-12 with the shared shell chrome), push, background sync and the iOS launch screen are separate; the
   hint was left out because it would add a banner to every browser visit and is not part of "offline shell and update prompt".
   The e2e config keeps `serviceWorkers: 'block'` for every other spec (the worker fetches around `page.route`); only
   `offline-shell.spec.ts` allows it, against its own server that answers `/api`.

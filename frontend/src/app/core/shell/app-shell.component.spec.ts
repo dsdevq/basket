@@ -41,6 +41,12 @@ describe('AppShellComponent', () => {
     expect(host.querySelector('[cmnAppLayoutNotice] lk-update-prompt')).not.toBeNull();
   });
 
+  it('renders the shared install hint in the layout notice slot', () => {
+    const host = render();
+
+    expect(host.querySelector('[cmnAppLayoutNotice] lk-install-hint')).not.toBeNull();
+  });
+
   it('shows the update prompt once AppUpdateService reports a downloaded version', () => {
     updateReady.set(true);
     const host = render();
