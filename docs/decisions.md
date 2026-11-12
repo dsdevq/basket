@@ -434,10 +434,11 @@ Owner's goal: the same layout and the same things across the lifekit apps, reuse
 the What's new feature of `@lifekit-hq/ui` and `@lifekit-hq/tokens` (convention: lifekit-common `docs/WHATS-NEW.md`, the pattern
 finance-sentry first had), bumped to 4.7.1.
 
-- **No app-local copy.** `provideWhatsNew` gets basket's version (`src/app/core/version.ts`, checked against `package.json` and
-  the notes file by a spec) and a `basket.whatsNew.lastSeen` marker. The sheet, the list, the dot and the seen marker are the library's.
-- **Notes.** `src/whats-new/notes.md`, plain second person; `lifekit-whats-new` runs before `start`, `build` and `build:prod`,
-  and `--check` runs in `npm run lint`, so CI fails when the committed `public/whats-new.json` is stale.
+- **No app-local copy.** `provideWhatsNew` gets basket's version (`src/app/core/version.ts`, checked against `package.json`
+  by a spec) and a `basket.whatsNew.lastSeen` marker. The sheet, the list, the dot and the seen marker are the library's.
+- **Notes.** `src/whats-new/notes.md`, plain second person; `lifekit-whats-new` runs before `start`, `build` and `build:prod`
+  to generate `public/whats-new.json` (no longer committed or linted, and fed by `CHANGELOG.md`: see "Releases: release-please and the
+  weekly release").
 - **Where it shows.** An account-menu item (`whatsNewMenuItem`) in the app shell and on the More page, with the dot until the
   sheet is opened. A first run on a device counts as seen, so a new person is not greeted with a dot.
 - No database change.
@@ -1082,3 +1083,32 @@ Epic #24: "I want to know what promotions are in the store and which promotion i
   shared milk line, `plan-empty` does not.
 - **Not in this change:** a Lidl offer fetch (the Lidl Plus offers feed stays out), a price-change figure against the last paid, the
   two-shop split, per-shop basket totals, and ticking lines off from the Plan.
+
+## Releases: release-please and the weekly release (2026-11-12, family alignment B8)
+
+Owner's goal: basket is one of the lifekit family, so its versions and What's new move with releases the way finance-sentry's and the
+dashboard's do, instead of staying at 0.1.0.
+
+- **Same two workflows as the family.** `release-please.yml` keeps one release PR current on every merge to main (version bump plus
+  `CHANGELOG.md`, from the conventional commit titles); `weekly-release.yml` merges it Mondays 00:07 UTC (`workflow_dispatch` is
+  "release now"), and the merge tags and publishes the release. No releasable commit since the last release means no PR and a no-op.
+- **The reusable templates are called, not copied.** `lifekit-hq/.github` is public, so a repo under `dsdevq` can call
+  `lifekit-hq/.github/.github/workflows/{release-please,weekly-release}.yml@v1` (the same call lifekit-common makes); nothing is inlined.
+- **What the release PR bumps:** `frontend/package.json`, the two version fields of `frontend/package-lock.json`, and `APP_VERSION`
+  in `frontend/src/app/core/version.ts` (marked `x-release-please-version`), so the existing spec that ties `APP_VERSION` to
+  `package.json` keeps holding on the release PR. `release-type: simple` also keeps the manifest. `pc-reader` has its own version
+  and the backend has none, so neither is touched. `bootstrap-sha` is the commit 0.1.0 describes, so the first release lists only what
+  lands after it.
+- **Releases do not gate deploys.** Every merge to main still deploys (`deploy.yml`); the weekly release governs the version, the
+  changelog and the tags. The release PR is a normal PR, so its merge deploys like any other.
+- **What's new follows the changelog.** `lifekit-whats-new` now runs with `--changelog ../CHANGELOG.md`, so each release in the
+  changelog is a sheet entry with its date and the fold of its user-facing changes; a `## x.y.z` heading in `src/whats-new/notes.md`
+  adds the plain lines for that release (a release without them shows the change list and raises no dot). `CHANGELOG.md` starts with a
+  bare `## 0.1.0` so the current release keeps its entry, and the Docker web stage copies it to `/CHANGELOG.md`.
+- **`public/whats-new.json` is generated and no longer committed.** A committed copy would go stale on every release PR (it changes
+  only the changelog and versions), so `npm run lint` could not stay green on it; the file is rebuilt before `start`, `build` and
+  `build:prod`, and `lifekit-whats-new --check` left the lint chain with it.
+- **Off until the bot is installed.** Both jobs run only when the `RELEASE_APP_ID` variable is set; they also need the
+  `RELEASE_APP_PRIVATE_KEY` secret and the release bot GitHub App installed on this repo. That is an owner step; until then the jobs
+  are skipped, not failed. A `GITHUB_TOKEN` fallback is deliberately absent: a release PR pushed with it never gets its checks.
+- No database change.

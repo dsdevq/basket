@@ -14,6 +14,8 @@ WORKDIR /web
 COPY frontend/package.json frontend/package-lock.json frontend/.npmrc ./
 RUN --mount=type=secret,id=npm_token \
     NODE_AUTH_TOKEN="$(cat /run/secrets/npm_token)" npm ci --no-audit --no-fund
+# CHANGELOG.md feeds the What's new sheet (npm run build:prod reads ../CHANGELOG.md, i.e. /CHANGELOG.md here).
+COPY CHANGELOG.md /CHANGELOG.md
 COPY frontend/ ./
 RUN npm run build:prod
 
