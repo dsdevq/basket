@@ -26,7 +26,7 @@
             "inlineStyleLanguage": "scss",
             "assets": [
               {"glob": "**/*", "input": "public"},
-              {"glob": "*", "input": "node_modules/@lifekit-hq/tokens/brand/dist/lk"}
+              {"glob": "*", "input": "node_modules/@lifekit-hq/tokens/brand/dist/bk"}
             ],
             "styles": [
               "src/styles.scss",
