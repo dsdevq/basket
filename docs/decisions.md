@@ -340,8 +340,9 @@ not a new one.
   downloaded and Reload activates it; the service re-checks when the app returns to the foreground, and is created at start-up
   so an update found on the sign-in page is not lost. The prompt does not interrupt: nothing reloads by itself, so a half-typed
   item is never lost.
-- **Not done here.** The install hint (`lk-install-hint`; added to the notice slot on 2026-11-12 with the shared shell chrome), push, background sync and the iOS launch screen are separate; the
+- **Not done here.** The install hint (`lk-install-hint`), push, background sync and the iOS launch screen are separate; the
   hint was left out because it would add a banner to every browser visit and is not part of "offline shell and update prompt".
+  It was added to the notice slot on 2026-11-12 with the shared shell chrome (`ShellChromeService`).
   The e2e config keeps `serviceWorkers: 'block'` for every other spec (the worker fetches around `page.route`); only
   `offline-shell.spec.ts` allows it, against its own server that answers `/api`.
 
@@ -802,7 +803,8 @@ carried for them. Additive: no endpoint, schema or migration changes.
   manifest are unchanged: they name the same file names. While the user has their own colour, the library rewrites the tab icon to
   a `data:` URL; the CSP's `img-src` already allows `data:`.
 - **Alert frame (#84), Custom theme start (#89), command palette (#90)** need nothing from basket: they are library components
-  (`cmn-alert`, the theme picker in Settings > Appearance, the palette) that basket already uses.
+  (`cmn-alert`, the theme picker in Settings > Appearance, the palette). The palette's entries were supplied by basket from
+  2026-11-12, by `ShellChromeService`.
 - **Carbon is remembered.** The library keeps an explicit Carbon choice now, and its pre-paint script changed to match it, so
   `index.html`'s generated `theme-init` block was regenerated with `npm run sync:theme`. The inline script's `sha256` in
   `Security:ContentSecurityPolicy` (`backend/src/Basket.Api/appsettings.json`) changed with it; `npm run lint` checks the two
@@ -865,7 +867,7 @@ and no migration.
   is now **List, Shelf, Plan, Cards**; **Prices** joins Promotions behind More, in the order of the desktop sidebar (List, Shelf, Plan,
   Prices, Cards, Promotions, People). Plan took Prices' slot because Prices is where products are set up and shop pages linked
   (occasional), while the Shelf and the Plan are the weekly shopping loop and Cards must stay one tap away at the till. Reversible:
-  it is the `tabRoutes` list of the shell and of the More page.
+  it is the `PHONE_TAB_ROUTES` list in `ShellChromeService`, which the shell and the More page both read.
 - **The answer on top is the coverage.** A `cmn-verdict-header` says "One shop covers it" with that shop (and how many can, when
   several), or "No one shop covers it" with the closest shop and how many lines block it, or "No shop prices it yet". Under it, when
   one shop does not cover the list, a card "Not priced at <closest shop>" lists the blocking lines each with a short reason tag. The
