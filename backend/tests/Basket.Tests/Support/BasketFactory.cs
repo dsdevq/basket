@@ -54,6 +54,9 @@ public class BasketFactory : WebApplicationFactory<Program>
 
     public string? Bootstrap { get; init; } = BootstrapToken;
 
+    /// <summary>Whether the host serves /metrics. Off by default: each host's meter provider stays in memory for the whole run.</summary>
+    public bool Metrics { get; init; }
+
     /// <summary>The fleet identity's issuer and signing key, as the app is configured to trust them. Off when false.</summary>
     public bool FleetAgentEnabled { get; init; } = true;
 
@@ -95,6 +98,7 @@ public class BasketFactory : WebApplicationFactory<Program>
         builder.UseSetting("Auth:Origins:0", Origin);
         builder.UseSetting("Auth:AuthRequestsPerMinute", AuthRequestsPerMinute.ToString());
         builder.UseSetting("Hangfire:Enabled", "false");
+        builder.UseSetting("Observability:Metrics:Enabled", Metrics ? "true" : "false");
         builder.UseSetting("LidlPlus:ReceiptPauseMilliseconds", "0");
         if (Bootstrap is not null)
         {

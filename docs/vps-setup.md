@@ -108,7 +108,8 @@ first push). The image build in CI also reads the `@lifekit-hq` packages with `G
 | Task | Command |
 |---|---|
 | Logs | `docker compose -p basket -f docker/docker-compose.prod.yml logs -f app` |
-| Redeploy a commit | `IMAGE_TAG=<full SHA> docker/deploy.sh` |
+| Redeploy a commit | `IMAGE_TAG=<full SHA> docker/deploy.sh` (also runs the platform contract; `docs/decisions.md` "The platform contract") |
+| Check the platform contract | `python3 /srv/lifekit-stack/scripts/platform-contract.py --project basket` |
 | Restart | `docker compose -p basket restart app` |
 | Back up the database | `docker exec basket-db pg_dump -U basket basket > basket-$(date +%F).sql` |
 | Stop (keeps data) | `docker compose -p basket -f docker/docker-compose.prod.yml down` |

@@ -1172,3 +1172,34 @@ dashboard's do, instead of staying at 0.1.0.
   `RELEASE_APP_PRIVATE_KEY` secret and the release bot GitHub App installed on this repo. That is an owner step; until then the jobs
   are skipped, not failed. A `GITHUB_TOKEN` fallback is deliberately absent: a release PR pushed with it never gets its checks.
 - No database change.
+
+## The platform contract (2026-11-12, family-align step B5)
+
+basket meets the box's platform contract (lifekit-stack `docs/platform-contract.md`, checked by `scripts/platform-contract.py`),
+the way finance-sentry and the dashboard do. Before this the live checker reported `basket-app` and `basket-db` as
+`UNDECLARED`.
+
+- **Declarations.** `docker/docker-compose.prod.yml` labels `basket-app` `lifekit.contract: "v1"` with port `3310`, health
+  `/api/health`, ready `/api/health/ready`, metrics `/metrics`, ingress `edge` (the loopback port is the tailnet edge's
+  upstream, as for the dashboard) and service `basket`. `basket-db` is `none`: a datastore with no HTTP surface and no
+  network but `default`.
+- **Metrics.** OpenTelemetry's ASP.NET Core and runtime instruments, exported as Prometheus text on `/metrics` (the same
+  packages as finance-sentry, metrics only; no traces exporter, the contract's traces item is not enforced yet). The app
+  joins the external `lifekit-shared` network so the box Prometheus reaches `basket-app:3310/metrics`. The meters are
+  process-wide, so the test hosts (dozens side by side) run with `Observability:Metrics:Enabled=false` and only the
+  platform-contract tests turn it on; in production it is on.
+- **`/metrics` is for Prometheus only.** It needs no sign-in, so a request that came through Tailscale (Serve or Funnel
+  always proxy with `X-Forwarded-For`; Prometheus never does) is answered 404. The numbers are not served on the public
+  address while the Funnel is still on, and not to tailnet devices either. The check runs before the forwarded-headers
+  middleware, which consumes the header.
+- **Logs.** The console sink writes one compact JSON object per line (`RenderedCompactJsonFormatter`), the trace id as
+  `@tr`. The container healthcheck's `/api/health` polls stay out of the log, but a health request that carries a
+  `traceparent` (the contract checker's probe) is logged, so a quiet app still shows a traced line.
+- **Deploy.** `docker/deploy.sh` runs `platform-contract.py --static` on the composed config before `up`, creates
+  `identity-oidc` and `lifekit-shared` when missing, and after the app is healthy runs `--project basket` with four
+  attempts 15 s apart (Prometheus' `scraped` item reads its last scrape). A missing checker fails the deploy; there is no
+  waiver.
+- **Not in this repo.** The `scraped` item needs a Prometheus job for `basket-app:3310` in lifekit-stack's
+  `compose/observability/prometheus/prometheus.yml` (path `/metrics`, like the `lifekit-dashboard` job). Until that job
+  lands, the live checker reports `scraped` and `labels` as FAIL for `basket-app`.
+- **No migration.**

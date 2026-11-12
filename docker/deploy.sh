@@ -10,6 +10,8 @@
 #     TEMPORARY: until docker/.env.sops is committed, the old env file ($BASKET_ENV_FILE, default ~/.config/basket/env)
 #     is used instead and the script says so. The follow-up item bsk-fam-b6b has the operator produce the encrypted
 #     docker/.env.sops, makes it required and deletes this fallback (docs/vps-setup.md).
+# Gated by the platform contract (lifekit-stack scripts/platform-contract.py, on the box at /srv/lifekit-stack):
+# the declarations are checked before anything changes, the running containers after.
 # Idempotent: re-running redeploys the same image.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -45,6 +47,20 @@ fi
 
 compose=(docker compose -p basket -f docker/docker-compose.prod.yml --env-file "$ENV_FILE")
 
+# Platform contract (guardrail 1). No existence check and no `|| true` on purpose: a missing checker fails the deploy
+# rather than silently skipping the gate. No waivers.
+CONTRACT="${PLATFORM_CONTRACT:-/srv/lifekit-stack/scripts/platform-contract.py}"
+
+# Static gate: every service's lifekit.contract.* declaration, before anything changes.
+echo "[deploy] platform contract: declarations"
+"${compose[@]}" config --format json | python3 "$CONTRACT" --static -
+
+# basket-app joins these two external networks (Logto's back channel, the box Prometheus). lifekit-stack's deploy
+# creates them too; creating them idempotently here keeps the deploy order irrelevant.
+for network in identity-oidc lifekit-shared; do
+  docker network inspect "$network" >/dev/null 2>&1 || docker network create "$network" >/dev/null
+done
+
 # Fail before anything changes when the commit has no published image (CI failed or never ran for it, or it was pruned).
 echo "[deploy] pull basket @ $IMAGE_TAG"
 if ! "${compose[@]}" pull app; then
@@ -64,10 +80,30 @@ for _ in $(seq 1 40); do
   if [[ $state == healthy ]]; then
     echo "[deploy] basket-app healthy"
     curl -fsS http://127.0.0.1:3310/api/health/ready >/dev/null && echo "[deploy] ready (database reachable)"
-    exit 0
+    break
   fi
   sleep 3
 done
-echo "error: basket-app did not become healthy" >&2
-"${compose[@]}" logs --tail 60 app >&2 || true
+if [[ $state != healthy ]]; then
+  echo "error: basket-app did not become healthy" >&2
+  "${compose[@]}" logs --tail 60 app >&2 || true
+  exit 1
+fi
+
+# Runtime gate: probe the running containers (health, ready, metrics, scraped, logs). Bounded retry: the `scraped`
+# item reads Prometheus' LAST scrape of the target, and a container recreated seconds ago is still `down` there until
+# its next 15s scrape. Four attempts a scrape interval apart. The containers stay up either way; the job goes red.
+echo "[deploy] platform contract: running containers (project basket)"
+attempts=4
+for ((attempt = 1; attempt <= attempts; attempt++)); do
+  if python3 "$CONTRACT" --project basket; then
+    echo "[deploy] platform contract met"
+    exit 0
+  fi
+  if ((attempt < attempts)); then
+    echo "[deploy] platform contract: attempt $attempt failed - retrying in 15s"
+    sleep 15
+  fi
+done
+echo "error: platform contract failed after $attempts attempts (table above)" >&2
 exit 1

@@ -29,6 +29,13 @@
     <!-- Serilog -->
     <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
     <PackageVersion Include="Serilog.Sinks.Console" Version="6.1.1" />
+    <PackageVersion Include="Serilog.Formatting.Compact" Version="3.0.0" />
+
+    <!-- OpenTelemetry: metrics only, served as Prometheus text on /metrics (platform contract). Same lines as finance-sentry. -->
+    <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.20.1" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.20.2" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.20.1" />
+    <PackageVersion Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" Version="1.18.0-beta.1" />
 
     <!-- Test stack -->
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
