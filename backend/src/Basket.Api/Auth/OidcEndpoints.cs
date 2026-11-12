@@ -13,7 +13,7 @@ public sealed record EndSessionResponse(string EndSessionUrl);
 /// <summary>
 /// The browser half of the org sign-in: <c>start</c> sends the person to the provider, the OIDC handler completes the
 /// code exchange at <see cref="OidcLoginOptions.CallbackPath"/> and hands over to <c>callback</c>, which resolves the
-/// account and opens basket's own session cookie. Every answer to a person is a redirect (these are page navigations);
+/// account (linking a passkey account that holds a valid session) and opens basket's own session cookie. Every answer to a person is a redirect (these are page navigations);
 /// when the path is off they are 404s.
 /// </summary>
 public static class OidcEndpoints
@@ -51,6 +51,7 @@ public static class OidcEndpoints
         HttpContext http,
         IOptions<OidcLoginOptions> options,
         ExternalLoginService accounts,
+        UserManager<AppUser> users,
         SignInManager<AppUser> signIn,
         IDataProtectionProvider protection)
     {
@@ -77,10 +78,14 @@ public static class OidcEndpoints
             principal.FindFirstValue("name"),
             oidc.GrantsApp(principal.FindAll(OidcLoginOptions.RolesClaim).Select(c => c.Value)));
 
-        var user = await accounts.ResolveAsync(identity, http.RequestAborted);
-        if (user is null)
+        // A valid basket session, if the request carries one: it is what lets a passkey account that predates the provider link to it.
+        var session = await http.AuthenticateAsync(IdentityConstants.ApplicationScheme);
+        var sessionUser = session.Succeeded && session.Principal is not null ? await users.GetUserAsync(session.Principal) : null;
+
+        var result = await accounts.ResolveAsync(identity, sessionUser, http.RequestAborted);
+        if (result.User is not { } user)
         {
-            return Results.Redirect(oidc.AccessDeniedUrl);
+            return Results.Redirect(result.Refusal == ExternalLoginRefusal.LinkRequired ? oidc.LinkRequiredUrl : oidc.AccessDeniedUrl);
         }
 
         await signIn.SignInAsync(user, isPersistent: true);

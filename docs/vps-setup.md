@@ -52,8 +52,9 @@ The app joins the external Docker networks `identity-oidc` and `lifekit-shared` 
 `/metrics` over the latter). lifekit-stack's deploy creates both; `deploy.sh` does not, and `up` fails if either is missing.
 
 Sign-in through the org Logto is a separate optional path: the five `AUTH_OIDC_*` values in `docker/.env.example` (the
-client secret is a secret) switch it on, and all empty keeps sign-in passkey-only. Leave them empty in production until
-the account-linking step ships (`docs/decisions.md` "Org sign-in").
+client secret is a secret) switch it on, and all empty keeps sign-in passkey-only. Account linking is in the callback now (an
+existing passkey account links on its first provider sign-in, and nobody is created beside an unlinked account), but leave them
+empty in production until the sign-in pages it redirects to (`/access-denied`, `/link-required`) ship (`docs/decisions.md` "Org sign-in").
 
 ### 2. Start the stack
 

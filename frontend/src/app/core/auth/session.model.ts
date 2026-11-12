@@ -11,6 +11,8 @@ export interface SessionUser {
 export interface SessionResponse {
   readonly authenticated: boolean;
   readonly user: SessionUser | null;
+  /** True when sign-in through the lifekit account is on and this session's account has not been linked to it yet. */
+  readonly linkRequired?: boolean;
 }
 
 export interface Member {
