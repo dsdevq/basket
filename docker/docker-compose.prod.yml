@@ -30,11 +30,19 @@ services:
       # The fleet's machine identity (docs/decisions.md "Fleet identity"). Empty = the path is off; neither is a secret.
       FleetAgent__Authority: "${FLEET_AGENT_AUTHORITY:-}"
       FleetAgent__BackchannelAuthority: "${FLEET_AGENT_BACKCHANNEL_AUTHORITY:-}"
+      # Sign-in through the org identity provider (Logto), like finance-sentry (docs/decisions.md "Org sign-in"). All empty =
+      # passkeys only, as before. The client secret is a secret: it comes from the env file, never from git.
+      Auth__Oidc__Authority: "${AUTH_OIDC_AUTHORITY:-}"
+      Auth__Oidc__ClientId: "${AUTH_OIDC_CLIENT_ID:-}"
+      Auth__Oidc__ClientSecret: "${AUTH_OIDC_CLIENT_SECRET:-}"
+      Auth__Oidc__PublicBaseUrl: "${AUTH_OIDC_PUBLIC_BASE_URL:-}"
+      Auth__Oidc__BackchannelAuthority: "${AUTH_OIDC_BACKCHANNEL_AUTHORITY:-}"
       TZ: Europe/Dublin
     volumes:
       - keys:/keys
     # `default` reaches db; `identity-oidc` is the external network the identity service (Logto) shares with its on-box
-    # clients, so FleetAgent__BackchannelAuthority=http://logto:3001/oidc resolves (docs/decisions.md "Fleet identity").
+    # clients, so FleetAgent__BackchannelAuthority and Auth__Oidc__BackchannelAuthority = http://logto:3001/oidc resolve
+    # (docs/decisions.md "Fleet identity", "Org sign-in").
     networks: [default, identity-oidc]
     tmpfs:
       - /tmp:size=16m

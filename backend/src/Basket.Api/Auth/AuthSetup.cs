@@ -61,6 +61,8 @@ public static class AuthSetup
                 };
             });
 
+        services.AddOidcLogin(configuration);
+        services.AddScoped<ExternalLoginService>();
         services.AddFleetAgent(configuration);
 
         services.AddAuthorizationBuilder()
