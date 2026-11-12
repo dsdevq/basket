@@ -41,8 +41,9 @@ plaintext. `BOOTSTRAP_TOKEN` is the owner's one-time sign-up secret (at least 32
 and tickets: whoever has it while no user exists can register as owner.
 
 Change a value with `docker/secrets-edit.sh` (decrypts into `$EDITOR`, re-encrypts on save, leaves no plaintext).
-Until `docker/.env.sops` is committed, `docker/deploy.sh` falls back to `~/.config/basket/env` and says so; once the
-encrypted file has deployed once, delete that fallback branch from `deploy.sh` and the old env file.
+Until `docker/.env.sops` is committed, `docker/deploy.sh` falls back to `~/.config/basket/env` and says so. That fallback
+is temporary: the separate follow-up item `bsk-fam-b6b` has the operator produce the encrypted `docker/.env.sops`, makes it
+required, and deletes the fallback branch from `deploy.sh` and the old env file.
 
 To accept the fleet's machine identity, also add `FLEET_AGENT_AUTHORITY` and `FLEET_AGENT_BACKCHANNEL_AUTHORITY` (not
 secrets; `docker/.env.example` and `docs/decisions.md` "Fleet identity" say what each is). The app joins the external
@@ -59,7 +60,6 @@ IMAGE_TAG=<full commit SHA> docker/deploy.sh   # pulls the image, starts basket-
 The normal route is the **Deploy to VPS** workflow (`.github/workflows/deploy.yml`) on a self-hosted runner: it starts
 when CI succeeds on `main`, after the `image builds` job published that commit's image, and deploys that SHA. To roll
 back, run it by hand (`workflow_dispatch`) with an older full SHA in `sha`, or run the script with that `IMAGE_TAG`.
-If ghcr or CI is down, `docker/deploy.sh` documents the break-glass build from the checkout.
 
 Check: `curl -s http://127.0.0.1:3310/api/health/ready` returns `Healthy`, and
 `docker stats --no-stream basket-app basket-db` stays under 256 MB / 192 MB.

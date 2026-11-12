@@ -63,7 +63,7 @@ planning record so this repo carries its own reasons; the M1 section holds the c
 - **The image is built once by CI and pulled by SHA.** The `image builds` job in `ci.yml` builds `ghcr.io/dsdevq/basket`
   natively on arm64 and, on a push to `main`, publishes `:<full commit SHA>`. The deploy workflow starts when that CI run
   succeeds and pulls that SHA, so the box builds nothing and needs no `NODE_AUTH_TOKEN`; a rollback is a deploy of an
-  older SHA. The compose file keeps its `build:` block as the break-glass path.
+  older SHA. The prod compose file has no `build:` block; `IMAGE_TAG` is required.
 - **Memory budget:** app container 256 MB, Postgres 192 MB (`shared_buffers=48MB`, 30 connections). Hangfire runs 2
   workers; its only M1 job purges dead invites nightly at 04:30 Europe/Dublin.
 - **Polling, not SignalR or push.** The list must show the other person's changes, so it polls every 15 seconds while the

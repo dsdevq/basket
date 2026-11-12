@@ -7,15 +7,10 @@
 #     older SHA is a rollback.
 #   - the secrets: docker/.env.sops, decrypted into the git-ignored docker/.env with the age key at SOPS_AGE_KEY_FILE
 #     (default ~/.config/sops/age/firstmate.agekey, a recipient beside the captain in .sops.yaml). Needs sops.
-#     Until docker/.env.sops is committed, the old env file ($BASKET_ENV_FILE, default ~/.config/basket/env) is used
-#     instead and the script says so; delete that branch with the first deploy from the encrypted file (docs/vps-setup.md).
+#     TEMPORARY: until docker/.env.sops is committed, the old env file ($BASKET_ENV_FILE, default ~/.config/basket/env)
+#     is used instead and the script says so. The follow-up item bsk-fam-b6b has the operator produce the encrypted
+#     docker/.env.sops, makes it required and deletes this fallback (docs/vps-setup.md).
 # Idempotent: re-running redeploys the same image.
-#
-# Break-glass (ghcr or CI unavailable): the compose file keeps its `build:` block, so the image can be built from the
-# checkout on the host instead of pulled:
-#
-#   export NODE_AUTH_TOKEN=$(gh auth token)   # read:packages, for the build's @lifekit-hq/* install
-#   IMAGE_TAG=local docker compose -p basket -f docker/docker-compose.prod.yml --env-file docker/.env up -d --build
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -45,7 +40,7 @@ else
     echo "error: no docker/.env.sops and no env file at $ENV_FILE (docs/vps-setup.md)" >&2
     exit 1
   fi
-  echo "[deploy] warn: docker/.env.sops is not committed yet - using $ENV_FILE" >&2
+  echo "[deploy] warn: docker/.env.sops is not committed yet - using $ENV_FILE. This fallback is temporary: bsk-fam-b6b makes the encrypted file required and deletes it" >&2
 fi
 
 compose=(docker compose -p basket -f docker/docker-compose.prod.yml --env-file "$ENV_FILE")
