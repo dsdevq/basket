@@ -181,11 +181,37 @@ public static class MatchEndpoints
 
         if (barcode is not null && await db.Products.AnyAsync(p => p.Barcode == barcode && p.Id != id, ct))
         {
-            return Results.Json(new { error = "barcode_exists", message = "Another product already has that barcode." }, statusCode: 409);
+            return BarcodeExists();
         }
 
         product.Barcode = barcode;
-        await db.SaveChangesAsync(ct);
+
+        var facts = new ProductFacts(product.Name, barcode);
+        foreach (var candidate in await db.MatchCandidates.Where(c => c.ProductId == id).ToListAsync(ct))
+        {
+            var verdict = CandidateMatcher.Evaluate(facts, new CandidateFacts(candidate.Title, candidate.Barcode));
+            if (verdict is null)
+            {
+                db.MatchCandidates.Remove(candidate);
+                continue;
+            }
+
+            candidate.Basis = verdict.Basis;
+            candidate.Score = verdict.Score;
+        }
+
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            return BarcodeExists();
+        }
+
         return Results.Ok(new { barcode });
     }
+
+    internal static IResult BarcodeExists() =>
+        Results.Json(new { error = "barcode_exists", message = "Another product already has that barcode." }, statusCode: 409);
 }

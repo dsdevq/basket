@@ -291,6 +291,37 @@ public sealed class MatchingTests : IClassFixture<BasketFactory>
         (await _factory.WithDb(db => db.Products.SingleAsync(p => p.Id == id))).Barcode.Should().BeNull();
     }
 
+    [Fact]
+    public async Task Setting_the_barcode_rechecks_the_open_proposals_against_it()
+    {
+        var mine = Ean13("500011263792");
+        var theirs = Ean13("400638133393");
+        var (owner, id) = await WithProductAsync();
+        var fleet = Fleet(FleetScopes.CatalogAdd);
+        const string differs = "https://www.lidl.ie/p/milbona-fresh-whole-milk-2-l/p10018810";
+        const string same = "https://www.lidl.ie/p/milbona-fresh-whole-milk-2-l/p10018811";
+        const string silent = "https://www.lidl.ie/p/milbona-fresh-whole-milk-2-l/p10018812";
+
+        await fleet.PostAsJsonAsync($"/api/products/{id}/candidates", new
+        {
+            store = "lidl",
+            results = new[]
+            {
+                Result(differs, "Milbona fresh whole milk 2 litres", theirs),
+                Result(same, "Milbona fresh whole milk 2 litres", mine),
+                Result(silent, "Milbona fresh whole milk 2 litres"),
+            },
+        });
+        (await owner.PutAsJsonAsync($"/api/products/{id}/barcode", new { barcode = mine })).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var list = await Json(await owner.GetAsync($"/api/products/{id}/candidates"));
+        var candidates = list.GetProperty("candidates").EnumerateArray().ToDictionary(c => c.GetProperty("url").GetString()!);
+        candidates.Keys.Should().BeEquivalentTo(same, silent);
+        candidates[same].GetProperty("basis").GetString().Should().Be("barcode");
+        candidates[same].GetProperty("score").GetInt32().Should().Be(100);
+        candidates[silent].GetProperty("basis").GetString().Should().Be("name_size");
+    }
+
     // ---- who may call it ----------------------------------------------------------------------------------------
 
     [Fact]

@@ -147,7 +147,7 @@ public static class ProductEndpoints
 
             if (await db.Products.AnyAsync(p => p.Barcode == barcode, ct))
             {
-                return Results.Json(new { error = "barcode_exists", message = "A product with that barcode is already tracked." }, statusCode: 409);
+                return MatchEndpoints.BarcodeExists();
             }
         }
 
@@ -166,7 +166,14 @@ public static class ProductEndpoints
             Barcode = barcode,
         };
         db.Products.Add(product);
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException) when (barcode is not null)
+        {
+            return MatchEndpoints.BarcodeExists();
+        }
 
         var connected = await db.LidlPlusConnections.AnyAsync(ct);
         var created = new ProductResponse(
