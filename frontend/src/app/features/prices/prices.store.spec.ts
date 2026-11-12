@@ -79,6 +79,42 @@ describe('PricesStore', () => {
     expect(toast.error).toHaveBeenCalledTimes(1);
   });
 
+  it('drops a refresh that was already in flight when a product was removed', async () => {
+    const other: Product = {id: 'p2', name: 'Bread', stores: []};
+    let resolveStale!: (value: unknown) => void;
+    const all = vi
+      .fn()
+      .mockResolvedValueOnce({products: [PRODUCT, other], stores: []})
+      .mockReturnValueOnce(new Promise(resolve => (resolveStale = resolve)));
+    const {store} = setup({all, remove: vi.fn().mockResolvedValue(undefined)});
+    await store.load();
+
+    const pull = store.load();
+    await store.remove(PRODUCT);
+    resolveStale({products: [PRODUCT, other], stores: []});
+    await pull;
+
+    expect(store.products()).toEqual([other]);
+  });
+
+  it('keeps the newest load when an older one answers last', async () => {
+    const other: Product = {id: 'p2', name: 'Bread', stores: []};
+    let resolveOlder!: (value: unknown) => void;
+    const all = vi
+      .fn()
+      .mockReturnValueOnce(new Promise(resolve => (resolveOlder = resolve)))
+      .mockResolvedValueOnce({products: [PRODUCT, other], stores: []});
+    const {store} = setup({all});
+
+    const older = store.load();
+    await store.load(true);
+    resolveOlder({products: [PRODUCT], stores: []});
+    await older;
+
+    expect(store.products()).toEqual([PRODUCT, other]);
+    expect(store.status()).toBe('ready');
+  });
+
   it('hands back the server text for a link it refused, and reloads after one it accepted', async () => {
     const refused = new HttpErrorResponse({
       status: 400,

@@ -1,6 +1,6 @@
 import { MAX_BATCH, type PostOutcome } from './ingest.ts';
 import { readPage } from './parse/index.ts';
-import { STORES, type Page, type Reading, type StoreId, type WorkItem } from './types.ts';
+import { ENABLED_STORES, STORES, type Page, type Reading, type StoreId, type WorkItem } from './types.ts';
 
 /** Page loads on one site are at least this far apart (the same politeness as the server's nightly Lidl job). */
 export const MIN_GAP_MS = 5_000;
@@ -30,11 +30,18 @@ export interface StoreReport {
  * One run over the work list. Sites are read one after the other, one page at a time, at least MIN_GAP_MS between loads
  * on the same site. A refusal ends that site's part of the run (the rest is not asked) and is never retried; readings
  * gathered before it are still posted. A site's readings are posted when its pages are done, so a later site cannot
- * lose them.
+ * lose them. Entries for a store that is not in `enabled` are skipped, with one log line for the run (not an error).
  */
-export async function run(items: WorkItem[], deps: Deps, minGapMs = MIN_GAP_MS): Promise<StoreReport[]> {
+export async function run(items: WorkItem[], deps: Deps, minGapMs = MIN_GAP_MS, enabled: readonly StoreId[] = ENABLED_STORES): Promise<StoreReport[]> {
   const reports: StoreReport[] = [];
   for (const store of STORES) {
+    if (!enabled.includes(store)) {
+      const skipped = items.filter((item) => item.store === store).length;
+      if (skipped > 0) {
+        deps.log(`${store}: paused, skipping ${skipped} page${skipped === 1 ? '' : 's'} (store not in ENABLED_STORES)`);
+      }
+      continue;
+    }
     const mine = items.filter((item) => item.store === store);
     if (mine.length === 0) {
       continue;

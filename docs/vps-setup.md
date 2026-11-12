@@ -1,7 +1,7 @@
 # VPS setup (runbook)
 
 How basket runs on the lifekit VPS and what is left to do for the first start. Nothing here is done by the code
-change itself: the Funnel needs root, the env file holds secrets, the first deploy runs on the box.
+change itself: the Funnel needs root, the secrets file is created and encrypted on the box side, the first deploy runs there.
 
 ## Shape
 
@@ -11,7 +11,8 @@ change itself: the Funnel needs root, the env file holds secrets, the first depl
 | App | container `basket-app`, **256 MB**, listens on `127.0.0.1:3310` only |
 | Database | container `basket-db` (Postgres 17), **192 MB**, no published port, volume `basket_pgdata` |
 | Data Protection keys | volume `basket_keys`, mounted at `/keys` (keeps the sign-in cookie valid across deploys) |
-| Secrets | `~/.config/basket/env` on the box, mode 600, outside any checkout and outside git |
+| Image | `ghcr.io/dsdevq/basket:<full commit SHA>`, built once per `main` commit by CI (`ci.yml`, job `image builds`, arm64) and pulled by the deploy; nothing is built on the box |
+| Secrets | `docker/.env.sops` in the repo, encrypted with SOPS + age; `docker/deploy.sh` decrypts it into the git-ignored `docker/.env` |
 | Public address | `https://lifekit-vps.tail1cb676.ts.net:10000` (Tailscale Funnel, port **10000**) |
 
 Port 3310 was free on the box when this was written (checked with `ss -ltn`); re-check before the first start.
@@ -20,36 +21,51 @@ is not acceptable, so basket uses 10000.
 
 ## First start
 
-### 1. Create the env file (as the deploy user)
+### 1. Create the encrypted secrets file
+
+`docker/.env.sops` holds the values `docker/.env.example` documents. It is encrypted to the age recipients in `.sops.yaml`
+(the captain's key and firstmate's, the same two as finance-sentry), so either decrypts it and it is safe in git. It
+needs `sops` and `age` installed; never use the captain's private key on the box, the deploy uses firstmate's
+(`~/.config/sops/age/firstmate.agekey`, or `SOPS_AGE_KEY_FILE`).
+
+Create it once from the existing plaintext env file, then commit it:
 
 ```sh
-install -d -m 700 ~/.config/basket
-umask 077
-cat > ~/.config/basket/env <<EOF
-PUBLIC_ORIGIN=https://lifekit-vps.tail1cb676.ts.net:10000
-POSTGRES_PASSWORD=$(openssl rand -hex 24)
-BOOTSTRAP_TOKEN=$(openssl rand -base64 33 | tr '+/' '-_' | tr -d '=')
-EOF
+sops encrypt --input-type dotenv --output-type dotenv --filename-override docker/.env.sops \
+  ~/.config/basket/env > docker/.env.sops
 ```
 
-`docker/.env.example` documents each value. `BOOTSTRAP_TOKEN` is the owner's one-time sign-up secret (at least 32
-characters). Keep it out of chat logs and tickets: whoever has it while no user exists can register as owner.
-Never put this file in git; do not use the captain's private age key for it.
+For a fresh install write the plaintext first (`umask 077`): `PUBLIC_ORIGIN`, `POSTGRES_PASSWORD=$(openssl rand -hex 24)`
+and `BOOTSTRAP_TOKEN=$(openssl rand -base64 33 | tr '+/' '-_' | tr -d '=')`, then encrypt it as above and delete the
+plaintext. `BOOTSTRAP_TOKEN` is the owner's one-time sign-up secret (at least 32 characters). Keep it out of chat logs
+and tickets: whoever has it while no user exists can register as owner.
+
+Change a value with `docker/secrets-edit.sh` (decrypts into `$EDITOR`, re-encrypts on save, leaves no plaintext).
+Until `docker/.env.sops` is committed, `docker/deploy.sh` falls back to `~/.config/basket/env` and says so. That fallback
+is temporary: the separate follow-up item `bsk-fam-b6b` has the operator produce the encrypted `docker/.env.sops`, makes it
+required, and deletes the fallback branch from `deploy.sh` and the old env file.
 
 To accept the fleet's machine identity, also add `FLEET_AGENT_AUTHORITY` and `FLEET_AGENT_BACKCHANNEL_AUTHORITY` (not
-secrets; `docker/.env.example` and `docs/decisions.md` "Fleet identity" say what each is). The app joins the external
-Docker network `identity-oidc`, which lifekit-stack creates; check that `docker network inspect identity-oidc` works
-before the deploy. Both empty keeps the path off.
+secrets; `docker/.env.example` and `docs/decisions.md` "Fleet identity" say what each is). Both empty keeps the path off.
+
+The app joins the external Docker networks `identity-oidc` and `lifekit-shared` (the box Prometheus scrapes
+`/metrics` over the latter). lifekit-stack's deploy creates both; `deploy.sh` does not, and `up` fails if either is missing.
+
+Sign-in through the org Logto is a separate optional path: the five `AUTH_OIDC_*` values in `docker/.env.example` (the
+client secret is a secret) switch it on, and all empty keeps sign-in passkey-only. Account linking is in the callback now (an
+existing passkey account links on its first provider sign-in, and nobody is created beside an unlinked account), but leave them
+empty in production until the sign-in pages it redirects to (`/access-denied`, `/link-required`) ship (`docs/decisions.md` "Org sign-in").
 
 ### 2. Start the stack
 
 ```sh
-export NODE_AUTH_TOKEN=...      # a token with read:packages (the image build installs @lifekit-hq/*)
-docker/deploy.sh                # builds the image, starts basket-app + basket-db, waits for "healthy"
+echo "$GHCR_TOKEN" | docker login ghcr.io -u <user> --password-stdin   # read:packages; the workflow does this itself
+IMAGE_TAG=<full commit SHA> docker/deploy.sh   # platform contract (static), pulls the image, starts basket-app + basket-db, waits for "healthy", platform contract (live)
 ```
 
-The normal route is the **Deploy to VPS** workflow (`.github/workflows/deploy.yml`) on a self-hosted runner; it runs the
-same script after CI passes on `main`. Running the script by hand is the same thing.
+The normal route is the **Deploy to VPS** workflow (`.github/workflows/deploy.yml`) on a self-hosted runner: it starts
+when CI succeeds on `main`, after the `image builds` job published that commit's image, and deploys that SHA. To roll
+back, run it by hand (`workflow_dispatch`) with an older full SHA in `sha`, or run the script with that `IMAGE_TAG`.
 
 Check: `curl -s http://127.0.0.1:3310/api/health/ready` returns `Healthy`, and
 `docker stats --no-stream basket-app basket-db` stays under 256 MB / 192 MB.
@@ -84,16 +100,19 @@ channel. After the owner exists, `BOOTSTRAP_TOKEN` does nothing; remove it from 
 The deploy workflow runs on `runs-on: [self-hosted, lifekit-vps, basket]`. **No runner is registered for this repo
 yet** - until one is, the deploy job queues and nothing deploys (CI itself runs on GitHub-hosted runners and is
 unaffected). Registering one is a box-side action for the captain/firstmate (same pattern as the finance-sentry runner:
-labels `lifekit-vps` and `basket`, the deploy user, Docker access). The runner needs `docker`, `docker compose` and
-`curl`, and `~/.config/basket/env` for its user. The workflow passes `GITHUB_TOKEN` as `NODE_AUTH_TOKEN`; the repo must
-be allowed to read the `@lifekit-hq` packages (package settings > "Manage Actions access").
+labels `lifekit-vps` and `basket`, the deploy user, Docker access). The runner needs `docker`, `docker compose`,
+`curl`, `python3`, `sops` and firstmate's age key, plus the contract checker at `/srv/lifekit-stack/scripts/platform-contract.py`.
+The workflow logs in to ghcr with `GITHUB_TOKEN`, so the `ghcr.io/dsdevq/basket`
+package must let this repo's Actions read it (package settings > "Manage Actions access"; CI creates the package on its
+first push). The image build in CI also reads the `@lifekit-hq` packages with `GITHUB_TOKEN`.
 
 ## Operating it
 
 | Task | Command |
 |---|---|
 | Logs | `docker compose -p basket -f docker/docker-compose.prod.yml logs -f app` |
-| Redeploy this checkout | `docker/deploy.sh` |
+| Redeploy a commit | `IMAGE_TAG=<full SHA> docker/deploy.sh` (also runs the platform contract; `docs/decisions.md` "The platform contract") |
+| Check the platform contract | `python3 /srv/lifekit-stack/scripts/platform-contract.py --project basket` |
 | Restart | `docker compose -p basket restart app` |
 | Back up the database | `docker exec basket-db pg_dump -U basket basket > basket-$(date +%F).sql` |
 | Stop (keeps data) | `docker compose -p basket -f docker/docker-compose.prod.yml down` |

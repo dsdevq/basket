@@ -1,4 +1,5 @@
 using System.Text;
+using Basket.Api.Prices;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
@@ -9,6 +10,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     : IdentityDbContext<AppUser, AppRole, Guid>(options)
 {
     public DbSet<ListItem> ListItems => Set<ListItem>();
+
+    public DbSet<Trip> Trips => Set<Trip>();
+
+    public DbSet<TripItem> TripItems => Set<TripItem>();
 
     public DbSet<Invite> Invites => Set<Invite>();
 
@@ -25,6 +30,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<PricePullRun> PricePullRuns => Set<PricePullRun>();
 
     public DbSet<PaidPrice> PaidPrices => Set<PaidPrice>();
+
+    public DbSet<LoyaltyCard> LoyaltyCards => Set<LoyaltyCard>();
+
+    public DbSet<LidlPlusConnection> LidlPlusConnections => Set<LidlPlusConnection>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -43,6 +52,38 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             item.HasOne<AppUser>().WithMany().HasForeignKey(i => i.AddedByUserId).OnDelete(DeleteBehavior.Restrict);
             item.HasOne<AppUser>().WithMany().HasForeignKey(i => i.CheckedByUserId).OnDelete(DeleteBehavior.SetNull);
             item.HasIndex(i => new { i.IsChecked, i.AddedAt });
+            item.Property(i => i.Store).HasConversion<string>().HasMaxLength(16);
+            item.HasOne<Product>().WithMany().HasForeignKey(i => i.ProductId).OnDelete(DeleteBehavior.SetNull);
+            // One open line per product and shop (a null shop counts as one value): tapping a Shelf tile twice, or two
+            // phones tapping at once, cannot put the same thing on the list twice. A ticked line is history, not a duplicate.
+            item.HasIndex(i => new { i.ProductId, i.Store })
+                .IsUnique()
+                .AreNullsDistinct(false)
+                .HasFilter("is_checked = false AND product_id IS NOT NULL");
+        });
+
+        builder.Entity<Trip>(trip =>
+        {
+            trip.ToTable("trip");
+            trip.HasKey(t => t.Id);
+            trip.HasIndex(t => t.ClosedAt);
+            trip.Property(t => t.Source).HasMaxLength(16);
+            trip.Property(t => t.ExternalId).HasMaxLength(64);
+            trip.Property(t => t.Total).HasPrecision(10, 2);
+            // One trip per receipt: importing the same receipt twice (a manual pull racing the nightly one) cannot file it twice.
+            trip.HasIndex(t => new { t.Source, t.ExternalId }).IsUnique().HasFilter("external_id IS NOT NULL");
+        });
+
+        builder.Entity<TripItem>(item =>
+        {
+            item.ToTable("trip_item");
+            item.HasKey(i => i.Id);
+            item.Property(i => i.Text).HasMaxLength(ListItem.MaxTextLength).IsRequired();
+            item.HasOne<Trip>().WithMany().HasForeignKey(i => i.TripId).OnDelete(DeleteBehavior.Cascade);
+            item.HasOne<AppUser>().WithMany().HasForeignKey(i => i.CheckedByUserId).OnDelete(DeleteBehavior.SetNull);
+            item.HasIndex(i => i.TripId);
+            item.Property(i => i.Store).HasConversion<string>().HasMaxLength(16);
+            item.HasOne<Product>().WithMany().HasForeignKey(i => i.ProductId).OnDelete(DeleteBehavior.SetNull);
         });
 
         builder.Entity<Invite>(invite =>
@@ -84,6 +125,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             listing.Property(l => l.Store).HasConversion<string>().HasMaxLength(16);
             listing.Property(l => l.Url).HasMaxLength(400).IsRequired();
             listing.Property(l => l.Title).HasMaxLength(300);
+            listing.Property(l => l.ImageUrl).HasMaxLength(ImageUrls.MaxLength);
+            listing.Property(l => l.Category).HasMaxLength(StoreListing.MaxCategoryLength);
             listing.Property(l => l.LastError).HasMaxLength(500);
             listing.HasOne<Product>().WithMany().HasForeignKey(l => l.ProductId).OnDelete(DeleteBehavior.Cascade);
             listing.HasIndex(l => new { l.ProductId, l.Store }).IsUnique();
@@ -133,7 +176,26 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             paid.Property(p => p.Store).HasConversion<string>().HasMaxLength(16);
             paid.Property(p => p.Price).HasPrecision(10, 2);
             paid.HasOne<Product>().WithMany().HasForeignKey(p => p.ProductId).OnDelete(DeleteBehavior.Cascade);
-            paid.HasIndex(p => new { p.ProductId, p.Store, p.PaidOn });
+            paid.HasIndex(p => new { p.ProductId, p.Store, p.PaidOn }).IsUnique();
+        });
+
+        builder.Entity<LoyaltyCard>(card =>
+        {
+            card.ToTable("loyalty_card");
+            card.HasKey(c => c.Id);
+            card.Property(c => c.Store).HasConversion<string>().HasMaxLength(16);
+            card.Property(c => c.Format).HasConversion<string>().HasMaxLength(16);
+            card.Property(c => c.NumberProtected).HasMaxLength(LoyaltyCard.MaxProtectedLength).IsRequired();
+            card.HasIndex(c => c.Store).IsUnique();
+        });
+
+        builder.Entity<LidlPlusConnection>(connection =>
+        {
+            connection.ToTable("lidl_plus_connection");
+            connection.HasKey(c => c.Id);
+            connection.Property(c => c.Id).ValueGeneratedNever();
+            connection.Property(c => c.RefreshTokenProtected).HasMaxLength(LidlPlusConnection.MaxProtectedLength).IsRequired();
+            connection.Property(c => c.Problem).HasMaxLength(32);
         });
 
         builder.Entity<AppUser>().ToTable("users");

@@ -1,10 +1,14 @@
 # pc-reader
 
-Reads Tesco, Aldi and Dunnes product pages in an ordinary browser on **your own PC and home connection** and posts the
+Reads Aldi and Dunnes product pages (and Tesco's, while it is not paused, see below) in an ordinary browser on **your own PC and home connection** and posts the
 prices to basket's write-only ingest endpoint (`POST /api/ingest/prices`). tesco.ie, aldi.ie and dunnesstoresgrocery.com
 refuse the VPS, so this is how those three shops get prices (see [docs/decisions.md](../docs/decisions.md), "M2 decisions",
 "Price ingest decisions" and "Dunnes: the server cannot read it, the PC reader does").
 A product whose shop has not been read yet shows "Waiting for the next PC read" in basket.
+
+**Tesco is paused for now.** The reader skips Tesco entries (from the catalog or the URL file) with one log line per run, not
+an error, and reads Aldi and Dunnes as usual. To read Tesco again, add `'tesco'` back to `ENABLED_STORES` in `src/types.ts`.
+The Tesco parser, fixtures and tests are kept.
 
 It is a small Node program: Chrome (installed on the PC, with a profile of its own) loads each page, a parser reads what
 the page says, and the readings go to basket in batches. Nothing is scheduled; you run it when the PC is on.
@@ -79,7 +83,10 @@ anything else stops the run before a browser opens, naming the entry. Query stri
   fingerprint or user-agent changes, no proxy, no CAPTCHA solving. It is driven by Playwright, and a shop may notice and
   refuse; that is accepted (below).
 - Each page's price, name and stock are posted as read, with the was price and promo text where the shop's markup gives
-  them (Aldi only; see the Tesco and Dunnes sections below); basket dates the reading itself. A page it cannot read (shop changed its
+  them (Aldi only; see the Tesco and Dunnes sections below); basket dates the reading itself. Every page also posts the product
+  photo's address (the JSON-LD `image`, else `og:image`; https only, otherwise left out), never the picture; see
+  [docs/decisions.md](../docs/decisions.md) ("The product photo"). Every shop's page also posts its category, the breadcrumb
+  as a path ("Chilled Food > Milk"), when the page has one; see "Each store page keeps its category" there. A page it cannot read (shop changed its
   markup, 404) is reported and nothing is posted for it.
 
 ## A blocked run
@@ -98,13 +105,13 @@ Progress goes to stderr, the JSON summary to stdout. Exit code: `0` every page r
 was blocked or a page was unreadable or refused (`unknown_listing` etc.), `1` could not start, basket could not be reached, or basket refused a batch
 (bad token, rate limit).
 
-## Tesco: not yet checked against a live page
+## Tesco: not yet checked against a live page (paused, see above)
 
 On 2026-11-07 tesco.ie answered every fresh, reader-made Chrome profile with Akamai's "Access Denied" (as it does the VPS),
 while a long-used Chrome profile was served a real page. So the Tesco parser follows the page's schema.org markup and is
-tested on hand-written fixtures only. It reads the price, name and stock from the JSON-LD offer and nothing from the visible
-text, so Tesco's was price, Clubcard price and offer dates are not posted until a live page shows where they can be read
-safely. The Aldi parser is tested on trimmed copies of live pages.
+tested on hand-written fixtures only. It reads the price, name and stock from the JSON-LD offer, the category from the page's
+breadcrumb, the photo address (see above), and nothing else from the visible text, so Tesco's was price, Clubcard price and offer dates are not posted
+until a live page shows where they can be read safely. The Aldi parser is tested on trimmed copies of live pages.
 
 ### The one manual step: open the reader's profile by hand once
 
@@ -118,7 +125,8 @@ cd pc-reader && npm run profile
 It opens your installed Chrome as a plain browser (no Playwright, no automation flags) on the reader's own profile
 directory, the same `BASKET_READER_PROFILE` the reader uses, at https://www.tesco.ie. Browse tesco.ie as you normally
 would, accept the cookie banner, sign in to Clubcard only if you want Clubcard prices, then **close Chrome** (the reader
-cannot open the profile while Chrome has it open). Then retry Tesco once:
+cannot open the profile while Chrome has it open). Then, with Tesco back in `ENABLED_STORES` (it is paused otherwise and
+`--store tesco` would read nothing), retry Tesco once:
 
 ```sh
 npm start -- --store tesco
@@ -135,8 +143,8 @@ profile locked, run `npm run profile` again and close Chrome normally.
 Dunnes' grocery shop, dunnesstoresgrocery.com, answers the VPS and a plain request from the author's PC alike with
 Cloudflare's "Just a moment..." challenge (2026-11-08, HTTP 403, `cf-mitigated: challenge`), so no real Dunnes product page
 has been read. The parser follows the page's schema.org JSON-LD offer, as Tesco's does, and is tested on hand-written
-fixtures only (plus the recorded challenge page, which must stop the shop). It posts the price, name and stock; the was
-price and promo text are not posted until a live page shows where they can be read safely. Dunnes has no card price in
+fixtures only (plus the recorded challenge page, which must stop the shop). It posts the price, name, stock, photo address and category (the page's breadcrumb); the
+was price and promo text are not posted until a live page shows where they can be read safely. Dunnes has no card price in
 basket. Whether Cloudflare serves the reader's Chrome profile is not known: the first run stops on a refusal and reports
 it as in "A blocked run". Nothing is built to get past it; `npm run profile` and its manual step below are written for
 Tesco and are not a Dunnes workaround. `npm start -- --store dunnes` runs only Dunnes.

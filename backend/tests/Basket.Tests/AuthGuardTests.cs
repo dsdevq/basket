@@ -17,16 +17,30 @@ public sealed class AuthGuardTests : IClassFixture<BasketFactory>
     [InlineData("POST", "/api/list/items")]
     [InlineData("PATCH", "/api/list/items/00000000-0000-0000-0000-000000000001")]
     [InlineData("DELETE", "/api/list/items/00000000-0000-0000-0000-000000000001")]
+    [InlineData("POST", "/api/list/close")]
+    [InlineData("GET", "/api/trips")]
+    [InlineData("POST", "/api/trips/00000000-0000-0000-0000-000000000001/reload")]
     [InlineData("GET", "/api/products")]
+    [InlineData("GET", "/api/promotions")]
+    [InlineData("GET", "/api/plan")]
+    [InlineData("GET", "/api/plan/by-shop")]
     [InlineData("POST", "/api/products")]
     [InlineData("DELETE", "/api/products/00000000-0000-0000-0000-000000000001")]
     [InlineData("PUT", "/api/products/00000000-0000-0000-0000-000000000001/stores/lidl")]
+    [InlineData("GET", "/api/cards")]
+    [InlineData("GET", "/api/cards/lidl")]
+    [InlineData("PUT", "/api/cards/lidl")]
+    [InlineData("DELETE", "/api/cards/lidl")]
     [InlineData("GET", "/api/invites")]
     [InlineData("POST", "/api/invites")]
     [InlineData("GET", "/api/members")]
     [InlineData("GET", "/api/ingest-tokens")]
     [InlineData("POST", "/api/ingest-tokens")]
     [InlineData("DELETE", "/api/ingest-tokens/00000000-0000-0000-0000-000000000001")]
+    [InlineData("GET", "/api/lidl-plus/connection")]
+    [InlineData("PUT", "/api/lidl-plus/connection")]
+    [InlineData("POST", "/api/lidl-plus/connection/check")]
+    [InlineData("DELETE", "/api/lidl-plus/connection")]
     [InlineData("POST", "/api/ingest/prices")]
     [InlineData("POST", "/api/auth/sign-out")]
     [InlineData("GET", "/api/passkeys")]
@@ -67,6 +81,9 @@ public sealed class AuthGuardTests : IClassFixture<BasketFactory>
         (await member.GetAsync("/api/members")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
         (await member.GetAsync("/api/ingest-tokens")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
         (await member.PostAsJsonAsync("/api/ingest-tokens", new { label = "x" })).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await member.GetAsync("/api/lidl-plus/connection")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await member.PutAsJsonAsync("/api/lidl-plus/connection", new { refreshToken = "x" })).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await member.DeleteAsync("/api/lidl-plus/connection")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
         (await owner.GetAsync("/api/members")).StatusCode.Should().Be(HttpStatusCode.OK);
     }
 

@@ -3,12 +3,16 @@ export type Role = 'owner' | 'member';
 export interface SessionUser {
   readonly id: string;
   readonly displayName: string;
+  /** The account's email; the server does not send it until sign-in moves to the lifekit account. */
+  readonly email?: string | null;
   readonly role: Role;
 }
 
 export interface SessionResponse {
   readonly authenticated: boolean;
   readonly user: SessionUser | null;
+  /** True when sign-in through the lifekit account is on and this session's account has not been linked to it yet. */
+  readonly linkRequired?: boolean;
 }
 
 export interface Member {

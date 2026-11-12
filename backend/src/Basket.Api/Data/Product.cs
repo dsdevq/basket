@@ -25,6 +25,10 @@ public sealed class Product
 /// <summary>The page of one shop that sells a product: where the nightly job reads its price.</summary>
 public sealed class StoreListing
 {
+    public const int MaxCategoryLength = 200;
+
+    public const string CategorySeparator = " > ";
+
     public Guid Id { get; set; }
 
     public Guid ProductId { get; set; }
@@ -35,6 +39,18 @@ public sealed class StoreListing
 
     /// <summary>The shop's own name for it, learned on the first successful read.</summary>
     public string? Title { get; set; }
+
+    /// <summary>
+    /// Where the shop shows this product's photo (an https address, never the bytes), kept from the last read that
+    /// carried one. A read without a photo leaves it as it was.
+    /// </summary>
+    public string? ImageUrl { get; set; }
+
+    /// <summary>
+    /// Where the shop files it, from the breadcrumb of its page, outermost first and joined with <see cref="CategorySeparator"/>
+    /// ("Chilled Food &gt; Milk"). Null until a reader has sent one; a later reading without one keeps it.
+    /// </summary>
+    public string? Category { get; set; }
 
     public DateTimeOffset AddedAt { get; set; }
 
@@ -153,8 +169,8 @@ public sealed class PricePullRun
 }
 
 /// <summary>
-/// A price the household really paid, with its date. Filled from Lidl Plus receipts once the owner has done the
-/// one-off login (milestone 4); until then the table stays empty and the page says "not yet connected".
+/// A price the household really paid, with its date. Filled from Lidl Plus receipts once the owner has connected Lidl Plus; one row
+/// per product, shop and day.
 /// </summary>
 public sealed class PaidPrice
 {
@@ -165,6 +181,9 @@ public sealed class PaidPrice
     public Store Store { get; set; }
 
     public DateOnly PaidOn { get; set; }
+
+    /// <summary>When the receipt behind this price was printed; of the receipts of one day, the latest keeps its price.</summary>
+    public DateTimeOffset? PaidAt { get; set; }
 
     public decimal Price { get; set; }
 }

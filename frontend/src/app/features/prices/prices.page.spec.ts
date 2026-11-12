@@ -50,6 +50,7 @@ function milk(): Product {
           title: 'Milk',
           checkedAt: null,
           error: null,
+          imageUrl: null,
         },
         price: {
           observedOn: '2026-11-05',
@@ -62,6 +63,7 @@ function milk(): Product {
           validFrom: null,
           validUntil: '2026-11-11',
           best: 0.99,
+          inStock: true,
         },
       },
       {
@@ -71,6 +73,7 @@ function milk(): Product {
           title: null,
           checkedAt: null,
           error: null,
+          imageUrl: null,
         },
         price: {
           observedOn: '2026-11-04',
@@ -83,6 +86,7 @@ function milk(): Product {
           validFrom: null,
           validUntil: null,
           best: 1.19,
+          inStock: true,
         },
       },
       TESCO,

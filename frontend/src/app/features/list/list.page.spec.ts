@@ -1,6 +1,6 @@
 import {signal} from '@angular/core';
 import {type ComponentFixture, TestBed} from '@angular/core/testing';
-import {CmnDrawerService, ToastService} from '@lifekit-hq/ui';
+import {CmnDialogService, CmnDrawerService, ToastService} from '@lifekit-hq/ui';
 import {of} from 'rxjs';
 
 import {SessionStore} from '../../core/auth/session.store';
@@ -27,6 +27,8 @@ function item(id: string, text: string, over: Partial<ListItem> = {}): ListItem 
     addedBy: ANNA,
     checkedAt: null,
     checkedBy: null,
+    productId: null,
+    store: null,
     ...over,
   };
 }
@@ -38,7 +40,9 @@ interface Harness {
     add: ReturnType<typeof vi.fn>;
     setChecked: ReturnType<typeof vi.fn>;
     remove: ReturnType<typeof vi.fn>;
+    close: ReturnType<typeof vi.fn>;
   };
+  readonly dialog: {confirm: ReturnType<typeof vi.fn>};
   readonly drawer: {open: ReturnType<typeof vi.fn>};
   readonly host: HTMLElement;
 }
@@ -49,12 +53,15 @@ async function render(items: ListItem[]): Promise<Harness> {
     add: vi.fn(),
     setChecked: vi.fn(),
     remove: vi.fn().mockResolvedValue(undefined),
+    close: vi.fn().mockResolvedValue({}),
   };
   const drawer = {open: vi.fn()};
+  const dialog = {confirm: vi.fn().mockReturnValue(of(true))};
   TestBed.configureTestingModule({
     providers: [
       {provide: ListApi, useValue: api},
       {provide: CmnDrawerService, useValue: drawer},
+      {provide: CmnDialogService, useValue: dialog},
       {provide: ToastService, useValue: {error: vi.fn(), success: vi.fn()}},
       {
         provide: SessionStore,
@@ -65,7 +72,15 @@ async function render(items: ListItem[]): Promise<Harness> {
   const fixture = TestBed.createComponent(ListPage);
   fixture.detectChanges();
   await settle(fixture);
-  return {fixture, api, drawer, host: fixture.nativeElement as HTMLElement};
+  return {fixture, api, dialog, drawer, host: fixture.nativeElement as HTMLElement};
+}
+
+function swipeButton(host: HTMLElement, name: string): HTMLButtonElement {
+  const button = host.querySelector<HTMLButtonElement>(`button[aria-label="${name}"]`);
+  if (!button) {
+    throw new Error(`No swipe action named "${name}"`);
+  }
+  return button;
 }
 
 describe('ListPage', () => {
@@ -88,6 +103,17 @@ describe('ListPage', () => {
     expect(text).toContain('Spinach');
     expect(text).toContain('Butter');
     expect(text).toContain('Anna');
+  });
+
+  it('marks a line picked from a shop with that shop, and leaves a free-text line bare', async () => {
+    const {host} = await render([
+      item('1', 'Whole milk 2L', {productId: 'p1', store: 'tesco'}),
+      item('2', 'Candles'),
+    ]);
+
+    const rows = Array.from(host.querySelectorAll('cmn-list-item-row'));
+    expect(rows[0]?.textContent).toContain('Tesco');
+    expect(rows[1]?.textContent).not.toMatch(/Tesco|Lidl|Aldi|Dunnes/);
   });
 
   it('adds the typed text and clears the field', async () => {
@@ -156,5 +182,98 @@ describe('ListPage', () => {
     await settle(fixture);
 
     expect(api.remove).not.toHaveBeenCalled();
+  });
+
+  it('ticks an item from its swipe action', async () => {
+    const {fixture, api, host} = await render([item('1', 'Spinach')]);
+    api.setChecked.mockResolvedValue(item('1', 'Spinach', {checked: true, checkedBy: ANNA}));
+
+    swipeButton(host, 'Tick Spinach').click();
+    await settle(fixture);
+
+    expect(api.setChecked).toHaveBeenCalledWith('1', true);
+  });
+
+  it('offers Untick on a ticked item and unticks it from the swipe action', async () => {
+    const {fixture, api, host} = await render([
+      item('1', 'Butter', {checked: true, checkedBy: ANNA, checkedAt: '2026-11-03T11:00:00Z'}),
+    ]);
+    api.setChecked.mockResolvedValue(item('1', 'Butter'));
+
+    swipeButton(host, 'Untick Butter').click();
+    await settle(fixture);
+
+    expect(api.setChecked).toHaveBeenCalledWith('1', false);
+  });
+
+  it('deletes an item straight from its swipe action, without the sheet', async () => {
+    const {fixture, api, drawer, host} = await render([item('1', 'Spinach')]);
+
+    swipeButton(host, 'Delete Spinach').click();
+    await settle(fixture);
+    fixture.detectChanges();
+
+    expect(drawer.open).not.toHaveBeenCalled();
+    expect(api.remove).toHaveBeenCalledWith('1');
+    expect(host.textContent).not.toContain('Spinach');
+  });
+
+  describe('Done shopping', () => {
+    const button = (host: HTMLElement): HTMLButtonElement | undefined =>
+      Array.from(host.querySelectorAll('button')).find(b =>
+        b.textContent?.includes('Done shopping')
+      );
+
+    it('is offered only when something is ticked', async () => {
+      const none = await render([item('1', 'Spinach')]);
+      expect(button(none.host)).toBeUndefined();
+      TestBed.resetTestingModule();
+
+      const some = await render([item('1', 'Spinach'), item('2', 'Butter', {checked: true})]);
+      expect(button(some.host)).toBeDefined();
+    });
+
+    it('files the trip after the confirm and leaves the list empty when everything was ticked', async () => {
+      const {fixture, api, dialog, host} = await render([
+        item('1', 'Spinach', {checked: true}),
+        item('2', 'Butter', {checked: true}),
+      ]);
+      api.items.mockResolvedValue([]);
+
+      button(host)?.click();
+      await settle(fixture);
+      await settle(fixture);
+
+      expect(dialog.confirm).toHaveBeenCalledTimes(1);
+      expect(dialog.confirm.mock.calls[0][0].message).toContain('2 ticked items go to History');
+      expect(api.close).toHaveBeenCalledTimes(1);
+      expect(host.textContent).toContain('Nothing on the list');
+      expect(host.textContent).not.toContain('Spinach');
+    });
+
+    it('says what stays on the list when some items are not ticked', async () => {
+      const {fixture, dialog, host} = await render([
+        item('1', 'Spinach'),
+        item('2', 'Butter', {checked: true}),
+      ]);
+
+      button(host)?.click();
+      await settle(fixture);
+
+      expect(dialog.confirm.mock.calls[0][0].message).toContain(
+        '1 ticked item goes to History. The 1 not ticked stay on the list.'
+      );
+    });
+
+    it('does nothing when the confirm is dismissed', async () => {
+      const {fixture, api, dialog, host} = await render([item('2', 'Butter', {checked: true})]);
+      dialog.confirm.mockReturnValue(of(false));
+
+      button(host)?.click();
+      await settle(fixture);
+
+      expect(api.close).not.toHaveBeenCalled();
+      expect(host.textContent).toContain('Butter');
+    });
   });
 });

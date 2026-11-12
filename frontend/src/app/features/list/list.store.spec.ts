@@ -17,12 +17,14 @@ function item(id: string, over: Partial<ListItem> = {}): ListItem {
     addedBy: ME,
     checkedAt: null,
     checkedBy: null,
+    productId: null,
+    store: null,
     ...over,
   };
 }
 
 function setup(api: Partial<ListApi>) {
-  const toast = {error: vi.fn()};
+  const toast = {error: vi.fn(), success: vi.fn()};
   TestBed.configureTestingModule({
     providers: [
       {provide: ListApi, useValue: api},
@@ -167,5 +169,96 @@ describe('ListStore', () => {
 
     expect(store.items()).toEqual([]);
     expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  describe('closeTrip', () => {
+    it('takes the ticked items off the list once the server filed the trip, and keeps the rest', async () => {
+      const items = vi
+        .fn()
+        .mockResolvedValueOnce([item('a'), item('b', {checked: true})])
+        .mockResolvedValue([item('a')]);
+      const close = vi.fn().mockResolvedValue({});
+      const {store, toast} = setup({items, close});
+      await store.load();
+
+      const done = await store.closeTrip();
+
+      expect(done).toBe(true);
+      expect(close).toHaveBeenCalledTimes(1);
+      expect(store.items().map(i => i.id)).toEqual(['a']);
+      expect(toast.success).toHaveBeenCalledWith('Trip saved to History');
+      expect(store.closing()).toBe(false);
+    });
+
+    it('leaves the list as it was when the server refuses', async () => {
+      const items = vi.fn().mockResolvedValue([item('b', {checked: true})]);
+      const close = vi.fn().mockRejectedValue({status: 500});
+      const {store, toast} = setup({items, close});
+      await store.load();
+
+      const done = await store.closeTrip();
+
+      expect(done).toBe(false);
+      expect(store.items().map(i => i.id)).toEqual(['b']);
+      expect(toast.error).toHaveBeenCalledTimes(1);
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(store.closing()).toBe(false);
+    });
+
+    it('re-reads the list when the server says it changed under us', async () => {
+      const items = vi
+        .fn()
+        .mockResolvedValueOnce([item('b', {checked: true})])
+        .mockResolvedValue([item('b')]);
+      const close = vi.fn().mockRejectedValue({status: 409});
+      const {store, toast} = setup({items, close});
+      await store.load();
+
+      await store.closeTrip();
+      await Promise.resolve();
+
+      expect(toast.error).toHaveBeenCalledTimes(1);
+      expect(store.items().map(i => i.checked)).toEqual([false]);
+    });
+
+    it('ignores a second tap while the first is in flight', async () => {
+      let finish: (value: unknown) => void = () => undefined;
+      const close = vi.fn().mockReturnValue(new Promise(resolve => (finish = resolve)));
+      const {store} = setup({
+        items: vi.fn().mockResolvedValue([item('b', {checked: true})]),
+        close,
+      });
+      await store.load();
+
+      const first = store.closeTrip();
+      const second = await store.closeTrip();
+      finish({});
+      await first;
+
+      expect(second).toBe(false);
+      expect(close).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('puts a picked product on the list once, whether the server created the line or returned the open one', async () => {
+    const line = item('p', {text: 'Whole milk 2L', productId: 'milk', store: 'tesco'});
+    const addProduct = vi.fn().mockResolvedValue(line);
+    const {store} = setup({addProduct, items: vi.fn().mockResolvedValue([])});
+    await store.load();
+
+    expect(await store.addProduct('milk', 'tesco')).toBe(true);
+    expect(await store.addProduct('milk', 'tesco')).toBe(true);
+
+    expect(addProduct).toHaveBeenCalledWith('milk', 'tesco');
+    expect(store.toBuy()).toEqual([line]);
+  });
+
+  it('says so and adds nothing when a picked product is refused', async () => {
+    const {store, toast} = setup({addProduct: vi.fn().mockRejectedValue(new Error('offline'))});
+
+    expect(await store.addProduct('milk', null)).toBe(false);
+
+    expect(store.items()).toEqual([]);
+    expect(toast.error).toHaveBeenCalledTimes(1);
   });
 });

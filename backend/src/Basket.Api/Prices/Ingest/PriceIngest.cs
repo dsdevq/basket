@@ -15,7 +15,9 @@ public sealed record IngestPrice(
     string? PromoText,
     DateOnly? ValidFrom,
     DateOnly? ValidUntil,
-    bool? InStock);
+    bool? InStock,
+    string? ImageUrl = null,
+    string? Category = null);
 
 public sealed record IngestRequest(IReadOnlyList<IngestPrice>? Prices);
 
@@ -27,7 +29,8 @@ public sealed record IngestResponse(int Accepted, int Rejected, IReadOnlyList<In
 /// <summary>
 /// Turns a posted batch into dated <see cref="PriceObservation"/> rows through <see cref="PriceRecorder"/>, the same
 /// write path as the nightly job. Each reading stands alone: a bad one is rejected with a reason and the others are
-/// kept. The reading is dated by the server's clock, never by the poster, so a stale or replayed batch cannot
+/// kept. A reading may carry the product photo's address (<c>imageUrl</c>), stored on the listing when it is a plain https address (otherwise
+/// ignored, the price is still kept); the picture itself is never fetched or kept. The reading is dated by the server's clock, never by the poster, so a stale or replayed batch cannot
 /// overwrite a newer reading of the same day with an older one.
 /// </summary>
 public sealed class PriceIngest(AppDbContext db, PriceRecorder recorder, TimeProvider clock)
@@ -181,6 +184,9 @@ public sealed class PriceIngest(AppDbContext db, PriceRecorder recorder, TimePro
             return Reasons.DatesInvalid;
         }
 
+        // The photo is optional and never costs a price: an address that is absent or not a plain https one is ignored.
+        var image = ImageUrls.TryNormalize(item.ImageUrl, out var normalized) ? normalized : null;
+
         var scheme = item.LoyaltyPrice is null
             ? null
             : UserNames.Clean(item.LoyaltyScheme, 32) ?? (store.LoyaltyScheme() is { Length: > 0 } own ? own : null);
@@ -197,7 +203,9 @@ public sealed class PriceIngest(AppDbContext db, PriceRecorder recorder, TimePro
                 UserNames.Clean(item.PromoText, 200),
                 item.ValidFrom,
                 item.ValidUntil,
-                inStock));
+                inStock,
+                image,
+                UserNames.Clean(item.Category, StoreListing.MaxCategoryLength)));
         return null;
     }
 

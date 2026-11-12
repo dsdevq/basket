@@ -39,6 +39,10 @@ public sealed class PriceRecorder(AppDbContext db)
         listing.LastCheckedAt = observedAt;
         listing.LastError = null;
         listing.Title = Truncate(quote.Title, 300) ?? listing.Title;
+        // A page that showed no photo this time does not take the one we have away; an address that fails the check
+        // is no address at all, so it can never replace a good one either.
+        listing.ImageUrl = ImageUrls.TryNormalize(quote.ImageUrl, out var image) ? image : listing.ImageUrl;
+        listing.Category = Truncate(quote.Category, StoreListing.MaxCategoryLength) ?? listing.Category;
     }
 
     /// <summary>A reading that did not work: the last known price stays, the listing says why it is stale.</summary>

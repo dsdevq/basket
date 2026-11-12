@@ -39,7 +39,7 @@ import {StoreLinkSheetComponent} from './store-link.sheet';
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <cmn-page kind="list" fill>
+    <cmn-page [reload]="reload" kind="list" fill>
       @for (problem of problems(); track problem) {
         <cmn-alert [title]="problem" variant="warning" />
       }
@@ -71,7 +71,7 @@ import {StoreLinkSheetComponent} from './store-link.sheet';
                 [aria-label]="'More for ' + product.name"
                 (clicked)="more(product)"
                 cmnListSectionAside
-                variant="secondary"
+                variant="ghost"
                 icon="Ellipsis"
               />
               @for (entry of product.stores; track entry.store) {
@@ -120,6 +120,9 @@ export class PricesPage implements OnInit {
   protected readonly name = new FormControl('', {nonNullable: true});
   protected readonly form = new FormGroup({name: this.name});
   protected readonly headline = headline;
+
+  /** Pull to refresh on this tab root: the shell's pull gesture calls it and waits for the promise. */
+  protected readonly reload = (): Promise<void> => this.store.load();
 
   public ngOnInit(): void {
     void this.store.load();

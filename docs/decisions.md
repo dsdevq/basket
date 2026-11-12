@@ -7,8 +7,8 @@ planning record so this repo carries its own reasons; the M1 section holds the c
 
 | # | Call | Effect on the code |
 |---|---|---|
-| Q1 | Her phone reaches basket over a **public Tailscale Funnel**, and the app does its own sign-in. | The app is on the open internet: sign-in, invite and write routes are hardened and rate limited (see M1 below). Funnel serves HTTPS on port **10000** (443 stays with xui). |
-| Q2 | Sign-in is a **one-time invite link, then a passkey** (ASP.NET Core Identity, .NET 10). | No passwords anywhere. Invites last 24 hours, work once and are stored hashed. |
+| Q1 | **Superseded 2026-11-12 (see "Org sign-in").** Her phone reaches basket over a **public Tailscale Funnel**, and the app does its own sign-in. | The app is on the open internet: sign-in, invite and write routes are hardened and rate limited (see M1 below). Funnel serves HTTPS on port **10000** (443 stays with xui). |
+| Q2 | **Superseded 2026-11-12 (see "Org sign-in"): basket signs in through the org Logto.** Sign-in is a **one-time invite link, then a passkey** (ASP.NET Core Identity, .NET 10). | No passwords anywhere. Invites last 24 hours, work once and are stored hashed. |
 | Q3 | **One shared list.** Plan-a-shop is later a view of it, not a second list. | A single `list_item` table, no per-user lists. |
 | Q4 | A Lidl price is **this week's offer plus the last price paid**, shown with its date. | M3-M4. Lidl publishes no everyday prices online. |
 | Q5 | The **Lidl refresh token lives encrypted in basket's database**, seeded by one paste in Settings - **not in SOPS**. | M4. The token rotates, so a static SOPS file would go stale; ASP.NET Data Protection (keys already persisted for the cookie) is the intended encryption. SOPS still holds the deploy secrets. |
@@ -56,15 +56,90 @@ planning record so this repo carries its own reasons; the M1 section holds the c
   the allowed origin includes `:10000`.
 - **One container serves both.** The .NET API serves the Angular build from `wwwroot` (one image, one port 3310, no
   nginx). Hashed assets are cached immutably; `index.html` is not.
-- **Deploy secrets are an env file outside git** (`~/.config/basket/env`, mode 600) holding the database password and
-  the bootstrap token. SOPS/age was left out for M1: the file has three values, all generated on the box, and none
-  needs to be shared or recovered from git. Move to SOPS if the set grows or a second operator appears.
+- **Deploy secrets are SOPS + age** (`docker/.env.sops`, committed encrypted; `docker/deploy.sh` decrypts it on the box
+  with firstmate's key, as finance-sentry does). M1 kept an env file outside git (`~/.config/basket/env`) because it had
+  three values, all generated on the box, and named the OIDC client secret (issued in Logto, not generated on the box) as
+  the trigger to move. The move started on 2026-11-12 as part of deploying like the rest of the family; until the encrypted
+  file is committed `deploy.sh` still falls back to the old env file (temporary, `docs/vps-setup.md`).
+- **The image is built once by CI and pulled by SHA.** The `image builds` job in `ci.yml` builds `ghcr.io/dsdevq/basket`
+  natively on arm64 and, on a push to `main`, publishes `:<full commit SHA>`. The deploy workflow starts when that CI run
+  succeeds and pulls that SHA, so the box builds nothing and needs no `NODE_AUTH_TOKEN`; a rollback is a deploy of an
+  older SHA. The prod compose file has no `build:` block; `IMAGE_TAG` is required.
 - **Memory budget:** app container 256 MB, Postgres 192 MB (`shared_buffers=48MB`, 30 connections). Hangfire runs 2
   workers; its only M1 job purges dead invites nightly at 04:30 Europe/Dublin.
 - **Polling, not SignalR or push.** The list must show the other person's changes, so it polls every 15 seconds while the
   page is visible (two people do not need SignalR); push belongs with a later milestone. M1 had no service worker; the
   shell-only one is "Offline shell and update prompt" below.
 - **Generic lifekit icons.** The app uses the library's `lk` brand set until basket gets a mark of its own.
+
+## Org sign-in: basket is a Logto client like the rest of the family (2026-11-12, supersedes Q2)
+
+Owner, 2026-11-12: "Currently we have some passkeys there, but my expectation for basket was that we have logto gateway, why dont
+we use it ? Why do we invent login ? Basket should be just in our ecosystem, reflecting 90% of stuff, including login, settings
+and so on. Design and stuff like that. The only difference is domain basket application is about. Everything else - it should be
+the same as our apps. Like its one family bro, family of products. Same UI, same UX, same library, everything is the same. Only
+difference is basket use cases and business logic." And on reach: "my gf is on tailnet bro, we have her account for finance
+sentry." Q2 (invite link, then a passkey) was chosen because her phone was assumed to be off the tailnet; it is not, so the
+reason is gone and the org identity provider is the sign-in. This is the backend step (A2), and A3 below links the two existing
+passkey accounts; the family sign-in pages, the tailnet-only cutover and removing the passkey code are separate steps that follow.
+
+- **Off until configured.** `Auth:Oidc` (compose: `AUTH_OIDC_AUTHORITY`, `AUTH_OIDC_CLIENT_ID`, `AUTH_OIDC_CLIENT_SECRET`,
+  `AUTH_OIDC_PUBLIC_BASE_URL`, `AUTH_OIDC_BACKCHANNEL_AUTHORITY`, all empty by default) switches it on only when the first four
+  are set. Until then nothing is registered, the `/api/auth/oidc/*` endpoints answer 404 and sign-in is passkey-only exactly as
+  before. The fleet path (`FleetAgent:*`) is a separate scheme and is unchanged.
+- **The same shape as finance-sentry.** An OpenID Connect scheme named `lifekit` (code flow with PKCE, confidential client, scopes
+  `openid email profile roles`, response mode `query` so sign-in stays a GET navigation and the CSP's `form-action 'self'` needs
+  no exception). `OidcLoginOptions`, `OidcLoginExtensions` and `OidcAuthorityRewriteHandler` are ported from there: the container
+  reaches Logto at `http://logto:3001/oidc` (`AUTH_OIDC_BACKCHANNEL_AUTHORITY`) for discovery, keys, token and userinfo, while the
+  issuer and the browser's authorize redirect stay on the tailnet address (`AUTH_OIDC_AUTHORITY`). The accepted issuer is pinned to
+  that address, as the fleet path pins its own.
+- **Endpoints.** `GET /api/auth/oidc/start?returnUrl=` challenges the scheme; the provider returns to `/api/auth/oidc/signin` (the
+  redirect URI to register; the handler completes the code exchange) and the handler hands over to `GET /api/auth/oidc/callback`,
+  which decides the account. A return URL must be an absolute path on this app (`//host` and backslash forms are ignored).
+  `POST /api/auth/sign-out` ends the basket session as before; when the session came from the provider it answers `200
+  {endSessionUrl}` (RP-initiated logout with the `id_token_hint` kept at sign-in) for the SPA to navigate to, otherwise `204`.
+  A refused sign-in redirects to `/access-denied`; a failed handshake to `/sign-in?error=OIDC_FAILED`; the provider returns to
+  `/sign-in?info=signed_out` after sign-out. Those pages are the frontend step's.
+- **Which account.** A linked `sub` (an Identity `user_logins` row, provider `lifekit`) signs in, with or without the role. Otherwise,
+  if the request also carries a **valid basket session** for an account with no `lifekit` login, that account takes the `sub` and the
+  person continues as it (the passkey accounts that predate the provider; see "Linking the passkey accounts" below). Otherwise a
+  **verified** email that matches exactly one account links to it, unless that account is already linked to another `sub`.
+  Otherwise holding the provider role `basket` (`RequiredRole`) creates a Member, display name from `name`, else the email's local
+  part, **but only while every usable account already has a `lifekit` login**. Otherwise access is denied. An unverified email never links
+  and never creates, even with the role; two accounts holding the same email are never guessed between. Existing accounts are not
+  role-checked, as in finance-sentry.
+- **The email.** It is stored on `users.email` when an account is created or linked from the provider, and a linked account that
+  has none takes the provider's verified one (it never replaces one). `/api/session` returns `email` (null for an account that has
+  none, such as a passkey-only one). No migration: `users.email` and `user_logins` are already in the Identity schema.
+- **Basket's own session stays.** After the callback the person holds the same `__Host-basket` Identity cookie (30-day sliding) as
+  a passkey sign-in; finance-sentry's access JWT and refresh cookie are not ported, they serve its JwtBearer default scheme and
+  MCP tokens. The only extra cookie that outlives the handshake is `__Host-basket-oidc-id`, the ID token (data-protected,
+  HttpOnly, Strict) kept so sign-out can send the hint; sign-out deletes it.
+- **Cookies of their own.** Browsers share cookies across the ports of one host, and finance-sentry lives on the same host, so the
+  external-login cookie (`basket-oidc-external`) and the OIDC correlation (`basket-oidc-correlation.`) and nonce
+  (`basket-oidc-nonce.`) cookies are renamed from the defaults other apps use. The correlation and nonce cookies are SameSite=Lax
+  because the provider returns by a cross-site GET.
+- **Linking the passkey accounts (2026-11-12, step A3).** The two existing accounts have no email, so the email match cannot find
+  them, and a role-holder who matched nothing would have been created as a second account beside the old one. Instead the
+  account's own session is the proof of whose it is (Logto vouches for the person, the `__Host-basket` cookie for the account),
+  the standard Identity "add an external login" pair. The cookie is SameSite=Strict, and the provider and basket share a site
+  (the same tailnet host, different ports), so it reaches the callback on the redirect from the provider.
+  - **At the callback**, a valid session for an account with no `lifekit` login gets the provider login added and continues as that
+    account, passkeys untouched. An account that already has a `lifekit` login never takes a second, and a locked-out account takes
+    none; the `sub` is then judged as if there were no session. A `sub` already linked to another account signs in as that account.
+  - **No duplicates.** While any usable (not locked-out) account has no `lifekit` login, a role-holder who matches no account is not created: the callback
+    redirects to `/link-required`, a page (the frontend step's, like `/access-denied`) that says to open basket on the phone they
+    already use, or to sign in with the passkey first. A locked-out account never blocks: it cannot link, so nobody could clear it. Once every usable account is linked, creation works as before.
+  - **`/api/session` reports `linkRequired: true`** for a session whose account has no `lifekit` login once the provider path is
+    configured (the passkey registration response does too: a new passkey account has none). It is always `false` when the path is
+    off. The SPA uses it to send the person through the provider once.
+  - No migration: the link is an Identity `user_logins` row.
+- **Tests** use an in-process fake provider (`FakeIdentityProvider`): a signing key generated per run, discovery, keys, the token
+  exchange with the client secret and PKCE checked, and userinfo, all on the back-channel host through the real rewrite handler.
+  They run the real OpenID Connect handler end to end and cover role present, role absent, unverified email, a verified email
+  linking, a linked `sub`, a second `sub` refused, duplicate emails, a session linking exactly its own account, nothing created while
+  an account is unlinked (a locked-out one not counting), `linkRequired` on the session, a forged or foreign-issuer callback, the cookie names, the
+  back channel, the logout URL with the hint, and the path off.
 
 ## Several passkeys per person
 
@@ -120,7 +195,7 @@ planning record so this repo carries its own reasons; the M1 section holds the c
 - **One write-only endpoint, `POST /api/ingest/prices`.** The PC-side reader posts `{"prices": [...]}`, up to 200 readings
   (256 KB), each naming `store` (`tesco` or `aldi`), the product page `url` that is already linked to a product, and
   what the page said (`price`, `wasPrice`, `loyaltyPrice`, `loyaltyScheme`, `promoText`, `validFrom`, `validUntil`,
-  `inStock`, `title`). Readings go through `PriceRecorder`, so they become the same one-per-listing-per-Dublin-day
+  `inStock`, `title`, and optionally `imageUrl` and `category`, see "The product photo" and "Each store page keeps its category" below). Readings go through `PriceRecorder`, so they become the same one-per-listing-per-Dublin-day
   `price_observation` rows as the nightly Lidl job's, and the Prices page shows them the same way. Two products may link
   the same page; a reading for that URL is recorded against each of them and counts as one accepted reading.
 - **Dated by the server.** The reader cannot set `observedAt`: the server stamps the moment of the post. A reader that
@@ -292,7 +367,14 @@ change borrows one named pattern; the audit is the 2026-11-07 phone UX audit (39
   cannot project into it.
 - **No promise of a gesture that does not exist (HIG Writing).** The list load error no longer says "Pull down to try
   again". It says "Check your connection and try again", which is what the error state's "Try again" button already does.
-  Reword again when the library's pull-to-refresh lands.
+  The library's pull to refresh has landed, and the copy stays as it is: the wording describes the button, not the gesture.
+- **Pull to refresh on the List and Prices tab roots (Apple HIG Refreshing content; lifekit-common `cmn-page [reload]`).**
+  Both pages bind `[reload]` to `store.load()`, which returns a promise, so the shell's indicator stays until the fetch
+  settles and no `reloading` flag is needed. Failure and offline stay with the error empty state's "Try again"; the pull
+  is not the only way to reload, since the page also re-reads every 15 seconds and on returning to the tab. More is a kit
+  menu with nothing to fetch, and People and Settings are pushed screens, so none of them registers a reload.
+  `PricesStore.load` drops a response that a later load or a local remove has overtaken (as `ListStore.load` does), so a
+  slow pull cannot bring a deleted product back.
 - **Sign-in leads with the explanation and one primary action (Carbon Empty states; HIG Onboarding).** A `cmn-empty-state`
   (icon, "The shopping list for the two of you", "Sign in with the passkey on this phone. There is no password.", the
   passkey button in its `cta` slot) in the middle of the screen, the invite hint under it. The join and unreachable
@@ -302,7 +384,7 @@ change borrows one named pattern; the audit is the 2026-11-07 phone UX audit (39
   date), line two is the reading (seen date, last paid, a failed read). A shop with no price yet ("Waiting for the next PC
   read") has one line saying why, plus the last-paid line when there is one. The row keeps the library's `cmn-list-item-row`; the line break is a `\n` shown with `pre-line`.
 - **Out of scope here:** the offline shell / service worker (own task) and every library-side item (44px hit areas,
-  skeleton before auth, swipe rows, pull-to-refresh, tab-bar text, startup image) stay with lifekit-common. The Linux
+  skeleton before auth, swipe rows, tab-bar text, startup image) stay with lifekit-common. The Linux
   baselines for List, Prices and Sign-in change with this and are re-rendered by the "Update screen baselines" workflow on
   CI, not committed from a local run.
 
@@ -335,6 +417,7 @@ not a new one.
   item is never lost.
 - **Not done here.** The install hint (`lk-install-hint`), push, background sync and the iOS launch screen are separate; the
   hint was left out because it would add a banner to every browser visit and is not part of "offline shell and update prompt".
+  It was added to the notice slot on 2026-11-12 with the shared shell chrome (`ShellChromeService`).
   The e2e config keeps `serviceWorkers: 'block'` for every other spec (the worker fetches around `page.route`); only
   `offline-shell.spec.ts` allows it, against its own server that answers `/api`.
 
@@ -368,7 +451,7 @@ action class. People stay passkey-only on basket; this only adds a machine path.
 - **Switching it on (2026-11-08, lifekit-stack#491 item 3).** The production compose joins `basket-app` (not `basket-db`) to
   the external network `identity-oidc`, alongside its own `default` network, so `http://logto:3001/oidc` resolves from the
   container. The network is created by lifekit-stack's `deploy.sh`, not by this stack; `up` fails if it is missing. The two
-  values are host settings in `~/.config/basket/env`, not in git: `FLEET_AGENT_AUTHORITY=<IDENTITY_ENDPOINT>/oidc` (the issuer
+  values are deploy secrets-file settings (`docker/.env.sops`, or `~/.config/basket/env` until the move), not plaintext in git: `FLEET_AGENT_AUTHORITY=<IDENTITY_ENDPOINT>/oidc` (the issuer
   the tokens carry, the same value the dashboard and the edge use) and `FLEET_AGENT_BACKCHANNEL_AUTHORITY=http://logto:3001/oidc`.
   The deploy recreates `basket-app` only. Check after it: a `basket:catalog-read` token on `GET /api/products` at
   `127.0.0.1:3310` answers 200, a token without that scope 403, no token 401 (lifekit-stack `docs/runbook.md`, "Fleet agent on
@@ -420,6 +503,736 @@ could already create a product; it can now also link a store page to one, with t
 - **Origin check.** A bearer request skips the origin check only for `POST /api/products` and `PUT /api/products/{id}/stores/{store}`
   (previously the path `/api/products` alone). A bearer on any other product route is still judged on its origin, and with the
   bearer the cookie is ignored, as before.
+
+## What's new comes from lifekit-common (2026-11-09)
+
+Owner's goal: the same layout and the same things across the lifekit apps, reused rather than rebuilt per app. Basket adopts
+the What's new feature of `@lifekit-hq/ui` and `@lifekit-hq/tokens` (convention: lifekit-common `docs/WHATS-NEW.md`, the pattern
+finance-sentry first had), bumped to 4.7.1.
+
+- **No app-local copy.** `provideWhatsNew` gets basket's version (`src/app/core/version.ts`, checked against `package.json`
+  by a spec) and a `basket.whatsNew.lastSeen` marker. The sheet, the list, the dot and the seen marker are the library's.
+- **Notes.** `src/whats-new/notes.md`, plain second person; `lifekit-whats-new` runs before `start`, `build` and `build:prod`
+  to generate `public/whats-new.json` (no longer committed or linted, and fed by `CHANGELOG.md`: see "Releases: release-please and the
+  weekly release").
+- **Where it shows.** An account-menu item (`whatsNewMenuItem`) in the app shell and on the More page, with the dot until the
+  sheet is opened. A first run on a device counts as seen, so a new person is not greeted with a dot.
+- No database change.
+
+## Swipe actions on list rows (2026-11-09)
+
+Owner's goal: ticking and removing a list item should be one gesture on a phone (issue #63).
+
+- **Borrowed pattern: Apple HIG Lists and tables, swipe actions**, through the `cmn-list-item-row` swipe slot in lifekit-common
+  (`@lifekit-hq/ui` 4.7.1, bumped with the rest of `@lifekit-hq/*`). Tick (or Untick on a ticked line) is the leading action,
+  Delete the trailing one.
+- **The visible controls stay.** The checkbox and the "More" button remain the keyboard and screen-reader path (the revealed
+  actions are buttons and focus slides the row open); the swipe is a shortcut, never the only way.
+- **Delete skips the sheet.** The sheet's Delete button was already the confirmation; a swipe reveals a labelled Delete that must
+  be pressed, so it is the same two deliberate steps. The store still rolls the row back if the server refuses.
+- No server change, no migration.
+
+## Promotions: ranked by unit price (2026-11-10, issue #48)
+
+Owner's words: "I am as a customer should understand what needs to be bought. I want to know where certain position is better. I want
+to know what promotions are in the store and which promotion is better." Epic #24. A **Promotions** tab lists the current promos of
+every tracked product and ranks the shops by the price of one kilo, one litre or one piece, so "2 for €4", "20% off" and the Lidl Plus
+price can be set side by side.
+
+- **Borrowed pattern: the unit-price shelf label** (the "€4.92/kg" printed under the price in a shop, and the per-unit column of
+  price-comparison apps). Nothing is invented: the label's number is the ranking key. The screen is the existing list template
+  (`cmn-page` kind `list`, `cmn-list-section` cards, `cmn-list-item-row`), a `cmn-segmented` control (HIG Segmented controls) for the
+  two groupings, and a `cmn-tag` for the place. It is a third tab (List, Prices, Promotions), also in the More page's list.
+- **A view over what is already collected; no migration, no new collection.** `GET /api/promotions` (signed-in people only; a
+  fleet token is refused like on every route not named as a machine route) reads the latest `price_observation` of every linked
+  listing: price, was-price, loyalty price and scheme, promo text, valid dates, in-stock. It needs no list-item product link and
+  adds no column. The calculation is pure (`PromotionBuilder`, `OfferCalculator`, `PackSizes`, `PromoText` under
+  `Basket.Api/Prices/Promotions`) and tested without a database.
+
+### The rule (also printed on the page)
+
+1. **One price per pack.** The reading's candidate prices are the shelf price, the card price (when it is lower) and a multi-buy; the
+   deal is the one with the lowest price per pack for a customer who meets its terms. "Each" below means per pack.
+   - **Multi-buy.** `N for €X` is `X / N` each ("Mix 'n' Match 2 for €4" is €2.00). `N for M` with no € sign and M below N means pay
+     for M of N ("3 for 2" is `2 x price / 3` each); a whole number above N with no € sign is euros ("2 for 3" is €3 for two);
+     `2 for 2` says nothing and is ignored. "Buy 1 get 1 free", "buy two get one free" and "BOGOF" are pay-for-M offers. A multi-buy
+     dearer than the single price is not the deal (the unit price assumes you buy the whole set, and the row says how many).
+   - **Percentage.** The shown price is the price: a was-price above it makes a price cut, and the saving is `(was - price) / was`.
+     A "20% off" in the text with no was-price is shown as the deal's name but **never subtracted again** (the shop's price may
+     already include it), and its saving is unknown, not guessed.
+   - **Loyalty price.** A card price below the shelf price is a deal that **needs the card** (Q7: loyalty prices count); the row says
+     "needs Lidl Plus". It ranks like any other price, flagged, because the owner counts card prices. A card price with no shelf
+     price is still a card price; there is then no saving to show.
+   - **Card and multi-buy together.** The promo text sits in the card's block on Lidl's tiles and Clubcard offers, so when a reading
+     has a card price and a scheme, a multi-buy in its text is the card's (it needs the card and counts the card price for "3 for 2").
+     With no card price it is for everyone. This is a reading of the shops' pages, not a guarantee; the row always names the card.
+   - **Saving** compares with the was-price when the shop gives one, else the shelf price; it is shown only when positive.
+2. **Divide by the pack size.** Pack size is read from the shop's own name for the product (`store_listing.title`), then from the
+   household's product name ("Whole milk 2L"): `500g`, `1.5kg`, `75cl`, `1,5L`, `6 x 330ml` (a multipack counts every part), `pack of
+   6`, `9 pack`, `each`. Weights become kilograms, volumes litres, counts pieces, and the unit price is `pack price / size`, rounded
+   to the cent away from zero. A size taken from the product name rather than the shop's title is marked, since the shop may sell a
+   different pack. **No size found: no unit price and no rank** (flag "no pack size"), never a guessed one; the pack price is shown.
+   **An ambiguous text gives no size either**: a weight or volume beside a separate pack count ("Heinz Beans 415g x 4",
+   "Coca-Cola 330ml 6 pack") could be one pack or several, so it reads as no size, and the search stops there: the product name
+   is not consulted in its place.
+3. **Rank within one product across the shops, cheapest first.** A kilo of mince is not a litre of milk, so the ranking key is the unit
+   price of the *same* product in each shop, and equal unit prices share a place. A product is listed when at least one shop has a
+   promo on it, and its ordinary shelf prices elsewhere are ranked beside the promos, so "Aldi's plain price beats Lidl's 2 for 3"
+   is visible. The "By store" grouping lists each shop's promos (not shelf prices) with the same place, e.g. "#2 of 3".
+4. **What is shown but not ranked** (each with its reason on the row, never dropped silently):
+   - a reading **older than 3 days** (`PromotionBuilder.StaleAfterDays`; the nightly Lidl job and the PC reader should beat that, and
+     an offer's price can move) with its "Seen" date;
+   - an **out-of-stock** reading;
+   - a pack with **no size**;
+   - **mixed units**: when a product's shops measure it differently (kg here, pieces there) the unit most shops share is ranked and
+     the others are flagged "sold by a different unit". They are not converted: that would need a weight per piece, which is a guess.
+5. **A shop with nothing usable today is named with the reason**, not skipped and not filled in: no reading yet, no price listed,
+   the offer starts on a date, the offer ended on a date. An offer is *current* by the same rule the Prices page uses
+   (`PriceStates`, shared): not before `valid_from`, not after `valid_until`, with a price.
+
+### Edge cases and calls
+
+- **Size changes (shrinkflation).** Basket stores no pack size and keeps no title history, so a changed pack shows from the next
+  reading, when the listing's title changes; the unit price then moves with it. The view does not compare a product with its own
+  past size. Remembering sizes per observation would be a column and a migration, left for the owner's go if wanted.
+- **Prices carry dates.** Every row shows when it was seen and when the offer ends. Nothing is carried forward past an ended offer
+  or filled in for a shop that was not read.
+- **Unit prices are to the cent**, which is also what ranks, so two offers that print the same figure share a place.
+- **Pieces need the household to say so.** Only "pack of N", "N pack/pk/pcs/pieces/count" and "each" count as a piece size; a bare
+  "10 Chicken Breast Skewers" has no size (Lidl's own tiles carry none), so it is listed unranked until the product name carries one.
+- **What this cannot see yet.** Shop-printed unit prices ("€2.50/kg") are not collected, so the app's own division is the number;
+  Dunnes and Tesco promos depend on what the PC reader can post (see the Tesco and Dunnes sections) and show as "No price read yet"
+  until then.
+- **Not part of this change** (out of scope in the issue): the plan API, basket totals and the shelf screen.
+- **Screens.** The new Promotions page and the extra tab change every signed-in screen's Linux baseline; they are re-rendered by the
+  "Update screen baselines" workflow on CI, not committed from a local run. The route scan, drift check and screen composition check
+  pass locally on the new page at 390 and 1280 px, light and dark.
+
+## Loyalty cards as barcodes at the till (2026-11-10, issue #46, epic #27)
+
+Owner's words: "I shop in 4 different stores. Lidl, aldi, tesco, dunnes. I want to have one app where I could sort things out."
+The four chains' loyalty card numbers are stored once and each is shown as a scannable code on the phone, so the phone replaces
+the wallet. Borrowed pattern: **Stocard's card list and add-card form** (a list of cards, the number typed once, the code format
+chosen from a short list) and **the Lidl Plus card screen** (one card, the code as wide as the screen on a white ground, the
+number under it).
+
+- **One card per shop, shared by the household (Q3).** `loyalty_card` has a unique index on `store`, so "added once" is the
+  database's rule, not the client's. `PUT /api/cards/{store}` adds the card or replaces the one there (201 / 200); two people
+  adding the same shop in one moment get the second as `409 card_exists`. `DELETE` removes it. The shop is one of the four
+  names (`Stores`); anything else is `404 unknown_store`. People only: the fleet identity's token is not accepted on `/api/cards`
+  (the default policy takes the cookie alone), and a test pins that.
+- **Encrypted with Data Protection, the mechanism Q5 chose for secrets.** The number is `Protect`ed with ASP.NET Data Protection
+  (purpose `basket.loyalty-card.number.v1`, the app's existing key ring on the `/keys` volume) before it reaches the database;
+  the column holds only the protected text and a test reads it back raw. Consequences, stated so they are not a surprise: the
+  keys are unencrypted on that volume (as already recorded for the cookie), so whoever can read the volume and the database can
+  read the numbers; and if the key ring is lost, the numbers are unreadable. basket then says "Cannot be read. Add it again."
+  on the card (`readable: false`, number `null`) rather than showing garbage, and adding the card again replaces it.
+- **Never logged, never cached.** The number travels in a request body and a response body, never in a path or query, and the
+  request log line carries only method, path and status. A refusal (`number_invalid`) states the rule and never repeats the
+  input. Card responses carry `Cache-Control: no-store`. A test registers a log sink, exercises every card route (including
+  refusals) and asserts neither the number nor its protected form appears in any rendered log event.
+- **The list hides the number; one route returns it.** `GET /api/cards` returns each card with the number masked to its last
+  four characters. `GET /api/cards/{store}` returns it whole, and is called only when a card is opened for the till.
+- **The code is chosen per card, with a default per chain.** The shop's own card decides what scans, so the default follows the
+  chain and the owner can change it per card (Stocard does the same): Code 128 or QR code.
+  - **Lidl: QR code.** The Lidl Plus card is a QR code in the app, scanned at the Irish till (Lidl Ireland's pages). What goes
+    in the field is the text behind that QR code, not a printed number.
+  - **Tesco Clubcard and Dunnes ValueClub: Code 128.** These are long digit strings, and Code 128 draws any of them. The
+    web checks made for this change found no official statement of either card's symbology, so this is a default and not a
+    verified fact: the first time the owner opens a card on a real till, a failed scan means switching the code in the sheet.
+  - **Aldi: Code 128, as a placeholder.** Aldi Ireland has no points scheme (an Irish Examiner column names it as the exception
+    among the main retailers); the only card found is its Savings Card, for topping up with deposit return vouchers. basket
+    stores whatever number the owner gives for Aldi and does not claim what it is. Raised with firstmate to confirm with the owner.
+  - **Normalisation.** Spaces and dashes typed for readability are dropped for the linear codes (a Clubcard number is printed in
+    groups); a QR text is kept as typed, trimmed. Code 128 takes 4 to 48 printable ASCII characters; QR up to 300.
+- **Drawn client-side by a maintained library, not by hand.** `bwip-js` 4.11.4 (MIT, released 2026-08), through its `browser`
+  entry (the package root has no condition TypeScript resolves). The number never leaves the phone to be drawn. The canvas
+  carries its own white ground and quiet zone, so the code scans the same in the dark theme and no colour is set in CSS. bwip-js
+  is imported on first use: the initial bundle is unchanged (1.40 MB raw), the extra lazy chunk is 184 kB over the wire and
+  the service worker prefetches it like any page chunk. Module size is 4 px (10 for QR) so a phone scales the picture down and
+  never up. A number the format cannot draw shows an error and no code; it is never drawn wrong.
+- **Where it lives: a fourth tab, and one screen per card.** `Cards` joins List, Prices and Promotions in the tab bar (at the till it must be
+  one tap). `/cards` is a list of the four shops (name, masked number and code, or "Not added yet"); a row opens the code or,
+  for a shop with no card, the add sheet. `/cards/:store` shows the card: the code and the number in groups of four as a preview,
+  then "Show at till", "Change number or code" and "Remove card" (with a confirmation). Both are on `cmn-page` (`list` and
+  `detail` kinds) with lifekit-common components only; no token, template or colour was added, and the drift check passes.
+- **"Show at till" is full-screen, at every width.** The owner asked for the code as a full-screen barcode, so the button opens
+  it in `CmnDialogService` with `CmnDialogBareContainerComponent` and a pane stretched to the whole viewport (`panelClass`), on a
+  phone and on a desktop alike: the library's own `size: 'full'` is a 95% dialog from `md` up, which is not a takeover. The bare
+  container keeps the dialog behaviour (`role="dialog"` named "<shop> card at the till", focus moved in and trapped, Escape closes,
+  focus returns to the button); the till component draws its own header (the shop's name and a close button, the first tabbable
+  element) because the bare container has none. The code is fitted to the smaller of the width and the height left, white on its
+  own ground, with the number under it, so the number and the close button are visible without scrolling at 1280x720 and on a
+  short phone (375x667). The code's canvas stays `role="img"` labelled "<shop> card <format>", which never reads the number
+  out. It does not raise the brightness or hold the screen awake (not asked for).
+- **Gates.** `cards`, `card` and `card-till` (the card page with the till dialog open, brought up by `reveal` in
+  `e2e/support/screens.ts`) are covered by the screen check, the route scan and the 390 / 1280 baselines. The Linux baselines
+  for the new screens, and for More and every other screen that now has a Cards tab, are rendered by the "Update screen
+  baselines" workflow on CI (`update-baselines` label), not from a local run.
+- **One migration, additive: `20261110100000_LoyaltyCard`.** It creates `loyalty_card` (and its unique index on `store`) and nothing else;
+  it touches no existing table. It sorts after `ListingImage`, the latest on main when this was regenerated (the timestamp is set by hand
+  to order after it). Other ships' migrations must order after whichever merges first.
+- **Out of scope.** The Lidl Plus token connection and receipts (their own tasks). Scanning a card with the camera to add it
+  (Stocard has it): `BarcodeDetector` is missing on iOS Safari, and the number is typed once per shop. Whether the Lidl Plus
+  QR text is static or rotates is not verified here: a rotating one would not scan from a stored copy.
+
+## The product photo (2026-11-10, issue #30, part of epic #21)
+
+Owner's words: "lets have tiles, photos, price (promotion if applicable) and so on - that would be the card." The shelf shows a
+product as a card with a photo, so the nightly read keeps each store listing's photo address.
+
+- **One nullable column, `store_listing.image_url` (`StoreListing.ImageUrl`).** The address only, never the picture: basket
+  fetches, resizes and stores no image bytes, and the shelf's browser loads it from the shop's own image host. Up to 500
+  characters (`ImageUrls.MaxLength`). Per listing, not per product, because each shop shows its own photo.
+- **Addresses are checked once, in `ImageUrls.TryNormalize`:** absolute `https` only, at most 500 characters, no login in the
+  address, no control characters. Nothing else (data:, javascript:, http:, a relative path) is stored. Which host it points
+  at is not restricted: shops serve photos from their own CDNs (lidl.ie, aldi.cx, tesco.com) and an allow-list would break
+  the first time one moves.
+- **An absent photo never clears one.** `PriceRecorder` sets `ImageUrl` only when the reading carries a usable address, so a
+  page that shows no photo this night, or a reader that does not send the field, leaves the stored one alone. A changed
+  address replaces it, which is the "refreshed when the store changes it". Relinking a listing to a different page clears
+  it with the title and readings (another page is another product).
+- **Ingest takes `imageUrl` as an optional field** on `POST /api/ingest/prices`, for the owner's `bsk_` token and the fleet
+  identity alike (it is the same endpoint and the same validation). Absent or blank is fine. An address that is not a plain
+  https address within the cap is ignored exactly as `PriceRecorder` ignores it, and the reading's price, was-price and promo
+  are still recorded: a photo address never costs a price. Any stored photo stays. The reader's own check (`toImageUrl`)
+  uses the same rules as `ImageUrls.TryNormalize` (https only, no login, no control characters, within the cap), so a
+  shop quirk is dropped at the reader rather than sent.
+- **Capture.** Lidl, read by the VPS job: the offer tile's `image` (else the first of its `imageList`), and on a product page
+  the JSON-LD `image` (first of the gallery; a string, a list or an object with a `url`), else the page's `og:image`. Aldi
+  answers the VPS with "Access Denied", so it is read by the PC reader, not the VPS job: `pc-reader` takes the JSON-LD `image`,
+  else `og:image`, and sends it as `imageUrl`. The brief for this change said both were VPS reads; Aldi's capture is in the
+  reader that actually reads Aldi. Tesco and Dunnes are read by the PC reader too: their shared JSON-LD parser
+  (`parseJsonLdOnly`) takes the same Product `image`, else `og:image`, and sends it as `imageUrl`; like the rest of those two
+  parsers it is checked against hand-written fixtures, not a live page. Aldi's JSON-LD image is a 300-pixel-wide rendition; no larger one is on the page.
+- **Not here:** no screen, no matching, no search-add, and the product list API does not return the address yet (the shelf
+  ship adds `ImageUrl` to its responses and, if it landed first, owns the column: this change checked main for an existing
+  `ImageUrl` before adding its migration, and none was there).
+- **Migration `20261110090000_ListingImage`:** additive, one nullable `character varying(500)` column, no backfill, no index.
+  Existing rows are null and fill in on the next read (Lidl that night, Aldi, Tesco and Dunnes at the next PC run). Rollback is dropping the
+  column. It needs the owner's go before merge.
+- **Tests** cover the Lidl tile and product-page capture (including `og:image` and bad addresses), the recorder's keep/replace
+  rule, ingest with the field present, absent, blank, and a bad address (over the cap, not https) ignored with the price kept and any
+  stored photo left alone, relinking clearing it, and the reader's address check and the Aldi, Tesco and Dunnes parsers.
+
+## Done shopping and the history of trips (2026-11-10)
+
+Owner's words: "I want have buy lists. And the history of lists." and, after ticking everything, "it should be in the past".
+Issues 37 (close the trip) and 38 (history and reload), built on the list as it is today: no dependency on the compare sheet,
+a planned store or the shelf. Patterns borrowed: AnyList and OurGroceries ("clear crossed-off items" and the list history).
+
+- **A closed trip is a date, the ticked items and who ticked them, nothing more.** Two new tables, `trip` (`id`, `closed_at`) and
+  `trip_item` (`id`, `trip_id`, `text`, `checked_at`, `checked_by_user_id`; `product_id` and `store` were added later, see the
+  2026-11-10 follow-up below). No prices or planned store: marking a planned
+  store on a trip (issue 36) stays out. `trip_item` rows go with their trip; a deleted account leaves `checked_by_user_id` empty
+  and the history then shows the item without a name.
+- **The close is an explicit action.** "Done shopping" sits on the Ticked section of the List tab and asks for a confirm that says
+  what happens. It is not triggered when the last item is ticked (the default taken in issue 37; a ticked row can still be
+  unticked by a mis-tap). `POST /api/list/close` copies the ticked items into a new trip and deletes them from `list_item` in one
+  transaction. It refuses with 409 `nothing_ticked` when nothing is ticked, and with 409 `list_changed` (nothing filed) when the
+  delete does not touch every row that was copied, which is what a second device closing at the same moment, or someone
+  unticking an item, looks like. Two taps at once therefore file one trip.
+- **What is not ticked stays on the list.** "Empties the list" is read the way AnyList reads it: the ticked items leave, the rest
+  waits for the next shop. When everything was ticked, which is the case the owner described, the list is empty and ready for a
+  new one. The confirm names the count that stays so this is never a surprise. Clearing unticked items too would lose things he
+  has not bought; that is the call to veto if he wants the other reading.
+- **History is a page, not a tab.** `/history` (title "History", back to the list) is reached from the clock icon in the List
+  tab's top bar, the lifekit page-action contract for a trailing action; it is not a third tab. Trips are listed newest first with
+  the day they were closed, the item count, each item and "Ticked by <name>". `GET /api/trips` returns 20 trips per page with a
+  `hasMore` flag; "Show older trips" asks for the next page with `before=<closedAt of the last trip shown>`, so a trip closed
+  while he is paging cannot shift or repeat a page.
+- **"Same as last time" adds, it does not replace.** `POST /api/trips/{id}/reload` puts the trip's items on the list as new
+  to-buy lines added by whoever tapped, in the trip's order. An item whose text (any letter case) is already waiting on the list is
+  skipped, so a second tap adds nothing; a ticked line with the same text does not count as waiting. The 500-item cap of the list
+  applies: over it the call answers 409 `list_full` and adds nothing. The trip stays in the history. The page then returns to the
+  List tab and a toast says how many were added.
+- **Text, plus the product and shop of a Shelf line (2026-11-10 follow-up).** Reloading copies the typed text, and a trip item
+  closed from a Shelf line also keeps that line's `product_id` and `store` (nullable columns on `trip_item`, migration
+  `20261110130000_TripItemProduct`, additive; the product link is set null if the product is deleted). Reload restores both onto the new
+  line, so the Shelf tile marks it "On the list" instead of adding a second one, and a product line counts as already waiting when
+  an open line has the same product and shop, whatever its text. A free-text line, and every trip closed before this change, has
+  neither and reloads as text exactly as before; old trips are not backfilled and free text is not matched to products. The
+  history response and screen are unchanged. A later change to the catalogue still never rewrites a past trip's text.
+- **Migration: additive only.** `20261110110000_Trips` creates the two tables and their indexes and touches no existing table
+  or row, so it merges under the standing authority for additive migrations. It is dated after `20261110100000_LoyaltyCard` so it applies
+  after it; `Down` drops both tables. Backend tests run it from empty on every class.
+- **Screens.** The new route is in `frontend/e2e/support/screens.ts` (the route scan, screen check and baselines read it) and the
+  list mock has a ticked item, so the List baselines change too. Linux baselines are drawn on CI only, by the "Update screen
+  baselines" workflow dispatched on the branch.
+
+## Each store page keeps its category from the shop's breadcrumb (2026-11-09, issue #41, epic #25)
+
+Owner's ask: "in lidl all the products are almost in the same position - first there is fruit section then meat... I wanted to see
+it sorted according to what goes after another. So i get predictable list by what is closest to me." A product's category is the
+unit that walk order will sort by; this change only keeps it. The sort is not built here.
+
+- **Borrowed pattern, named.** The category follows the **product photo field** (`StoreListing.ImageUrl`, issue #30) exactly:
+  an optional, nullable field on the reading (`category` on `POST /api/ingest/prices`, `PriceQuote.Category` for the nightly Lidl
+  job), written by `PriceRecorder`, returned on the listing, `?? listing.Category` so **a reading without one never clears a
+  stored one**, and cleared only when a different page is linked (a different page is a different product).
+- **It lives on the store listing, not the product.** Each shop files the same thing under its own aisles ("Chilled Food > Milk" at
+  Aldi, something else at Tesco), and the walk is one shop's walk, so a product has a category per shop it is linked to.
+- **A path, not one word.** The value is the breadcrumb between the shop's front page and the product, outermost first, joined with
+  " > " ("Chilled Food > Milk"), at most 200 characters. The front page crumb ("Home", or a link to `/`) and the last crumb (the
+  product itself, by name or by address) are dropped, as is Aldi's catalogue root "Products". Keeping the whole path lets the later
+  sort choose its depth (aisle or shelf) without another read.
+- **Where it is read.** PC reader, from the page it already loads: the schema.org `BreadcrumbList` JSON-LD, else a `nav` whose
+  label says breadcrumb (Aldi, Tesco, Dunnes). Server, Lidl: the `BreadcrumbList` of the product page. Lidl's offer tiles carry
+  only "Food" or "NonFood", which is too coarse, and a listed product is deliberately not opened for its price, so a Lidl
+  listing **with no category yet** opens its own page once (the pull job passes `ListingToCheck.NeedsCategory`); once a category
+  is stored the offer page alone is enough again, so the nightly request count returns to what it was. A page that cannot be read
+  costs the category only, never the price; a refusal (`FetchStatus.Blocked`) on that page still ends the store's pull, as it does
+  everywhere else.
+- **Not verified live.** No shop was read for this change (the brief forbids it), and tesco.ie and dunnesstoresgrocery.com have
+  not answered the author's PC so far. Aldi's fixture is a recorded breadcrumb; the Lidl, Tesco and Dunnes fixtures are
+  hand-written from the schema.org shape and say so. A shop whose page has neither markup simply leaves the field empty.
+- **One additive migration, `StoreListingCategory`:** one nullable `varchar(200)` column on `store_listing`; no rewrite, no
+  backfill. It follows `StoreListingImageUrl` (the product photo) and is independent of it.
+
+## The Shelf: pick products from a shop instead of typing them (2026-11-09, issues #32 and #11)
+
+Owner's ask: "select the store and select the products from the list from the store and form a list to buy. Without manually typing
+things to buy", with "tiles, photos, price (promotion if applicable)" as the card. A new **Shelf** tab does it. The tab bar is now List, Shelf, Prices and Cards; Promotions moved behind **More** (it is a view over
+prices, and a fifth tab would leave six slots with More on a 390 px bar).
+
+- **Borrowed patterns, named.** The product tile grid of **Bring!** (a photo tile per product, one tap puts it on the shared list,
+  the tile shows it is there) and the favourites list of the **Tesco app** (browse what a shop sells, with its price, and add from
+  there). No new interaction is invented. The shop selector is lifekit-common's `cmn-segmented` (All, Lidl, Aldi, Tesco, Dunnes)
+  and the tile is its `cmn-selectable-card`, pressed while the product is on the list. The page is the `overview` template, which
+  has no rail and takes the full width, so the grid goes from two columns at 390 px to five at 1280 px.
+- **What a card shows**, all of it already on the product endpoint: photo, name, the best price today (a card holder's price when it
+  is the lowest, with "with Clubcard"), the old price struck through, the promo text as a tag, how long the offer lasts, when it was
+  read ("Seen 5 Nov"), and "Out of stock" when the reading says so. An offer that has not started or has ended shows "from 12 Nov"
+  or "ended" and none of the deal lines. A page with no reading yet says so. `PriceResponse` gains `inStock` (it was stored, not sent).
+- **A shop's filter shows that shop's reading.** Tesco keeps the products with a Tesco page and shows the Tesco price and photo.
+  **All** keeps every product and shows the shop with the lowest current price, named on the card; this is a display choice, not
+  the compare sheet or matching (issues #9, #10), which stay out.
+- **A tap is one list line per product and shop.** The list item gets a nullable `ProductId` and a nullable `Store` (issue #11): the
+  line is named after the product (the server ignores any text sent with a product), the shop is where it was picked, and **All**
+  records no shop. The shop has to be one that lists the product (400 `not_sold_there`). A second tap, or a second phone, gets the
+  open line back (200, not 201) and a partial unique index on `(product_id, store)` for open lines (`NULLS NOT DISTINCT`, so "no
+  shop" counts as one value) holds it when two taps race. A ticked line is history: tapping the product again makes a new line,
+  and un-ticking the old one while a new one is open answers 409 `already_on_list` rather than breaking the index. Deleting a
+  product keeps its list lines as plain text (`ON DELETE SET NULL`). Free-text lines are untouched; the composer stays on the List
+  tab as their only way in. The List row shows the shop as a tag.
+- **Photos.** The column and the price-ingest `imageUrl` already exist (the nightly read's photo address, see "The product photo" above:
+  an address that is absent or fails the check is ignored and never costs a price). This change returns it as `imageUrl` on the
+  listing in `GET /api/products` and accepts it on the catalog link (`PUT /api/products/{id}/stores/{store}`, optional `imageUrl`,
+  checked by the same `ImageUrls` rule; a bad one there is a 400 `image_invalid`, because that call is a deliberate write). A link
+  without a photo keeps the stored one; relinking a different page forgets it. A tile with no photo, or whose photo does not load,
+  shows the product's initial on the surface colour.
+- **Content-security policy: `img-src` now allows `https:`.** The shops' image hosts are not known until the reader sends them, and
+  an allowlist of guessed hosts would break the first photo that came from another one. Only the image directive widens, the
+  address is server-validated as above, and the image tag sends no referrer. Narrow it to the hosts the reader really uses once
+  they are known.
+- **One additive migration, waiting for the owner's go:** `20261110120000_ListItemProduct` (two nullable columns on `list_item`, a
+  foreign key and the partial index). It rewrites no row and needs no backfill; `Down` drops all four. It is dated after
+  `20261110110000_Trips`.
+- **Not in this change** (recorded as follow-ups): matching of free text to products (#9), search-to-add (#31), the match sheet
+  (#10), reading photos from the shops (#30), the compare sheet and the shop plan.
+
+## Shell before the session call
+
+- **The shell draws before `/api/session` answers.** `AppComponent` holds the signed-in shell until the first navigation
+  ends (the guards wait for the session, then the page's chunk loads): `cmn-app-layout` with `[accountPending]="true"`, and
+  in the page's place a `cmn-page` of the address's kind holding the matching `cmn-skeleton` preset (`list` for every page
+  today) inside a `role="status"` "Loading" region. Only the routed content waits for the session. Sign-in, invite and the
+  unreachable page draw no shell; their layout is a separate fix. Pattern: Apple HIG, Loading and Launching (show something
+  right away) and the Carbon Loading pattern, as written up in lifekit-common's `docs/PHONE-CONTRACT.md`, "First paint".
+  `e2e/cold-start.spec.ts` holds the audit's `basket-boot` probe: session delayed 900 ms, layout shift under 0.1 on every page
+  at 390 and 1280.
+
+## Design selection in Settings (2026-11-10)
+
+Owner's words: "we dont have yet a design selection." Basket is on `@lifekit-hq/ui` 4.7.1, which ships design presets; this wires
+the library's own switcher into Settings and sets the default.
+
+- **The library does the work; basket only offers a preset.** `provideDesignPresets({id: 'lifekit', label: 'Lifekit'})` in
+  `app.config.ts` lists it, `@lifekit-hq/tokens/presets/lifekit.css` is added to the `angular.json` styles beside `theme.css`, and
+  the existing `<cmn-appearance-settings>` in Settings > Appearance shows its Design control (Carbon, Lifekit) because there is now
+  more than one preset. No switcher, preset or storage code lives in basket.
+- **Lifekit is the default** (the owner's 2026-11-08 pick): `<html data-preset="lifekit">` in `index.html`, which is the
+  library's documented way for an app to ship a default (`PresetService` keeps an offered `data-preset` already on the page when
+  nothing is stored). The generated `theme-init` block is untouched.
+- **Kept the way the library keeps it:** per device, in `localStorage` under `cmn-preset`, not on the account; there is no
+  backend change and no migration. Because a Carbon pick did not persist (below), basket's Appearance caption reads "The look of
+  the app" rather than "On this device", and the what's-new note says only that the look can be changed, not that it is remembered.
+- **Carbon was a library gap, closed in 4.8.0 (see "Adopting `@lifekit-hq/ui` 4.8.0" below):** until then `PresetService` stored no key
+  for Carbon, so a device that picked it came back as Lifekit after a reload. Basket never re-implemented presets to hide it.
+- **Tests:** `e2e/design-preset.spec.ts` covers the default (attribute and the chosen Design cell) and switching to Carbon and
+  back, with Lifekit surviving a reload. Every screen baseline changes because the default look changed; they are regenerated by
+  the Update screen baselines workflow, not committed by hand.
+
+## Adopting `@lifekit-hq/ui` 4.8.0 for the phone UI gaps (2026-11-10, issues #83, #84, #87, #89, #90)
+
+`@lifekit-hq/ui` and `@lifekit-hq/tokens` (with `core`, `elements`, `charts-core` and `config`, which `ui` pins to the same
+version) go from 4.7.1 to 4.8.0. The library halves of the phone audit are fixed there; basket takes them and drops what it
+carried for them. Additive: no endpoint, schema or migration changes.
+
+- **Icons (#83).** `BadgePercent`, `WalletCards` and `Maximize2` are in the library's own icon subset now, so `core/icons.ts`
+  registers only `Store` and `RotateCcw`, which the library still does not ship. `tab-icons.spec.ts` still fails on any tab
+  icon that draws nothing, so a name that falls out of the library set is caught.
+- **The app mark (#87).** `provideAppMark('bk')` in `app.config.ts` makes basket's own mark the library's. `bk-auth-intro` draws
+  `<cmn-app-mark [size]="56">` instead of an `<img src="/favicon.svg">`, so the sign-in, invite and unreachable pages show the
+  mark in the user's colour and in dark mode. The `angular.json` icon assets come from `@lifekit-hq/tokens/brand/dist/bk` (they
+  were the `lk` set, so the favicon, apple-touch icon and PWA icons were Lifekit's, not basket's). `index.html` and the web
+  manifest are unchanged: they name the same file names. While the user has their own colour, the library rewrites the tab icon to
+  a `data:` URL; the CSP's `img-src` already allows `data:`.
+- **Alert frame (#84), Custom theme start (#89), command palette (#90)** need nothing from basket: they are library components
+  (`cmn-alert`, the theme picker in Settings > Appearance, the palette). The palette's entries were supplied by basket from
+  2026-11-12, by `ShellChromeService`.
+- **Carbon is remembered.** The library keeps an explicit Carbon choice now, and its pre-paint script changed to match it, so
+  `index.html`'s generated `theme-init` block was regenerated with `npm run sync:theme`. The inline script's `sha256` in
+  `Security:ContentSecurityPolicy` (`backend/src/Basket.Api/appsettings.json`) changed with it; `npm run lint` checks the two
+  stay in step. The default preset stays Lifekit (`<html data-preset="lifekit">`), and the what's-new line ("You can change the
+  look in Settings under Appearance") is still true as written, so it is unchanged.
+- **Not here:** secondary controls (#85) and sheet padding (#88) are separate. The screen baselines change with the new mark and
+  icons and are rendered by the Update screen baselines workflow on the PR branch, never committed by hand.
+
+## Plan API: the best shop per list line (2026-11-10, issue #12, epic #24)
+
+Owner's plan of 2026-11-07, step Plan API: `GET /api/plan` says which shop is best for each line on the list and whether one shop
+covers all of it. Unmatched or stale lines are flagged, never guessed. Backend and contract only; the Plan tab is a separate item.
+
+- **A view over what is already collected; no migration.** `GET /api/plan` (signed-in people only; a fleet token is refused like on
+  every route not named as a machine route) reads the open (unticked) lines of the list, their products, the linked shop pages and the
+  latest `price_observation` of each. Per line it returns the line, its product when attached, a price per linked shop, the best shop and
+  a flag when there is none. Plan-level it returns `coverage`. Ticked lines are history and are not planned.
+- **One price rule, shared with Promotions.** The per-shop price is `PromotionBuilder.Compare`, extracted from the Promotions
+  builder so both screens read a reading the same way: the cheapest way to buy it (shelf, card price, multi-buy), the pack size read
+  from the title or the name, the unit price to the cent, the same rank. Each shop entry carries that `offer` (with its card, deal
+  label and unit price), plus the raw reading: `observedOn`, `price`, `wasPrice`, `promoText`. A card price counts as in Promotions and
+  names its card (`Clubcard`, `Lidl Plus`); the plan does not know who holds a card.
+- **Best shop = lowest unit price among fresh, in-stock readings.** A kilo, a litre or a piece is the key (a 2 L bottle at €2.20 beats a
+  1 L at €1.20). A shop that is stale or out of stock is shown with its state and never named best. If exactly one shop has a fresh,
+  in-stock price it is the best, whatever its pack size. If several do, **all of them must be comparable** (a pack size known, the
+  same kind of unit), otherwise no shop is named and the line is flagged `not_comparable`: naming the cheapest of the comparable ones
+  would hide a shop whose price cannot be read against them. Equal unit prices go to the first shop in the fixed order (Lidl, Aldi,
+  Tesco, Dunnes).
+- **Staleness window: 3 days** (`PromotionBuilder.StaleAfterDays`, the Promotions window, one number for both). The nightly Lidl job
+  and the PC reader should beat it, and a shelf price can move in a week; a reading from the 3rd day back still counts, the 4th is
+  stale. A line whose newest usable price is older is flagged `stale` with no best shop, and its readings stay listed with their dates.
+- **A line that cannot be priced says why (`flag`), and has no best shop:**
+  `unmatched` (free text, or its product was deleted: never matched from the words), `no_price` (the product has no usable price at
+  any shop: not linked, not read yet, no price listed, the offer has not started or has ended), `stale`, `out_of_stock` (every
+  fresh price is for a product the shop shows as out of stock; added to the three reasons because naming such a shop best would send
+  the shopper to an empty shelf) and `not_comparable` (above). A line the owner picked at a shop keeps that shop as `pickedStore`; it
+  does not steer the answer.
+- **Coverage: does one shop price every open line?** A shop prices a line when its reading is fresh, in stock and current
+  (state `priced`); `not_comparable` lines still count as priced there. `coverage.singleStore` is true when at least one shop prices
+  all of them (`coveredBy` lists them in the fixed order; `store` is the one that is best for the most lines, ties to the first).
+  An empty list is not covered by anything. When it is false, `closestStore` is the shop that prices the most lines (null when no
+  shop prices any) and `blockers` lists the lines it cannot price with a `reason`: the line's flag when no shop can price it
+  (`unmatched`, `no_price`, `stale`, `out_of_stock`), otherwise that shop's own state for it (`not_read`, `no_price`, `upcoming`,
+  `ended`, `stale`, `out_of_stock`, or `not_linked` when the shop has no page for the product).
+- **Not in this change:** the Plan tab (next section), the cheapest two-shop split, per-shop basket totals, and Lidl last-paid prices.
+
+## Plan tab: the plan on the phone (2026-11-10, issue #13, epic #24)
+
+Owner's plan of 2026-11-07, step Plan tab: the `GET /api/plan` answer on a screen, with prices dated. Frontend only; no backend change
+and no migration.
+
+- **Borrowed pattern, named.** The per-store price comparison row of price-comparison grocery apps (shop, price, the day it was read),
+  as the epic asks. Each open line is a `cmn-list-section` card headed by the line, with one `cmn-list-item-row` per linked shop: shop
+  name, "Seen 5 Nov" and the deal beneath it, a tag, and the price on the right with the old price struck through. No interaction is
+  invented; the page is read-only and sits on the `list` template with lifekit-common components only (`cmn-verdict-header`,
+  `cmn-list-section`, `cmn-list-item-row`, `cmn-tag`, `cmn-empty-state`, `cmn-skeleton`). The only utility classes are the spacing and
+  type tokens other pages use; the row's own layout is not overridden, so the date comes first in the line where a narrow row can
+  least afford to lose it.
+- **A fourth tab slot, so Prices moves behind More.** The phone tab bar holds four tabs and More (the library's `MAX_BOTTOM_TABS`). It
+  is now **List, Shelf, Plan, Cards**; **Prices** joins Promotions behind More, in the order of the desktop sidebar (List, Shelf, Plan,
+  Prices, Cards, Promotions, People). Plan took Prices' slot because Prices is where products are set up and shop pages linked
+  (occasional), while the Shelf and the Plan are the weekly shopping loop and Cards must stay one tap away at the till. Reversible:
+  it is the `PHONE_TAB_ROUTES` list in `ShellChromeService`, which the shell and the More page both read.
+- **The answer on top is the coverage.** A `cmn-verdict-header` says "One shop covers it" with that shop (and how many can, when
+  several), or "No one shop covers it" with the closest shop and how many lines block it, or "No shop prices it yet". Under it, when
+  one shop does not cover the list, a card "Not priced at <closest shop>" lists the blocking lines each with a short reason tag. The
+  wording is the server's coverage and nothing is recomputed on the phone.
+- **Per line: the best shop first.** The best shop is tagged "Best", the other fresh prices follow, then shops with nothing usable;
+  a shop whose reading is old, out of stock, not read yet, without a price, not started or ended says so in its tag and is dimmed. The
+  price on the right is the offer's price for one pack when the deal is met (a card price counts and names its card, "2 for €4" is
+  €2.00 with the deal in the line), and the unit price (€/kg, €/l, each) is in the line. The was-price is struck through only when
+  it is higher than what is charged. A line the server could not price carries its flag as a plain label and one sentence: "Not
+  matched" (typed by hand), "No price", "Old prices" (older than the server's window, 3 days), "Out of stock", "Can't compare". Its
+  readings stay listed with their dates.
+- **Dates are the reading's own** (`observedOn`, Dublin day, never shifted by a time zone), and a rule card at the bottom states the
+  as-of day, the unit-price rule and the staleness limit the server sent.
+- **States follow the other tabs.** Skeleton while loading, an error empty state with "Try again" plus a toast, an empty list says
+  "Nothing to plan", and the page reads again when it comes back into view (prices change at most once a night). Icons: `ListChecks`
+  for the tab and the empty state, from the library's Lucide subset, so nothing new is registered in `app.config.ts`.
+- **Tests.** Unit: the wording helpers and the page against a recorded response (`plan-format.spec.ts`, `plan.page.spec.ts`).
+  E2E: `plan-flow.spec.ts` (the tab bar and More on a phone, and what the Plan tab answers), the cold-start layout shift for `/plan`, and
+  three screens in `e2e/support/screens.ts` (`plan`: no shop covers it, with one line of each flag; `plan-covered`; `plan-empty`), so
+  the screen check, the route scan and the baselines cover them. The new baselines and the changed tab bar are rendered by the Update
+  screen baselines workflow on the PR branch, never committed by hand.
+- **Not in this change:** the cheapest two-shop split, per-shop basket totals, Lidl last-paid prices, and ticking lines off from the Plan.
+
+## By shop: the list priced at each shop (2026-11-10, issue #47, epic #24)
+
+Owner's words: "I am as a customer should understand what needs to be bought. I want to know where certain position is better. I want to know what promotions are in the store and which promotion is better." and "It should compare the products and show the best for price/value across multiple stores." The whole list priced at each of the four shops side by side: a total per shop, the lines each lacks, and the cheapest split.
+
+- **Borrowed pattern, named.** The per-store basket total comparison of price-comparison grocery apps (Trolley, Basket Savings): one row per shop with the basket total, how much of the basket it prices, and the cheapest marked. Nothing is invented: it sits on the `list` page template with the same lifekit-common components as the Plan tab (`cmn-verdict-header`, `cmn-list-section`, `cmn-list-item-row`, `cmn-tag`).
+- **A view over what is already collected; no migration, no new collection.** `GET /api/plan/by-shop` (signed-in people only) loads the plan exactly as `GET /api/plan` does and sums it (`ByShopBuilder`, pure, built only on `PlanResponse`). Which shops price a line, at what, and which one is best are the plan's own answers, so a price is the same number on the Plan tab, in Promotions and here. A card price (Clubcard, Lidl Plus) and a multi-buy deal count, as everywhere, and name their card or deal.
+- **Reached from the Plan tab, not a tab of its own.** The phone tab bar stays at four tabs. Plan's page header carries a "By shop" action (the pattern the List tab uses for History) to `/plan/by-shop`, a page with a back arrow to Plan; the sidebar has no entry for it.
+- **A shop's total adds only what it prices today.** A line counts at a shop only when the plan calls it `priced` there: a fresh reading (3 days, the plan's window), in stock, offer started and not ended. A line the shop cannot price adds nothing and is listed under "Not priced at <shop>" with the shop's own reason (`not_linked`, `stale`, `out_of_stock`, `not_read`, `no_price`, `upcoming`, `ended`, or `unmatched` for a line typed by hand). The total is therefore never a guess, and a shop is **complete** only when it lacks nothing. A shop that prices nothing shows a dash and "Nothing priced" and lists nothing (its reason would be the same on every line).
+- **Cheapest = lowest total among the complete shops.** A shop with lines missing can show a lower number only because it left things out, so it is never called cheapest. When no shop is complete the top says so and names the closest (most lines priced) with its total so far. Ties go to the first shop in the fixed order (Lidl, Aldi, Tesco, Dunnes).
+- **A total is one pack of each line, and says when packs differ.** Lines have no quantity yet, so each counts once, at the pack the shop lists. Where two or more shops price a line with different or unknown pack sizes, the totals are not like for like on it: each such shop's row says "packs differ on N". The rule card on the page says the same. Fixing that needs quantities on lines, which is a migration and the owner's call; it is not done here.
+- **The cheapest split buys each line at the plan's best shop, by value.** The split is the plan's `bestStore` per line (lowest price per kilo, litre or piece), grouped by shop with the dated prices, each shop's subtotal and the split total. A line the plan names no best shop for (`not_comparable`, `no_price`, `stale`, `out_of_stock`, `unmatched`) is listed under "Split: no best shop" with the plan's flag and is not given to a shop by guess. `versusCheapest` sets a complete split against the cheapest complete shop (negative: the split is cheaper) and is null otherwise: a partial split is never set against a whole basket. Because the split picks by value, it can cost more than one shop whose packs are smaller; the page says so in those words instead of hiding it.
+- **Dates and flags.** Every split line shows "Seen 5 Nov" first (the reading's own Dublin day), then the deal, the card it needs and the unit price; each shop's row shows the day of the oldest price in its total, the cards and offers included, and how many lines are missing. Old and out-of-stock prices are never in a total; they appear as missing lines, with their reason.
+- **Not in this change:** quantities on lines, which promotion is best across shops (Promotions already ranks them), the Plan-tab cheapest-split row (issue #40), and the order to walk the shops in.
+- **Tests.** Backend: `ByShopTests` (totals, cheapest, missing reasons, cards and offers, differing packs, the split and its comparison, the empty list, the endpoint and its guards). Frontend: wording helpers and the page against recorded responses, plus the Plan-to-By-shop flow, the cold-start shift for `/plan/by-shop` and three screens (`by-shop`, `by-shop-complete`, `by-shop-empty`) in the route scan and the baselines. The new baselines are rendered by the Update screen baselines workflow on the PR branch, never committed by hand.
+
+## Basket-side halves of the phone audit's Carbon findings (2026-11-10, issues #83, #86, #88)
+
+A phone audit of basket on the Carbon-aligned library filed missing icons and components that did not look right. Three small
+changes land here; the library halves are fixed in lifekit-common, not worked around.
+
+- **Icons the app uses outside the library's set (#83).** `BadgePercent` (the Promotions tab), `Store` (the Shelf tab),
+  `WalletCards` (the Cards tab and Add card), `Maximize2` (Show at till) and `RotateCcw` (Same as last time on History) are
+  registered with `provideLucideIcons` in `app.config.ts`, from `core/icons.ts`. Without that `<cmn-icon>` renders an empty box.
+  `tab-icons.spec.ts` renders the shell with the real app providers and fails on any tab icon that draws nothing. Since
+  `@lifekit-hq/ui` 4.8.0 the library ships `BadgePercent`, `WalletCards` and `Maximize2`, so only `Store` and `RotateCcw` stay
+  registered (see "Adopting `@lifekit-hq/ui` 4.8.0" above).
+- **Row overflow and cancel-link buttons are `ghost` (#86).** The list item's and product's overflow (`Ellipsis`) and the pending
+  invite's cancel (`X`) are `variant="ghost"`, so they read as row furniture and not as a second primary action.
+- **Sheet bodies are padded `px-cmn-6 pt-cmn-4 pb-cmn-6` (#88).** All seven `*.sheet.ts` bodies carry the padding themselves so
+  the body lines up with the title and clears the header rule. This is a **stopgap until the library drawer pads its body**; when
+  it does, drop the class string from the seven sheets so the padding is not doubled.
+
+## Lidl Plus connection: paste a token once (2026-11-10, issue #15, epic #26)
+
+Owner's words (Q5): the Lidl refresh token "lives encrypted in basket's database, seeded by one paste in Settings, not in SOPS".
+This is that connection: the token is pasted, checked with Lidl, kept encrypted, and Settings says whether it still works. What is
+read through it is not here: receipts import (#45) and the Lidl Plus offers (#14) are their own tasks and will call
+`LidlPlusConnectionService.AccessAsync`.
+
+- **One connection for the household, owner only.** `lidl_plus_connection` is a single-row table: the primary key is a fixed id, so
+  a second row cannot exist, and a paste is `INSERT ... ON CONFLICT (id) DO UPDATE` (one statement, so two pastes at once do not
+  collide). The routes are on the owner policy, like the price tokens: a member gets 403, a signed-out caller 401, and the fleet
+  identity is not accepted. `GET /api/lidl-plus/connection` says where it stands; `PUT` pastes a token (201 the first time, 200
+  after); `POST .../check` asks Lidl again with the saved token; `DELETE` removes it (204, or 404 when there is none). Every answer
+  is `Cache-Control: no-store`.
+- **The token is checked with Lidl before it is kept.** `PUT` exchanges it at Lidl's `/connect/token` (OAuth2 refresh grant, the
+  Lidl Plus Android app's public client id and secret in a Basic header, the token in the form body). Lidl accepts it: stored,
+  `201`/`200`. Lidl refuses it (400/401/403): `422 token_rejected`, nothing stored, and an existing connection is left as it was, so
+  a mistyped paste cannot break a working one. Lidl cannot be reached, or answers something unreadable (5xx, 429, not JSON, no
+  `access_token`): `502 lidl_unavailable`, nothing stored. A value that cannot be a token (empty, under 16 or over 1024 characters,
+  spaces or non-ASCII inside) is `400 token_invalid` without asking Lidl. Quotes and spaces round a paste are dropped. The messages
+  never repeat what was pasted.
+- **Encrypted at rest with Data Protection, as Q5 and the loyalty cards chose.** `refresh_token_protected` holds
+  `Protect`ed text (purpose `basket.lidl-plus.refresh-token.v1`, the app's key ring on the `/keys` volume); a test reads the column
+  raw and asserts the token is not in it. Same consequences as the cards, stated so they are not a surprise: whoever can read the
+  key volume and the database can read the token, and if the key ring is lost the token is unreadable. basket then reports
+  `unreadable` and asks for a new paste (it does not show garbage or ask Lidl with it).
+- **Never logged, never returned.** No response carries the token, whole or in part. It travels in a request body, never a path or
+  query. `LidlPlusAuthClient` logs nothing and reduces every failure (including the exception text of a failed request, which could
+  hold the form body) to an outcome; `LidlAuthResult` and `LidlAccess` print only their outcome. A test pastes a unique token through
+  every route including the refusals, registers a log sink, and asserts neither the token, the replacement token Lidl hands out nor
+  the protected text appears in any rendered log event. The HTTP client factory logs the address only, and EF's command log is at
+  Warning, so parameters are not logged.
+- **Lidl rotates the refresh token, so the replacement is saved first.** When Lidl's answer carries a new `refresh_token` it replaces
+  the stored one in the same call, before the access token is handed to anyone: losing it would end the connection. An answer
+  without one means Lidl kept the old token. The exchange is behind a process-wide lock (basket runs as one instance), so two
+  exchanges of the same token cannot race and have Lidl refuse the second. Disconnect takes the same lock, so it cannot delete the row
+while a check is waiting on Lidl to save its answer.
+- **The states.** `not_connected`, `connected`, `needs_new_token` (Lidl refused the saved token the last time it was used: the
+  row keeps a `problem` of `token_rejected`, Lidl is not asked again, and a new paste clears it) and `unreadable`. An unreachable
+  Lidl changes nothing: a check answers `502`, and the connection stays `connected`, because a network error says nothing about
+  the token.
+- **Settings shows it, owner only.** A "Lidl Plus" section after "Price reader": the state (with the day Lidl last accepted the
+  token), **Connect Lidl Plus** / **Paste a new token** (a sheet with a masked field and the server's reason when a paste is
+  refused), **Check now** (only while connected) and **Disconnect** (with a confirmation). The token is never shown again after the
+  paste. The what's-new note and the Settings screen mock are updated; the Linux screen baselines for Settings are rendered by the
+  "Update screen baselines" workflow on CI (`update-baselines` label), not from a local run.
+- **Tests use fake responses only.** `FakeLidlPlusAuth` stands in for Lidl at the `ILidlPlusAuth` seam in the integration tests;
+  `LidlPlusAuthClientTests` feeds recorded answers (accepted, rotated, refused, 5xx, malformed, network error, timeout) to the real
+  client through a stub handler and checks the request it sends. No test, and no build step, calls Lidl.
+- **Not verified live.** The token endpoint, the client credentials and the grant shape follow the community `lidl-plus` client for
+  the Lidl Plus app, not an official Lidl document, and nothing here has been run against Lidl. The first real paste is the
+  check: `lidl_unavailable` or `token_rejected` on a token the app still accepts would mean one of those is different for Ireland
+  (`LidlPlus:AccountsBase`, `ClientId` and `ClientSecret` are options for that reason). Where the owner gets a refresh token is the
+  `lidl-plus` tool's sign-in; basket does not drive Lidl's login page (a person signs in, once).
+- **One migration, additive: `20261110134121_LidlPlusConnection`.** It creates `lidl_plus_connection` and nothing else; it touches no
+  existing table. It sorts after `TripItemProduct`, the latest on main when this was generated. Other ships' migrations must order
+  after whichever merges first.
+
+## Lidl Plus receipts: closed trips, shelf products and last paid prices (2026-11-10, issue #45, epic #26)
+
+Owner's words: "I want have buy lists. And the history of lists." With the connection from issue #15 in place, the receipts Lidl Plus
+holds for the account are pulled in on their own: each becomes a closed trip, its lines join the shelf, and what was paid is kept with its
+day. Builds on `LidlPlusConnectionService.AccessAsync`; the Lidl Plus offers (#14) and the Plan tab's display of last paid prices
+(`bsk-plan-lidl-last-paid`) are not here.
+
+- **Borrowed pattern, named: the receipts list of the Lidl Plus app.** The app lists the account's receipts newest first, each with
+  its day, shop and total, and opens one to show its lines. basket reads the same two things (the list, then each receipt) and shows
+  them in the History it already has (AnyList and OurGroceries' list history, see the trips section above); no new interaction is
+  invented. A receipt trip's heading reads `Thu 5 Nov 2026 · 12 items · Lidl Plus €23.40` and "Same as last time" works on it
+  like on any trip.
+- **A receipt is a closed trip, filed on the day it was printed.** `trip` gains three nullable columns: `source` (`lidl_plus`; null for
+  a trip closed on the list), `external_id` (Lidl's receipt id) and `total` (as printed). A partial unique index on
+  `(source, external_id)` means one trip per receipt, so two pulls racing cannot file it twice. `closed_at` is the
+  receipt's time, so receipts sort into the history among the trips closed by hand. A trip's lines are its receipt lines as `trip_item`
+  rows: text as printed, `checked_at` the receipt time, nobody as the ticker, and the product and shop (`lidl`) set, so reloading a
+  receipt puts product lines on the list that the Shelf tile marks "On the list". `GET /api/trips` returns `source` and `total` on every
+  trip (null for a trip closed on the list); nothing else about it changed.
+- **A line is a purchase when it has a name and came to money.** Zero and negative lines (a returned deposit, a refund, a discount
+  printed as its own line) and lines without a name are not trip items and set no price. The same name twice on one receipt is one
+  trip line. Quantities are not kept on the trip (the trip has none); the price is.
+- **Lines become shelf products by exact name, letter case aside; nothing is guessed.** A line whose name matches a product (any letter
+  case) is that product; otherwise a product with that name is added, recorded against the owner (as the fleet's adds are), up to the
+  existing 300-product guard (past it, the line is still on the trip as text). The receipt's name is Lidl's own ("Whole milk 2L"), not
+  the household's, so a household product with another name stays separate until the owner renames one; matching words to products
+  stays out, as for the plan. A product made this way has no store page, so the nightly price read ignores it.
+- **Seeded Lidl products appear on the Lidl shelf.** The Shelf's Lidl filter showed only products with a linked Lidl page. It now also
+  keeps the products with a known last paid price at that shop, and the card shows what was paid and when ("€2.19 / Last paid 3 Nov")
+  instead of a page reading; **All** shows them too. The list endpoint's `not_sold_there` check follows: a shop "sells" a product when its
+  page is linked **or** a receipt shows it was bought there, so tapping the card works; Tesco, Aldi and Dunnes are unchanged.
+- **Last paid price and date.** One `paid_price` row per product, shop and day (an existing table that stayed empty until now; its
+  index on those three is now unique): the price of one item, which is the line's amount over its quantity, or the price of a kilo for
+  a weighed line. The row also keeps `paid_at`, the time of the receipt behind it (nullable). When two receipts of one day have the
+  same product, the one printed later is the price that stays, whichever order they are found in: an existing row is overwritten only
+  by a receipt with a later time. If a save loses a race on that unique index (a deploy overlap with the nightly job), the receipt is
+  built again against the row that won and filed; if the other pull already filed the receipt itself, its copy stands. The day is the
+  Dublin day of the receipt. It reaches `GET /api/products` (`lastPaid`: `known` with price and day; `none` once Lidl Plus is connected but no receipt has
+  the product, which the Prices page leaves blank; `not_connected` before that) and **the plan API**: each plan line carries `lastPaid`,
+  the latest paid price at each shop it was bought at (shop, price, day), whether or not that shop's page is linked. It is information
+  only: it never decides the best shop or the coverage, and a product with only a paid price is still flagged `no_price`. The Plan tab
+  draws it from the section below (issue #14).
+- **It pulls on its own, nightly.** A recurring job runs at 05:00 Europe/Dublin (after the 03:00 price read and the 04:30 invite
+  cleanup) and does nothing until Lidl Plus is connected. There is no endpoint or Settings button to pull on demand: Settings is
+  already drawn connected in the screen baselines, and a button there would change them for a route nobody needs once the nightly job
+  has run; add one if the first pull wants watching.
+- **A pull is idempotent and polite.** It reads every page of the list (a page of known receipts says nothing about older ones, which
+  an earlier capped pull may have left), but opens only receipts not yet filed, newest first, until 30 have been
+  read (`LidlPlus:MaxNewReceiptsPerPull`), at most 50 list pages (`MaxReceiptPages`), one request at a time with 500 ms between them. A longer
+  history is taken over the following nights; `waiting` says how many are left. A receipt is filed in one save (trip, lines, new
+  products, paid prices), so it is there whole or not at all. A receipt in a shape basket cannot read, or that Lidl refuses on its own
+  (a 4xx such as not found or forbidden), is skipped, counted in `skipped` and tried again next time; it does not use up the 30, so
+  one receipt that never opens cannot hold back the older ones. Lidl being down, throttling (429), turning the access token away
+  (401) or unreachable stops the pull and keeps what was filed. A process-wide lock stops two pulls overlapping.
+  The access token goes in a header, is never logged or returned, and a test checks it against every rendered log line.
+- **Tests use fake Lidl responses only.** `FakeLidlPlusTickets` stands in for Lidl at the `ILidlPlusTickets` seam in the integration
+  tests (trip, products, paid prices, the plan and products responses, idempotency, the limit, failures mid-pull, a lost race for a day's
+  price, two products differing only by letter case, the job);
+  `LidlPlusTicketsClientTests` feeds recorded answers (decimal commas and numbers, bad shapes, refusals, network error) to the real
+  client. No test, and no build step, calls Lidl.
+- **Not verified live.** The receipts service address, the headers (`App`, `Operating-System`, `App-Version`) and the field names
+  (`tickets[].id`, `date`, `totalAmount`, `itemsLine[]` with `description`, `quantity`, `isWeight`, `currentUnitPrice`, `extendedAmount`
+  or `originalAmount`) follow the community `lidl-plus` client, not an official Lidl document, and nothing here has been run against
+  Lidl. Two readings to check against the first real receipts: whether `extendedAmount` is before or after a Lidl Plus coupon (basket
+  takes it as printed and does not net discount lines, so a paid price may be the price before a coupon), and the country (`LidlPlus:Country`,
+  `TicketsBase` and `Language` are options for that reason). An answer basket cannot read ends as `lidl_unavailable` or `skipped`,
+  never as a wrong price.
+- **One migration, additive: `20261110144147_LidlReceipts`.** It adds the three nullable columns and the partial unique index to `trip`,
+  adds the nullable `paid_at` column to `paid_price`, and replaces the `paid_price` index on `(product_id, store, paid_on)` with a unique
+  one. It touches no row. The unique index build would fail on duplicate `paid_price` rows; the table was empty before this change, so
+  none are expected. It sorts after `20261110134121_LidlPlusConnection`, the latest on main when this was generated; `Down` drops the
+  new indexes and columns and restores the non-unique `paid_price` index. A migration waits for the owner's go before merge.
+- **Screens.** No route is added or removed, and the mocks' History has no receipt trip, so the baselines do not change; the Linux
+  baselines are drawn on CI only, as before.
+
+## Plan tab: Lidl's offer beside the last price paid there (2026-11-10, issue #14, epic #24)
+
+Epic #24: "I want to know what promotions are in the store and which promotion is better." The plan API already sends `lastPaid` per line
+(issue #45); the Plan tab now draws it. Frontend only; no backend change and no migration.
+
+- **Borrowed pattern, named: the per-store comparison row, with the shopper's own last price beside it.** The row of the Plan tab section
+  above (shop, price now, the day it was read) keeps its place, and a second line under it says what the household last paid at that
+  shop and when: `Last paid €1.19 on 3 Nov`, the Shelf's and the Prices page's own wording, so one price reads the same on every screen.
+  The two lines are the Prices page's "one fact group per line" row, with its same row classes (`whitespace-pre-line`, `break-words`) on
+  `cmn-list-item-row`; nothing else is new, and the page stays read-only on the `list` template.
+- **The offer is only what basket already has.** Lidl's offer is the Lidl entry's normalised `offer` from the Promotions rule (card
+  price, multi-buy, percentage, shelf); nothing is fetched for Lidl Plus offers, and the line is drawn as the Plan tab already
+  draws it. So the Lidl row reads `Seen 5 Nov · Lidl Plus price · €0.50/l` over `Last paid €1.19 on 3 Nov`, with the
+  offer price (`€0.99`, old price struck through) on the right.
+- **Last paid at any shop is shown, not only Lidl.** The server sends the latest receipt price per shop; today only Lidl receipts exist,
+  and the page draws whatever shops come, so a later Tesco or Dunnes receipt needs no change here.
+- **A paid price needs a shop row to sit on.** The paid line is attached to the shop rows the Plan tab already draws; a shop the
+  product was bought at but has no reading for gets no row of its own, so its paid price is not drawn here (it stays on the Shelf).
+- **Information only.** The paid price never picks the best shop, never moves a line's flag and is not in the coverage answer on top;
+  the rule card at the bottom says so. A weighed product's paid price is a kilo's, like on the Shelf. The date is the receipt's Dublin
+  day (`paidOn`), never shifted by a time zone.
+- **Tests.** Unit: the wording and the row building (`plan-format.spec.ts`: offer beside last paid, a shop never
+  bought at, no rows) and the page against a recorded response (`plan.page.spec.ts`). E2E: `plan-flow.spec.ts` asserts
+  the offer line, both paid lines and their days on a phone; the `plan` mock gains a milk `lastPaid`, so the screen
+  check (both templates, 390 and 1280) covers it. The `plan` baselines change and are rendered by the Update
+  screen baselines workflow on the PR branch after the pipeline's push is final, never committed by hand; `plan-covered` changes with the
+  shared milk line, `plan-empty` does not.
+- **Not in this change:** a Lidl offer fetch (the Lidl Plus offers feed stays out), a price-change figure against the last paid, the
+  two-shop split, per-shop basket totals, and ticking lines off from the Plan.
+
+## Releases: release-please and the weekly release (2026-11-12, family alignment B8)
+
+Owner's goal: basket is one of the lifekit family, so its versions and What's new move with releases the way finance-sentry's and the
+dashboard's do, instead of staying at 0.1.0.
+
+- **Same two workflows as the family.** `release-please.yml` keeps one release PR current on every merge to main (version bump plus
+  `CHANGELOG.md`, from the conventional commit titles); `weekly-release.yml` merges it Mondays 00:07 UTC (`workflow_dispatch` is
+  "release now"), and the merge tags and publishes the release. No releasable commit since the last release means no PR and a no-op.
+- **The reusable templates are called, not copied.** `lifekit-hq/.github` is public, so a repo under `dsdevq` can call
+  `lifekit-hq/.github/.github/workflows/{release-please,weekly-release}.yml@v1` (the same call lifekit-common makes); nothing is inlined.
+- **What the release PR bumps:** `frontend/package.json`, the two version fields of `frontend/package-lock.json`, and `APP_VERSION`
+  in `frontend/src/app/core/version.ts` (marked `x-release-please-version`), so the existing spec that ties `APP_VERSION` to
+  `package.json` keeps holding on the release PR. `release-type: simple` also keeps the manifest. `pc-reader` has its own version
+  and the backend has none, so neither is touched. `bootstrap-sha` is the commit 0.1.0 describes, so the first release lists only what
+  lands after it.
+- **Releases do not gate deploys.** Every merge to main still deploys (`deploy.yml`); the weekly release governs the version, the
+  changelog and the tags. The release PR is a normal PR, so its merge deploys like any other.
+- **What's new follows the changelog.** `lifekit-whats-new` now runs with `--changelog ../CHANGELOG.md`, so each release in the
+  changelog is a sheet entry with its date and the fold of its user-facing changes; a `## x.y.z` heading in `src/whats-new/notes.md`
+  adds the plain lines for that release (a release without them shows the change list and raises no dot). `CHANGELOG.md` starts with a
+  bare `## 0.1.0` so the current release keeps its entry, and the Docker web stage copies it to `/CHANGELOG.md`.
+- **`public/whats-new.json` is generated and no longer committed.** A committed copy would go stale on every release PR (it changes
+  only the changelog and versions), so `npm run lint` could not stay green on it; the file is rebuilt before `start`, `build` and
+  `build:prod`, and `lifekit-whats-new --check` left the lint chain with it.
+- **Off until the bot is installed.** Both jobs run only when the `RELEASE_APP_ID` variable is set; they also need the
+  `RELEASE_APP_PRIVATE_KEY` secret and the release bot GitHub App installed on this repo. That is an owner step; until then the jobs
+  are skipped, not failed. A `GITHUB_TOKEN` fallback is deliberately absent: a release PR pushed with it never gets its checks.
+- No database change.
+
+## Plan: the cheapest two-shop split when no one shop covers the list (2026-11-10, issue #40, epic #24)
+
+Owner's words: "It should compare the products and show the best for price/value across multiple stores." When no single shop prices every line, the plan proposes the cheapest two shops that together do, with card prices and offers counted and every price dated.
+
+- **What By shop already had, and what was missing.** By shop's split (issue #47) places each line at the plan's `bestStore`, so it spreads the list over as many as four shops and sits only on `/api/plan/by-shop`. The plan API (`/api/plan`) returned the best single shop (`coverage.store`) but no split. This change adds only the missing piece: `coverage.split`, the cheapest pair of shops, on the plan response, and shows it in the Plan tab. By shop is untouched.
+- **Borrowed pattern, named.** The "split your shop across two stores" suggestion of price-comparison grocery apps (Trolley, Basket Savings): when one shop cannot fill the basket, name the two that can, with a basket total and what is bought where. The Plan tab's new cards are the By shop split's cards (`cmn-list-section` of `cmn-list-item-row`, the `lineDetail` wording), so a line reads the same on both screens.
+- **Reuses By shop's rules, does not duplicate them.** `PairSplitBuilder` (pure, on `PlanItem`s only) takes "this shop prices this line" from `ByShopBuilder.Priced` (a fresh reading, in stock, offer started and not ended; the same test By shop's shop totals use), the line shape from `ByShopBuilder.Line` and the groups from `ByShopGroup`. Those two became `internal` rather than copied.
+- **Best single shop first, a split only when none covers.** `coverage.singleStore` is unchanged and wins whenever any one shop prices every line. `coverage.split` is set only when `singleStore` is false, and is null when no two shops together price every line (a typed-by-hand line, or one with no usable price anywhere): a pair that leaves a line out is not a candidate, so a partial list is never presented as a plan. Everything else is as before: the blockers still list what the closest shop lacks.
+- **The pair is the lowest total.** Of every pair of the four shops that between them price every line, the one with the lowest total wins; within a pair each line is bought at the shop with the lower unit price (the offer `rank`, the same rule the plan's `bestStore` and the By shop split use; a card price or a multi-buy counts), and the pair's total is the sum of the chosen offers' pack prices. The total is like for like on every line. Ties go to the first pair in the fixed order (Lidl, Aldi, Tesco, Dunnes), and within a pair, on equal unit prices, to the first shop. **A line that cannot be compared is never guessed:** when both shops of a pair price a line but either has no `rank` (no pack size, or another unit), that pair is not a candidate; a line only one shop of the pair prices needs no comparison. No quantities are added to lines, so the total is still one pack of each line, at the pack the chosen shop lists.
+- **Dates and cards.** Each bought line carries its reading's own Dublin day (`observedOn`), shown as "Seen 5 Nov" first, then the deal, the card it needs and the unit price; the split carries the day of its oldest price (`oldestSeenOn`), shown in the answer on top.
+- **On the phone.** The answer on top keeps "No one shop covers it" and adds the pills "Best two: Lidl + Aldi", the total and the closest shop; under it one card per shop of the pair, "Buy at Lidl · €0.99", with its lines and prices, before the per-line cards. The rule card gains one sentence when a pair is shown. No migration, no new collection, no new route, no new component.
+- **Not in this change:** quantities on lines, a three-shop split, and routing (which shop to walk first).
+- **Tests.** Backend: `PlanTests` (the cheapest pair with a card price and dates, the pair chosen by lowest total and not by most lines, a tie, a line bought at the lower unit price although its pack costs more, a pair dropped when a line priced at both shops cannot be compared, no split when a line has no usable price or the list is empty, old and out-of-stock prices not counted). Frontend: the verdict wording (`plan-format.spec.ts`) and the page against a recorded response (`plan.page.spec.ts`), plus a `plan-split` screen in `e2e/support/screens.ts` for the route scan and the baselines. The new `plan-split` baseline is rendered by the Update screen baselines workflow on the PR branch after the pipeline's push is final, never committed by hand.
+
+## The platform contract (2026-11-12, family-align step B5)
+
+basket meets the box's platform contract (lifekit-stack `docs/platform-contract.md`, checked by `scripts/platform-contract.py`),
+the way finance-sentry and the dashboard do. Before this the live checker reported `basket-app` and `basket-db` as
+`UNDECLARED`.
+
+- **Declarations.** `docker/docker-compose.prod.yml` labels `basket-app` `lifekit.contract: "v1"` with port `3310`, health
+  `/api/health`, ready `/api/health/ready`, metrics `/metrics`, ingress `edge` (the loopback port is the tailnet edge's
+  upstream, as for the dashboard) and service `basket`. `basket-db` is `none`: a datastore with no HTTP surface and no
+  network but `default`.
+- **Metrics.** OpenTelemetry's ASP.NET Core and runtime instruments, exported as Prometheus text on `/metrics` (the same
+  packages as finance-sentry, metrics only; no traces exporter, the contract's traces item is not enforced yet). The app
+  joins the external `lifekit-shared` network so the box Prometheus reaches `basket-app:3310/metrics`. The meters are
+  process-wide, so the test hosts (dozens side by side) run with `Observability:Metrics:Enabled=false` and only the
+  platform-contract tests turn it on; in production it is on.
+- **`/metrics` is for Prometheus only.** It needs no sign-in, so a request that came through Tailscale (Serve or Funnel
+  always proxy with `X-Forwarded-For`; Prometheus never does) is answered 404. The numbers are not served on the public
+  address while the Funnel is still on, and not to tailnet devices either. The check runs before the forwarded-headers
+  middleware, which consumes the header.
+- **Logs.** The console sink writes one compact JSON object per line (`RenderedCompactJsonFormatter`), the trace id as
+  `@tr`. The container healthcheck's `/api/health` polls stay out of the log, but a health request that carries a
+  `traceparent` (the contract checker's probe) is logged, so a quiet app still shows a traced line.
+- **Deploy.** `docker/deploy.sh` runs `platform-contract.py --static` on the composed config before `up`, and after the app is healthy
+  runs `--project basket` with four attempts 15 s apart (Prometheus' `scraped` item reads its last scrape). A missing
+  checker fails the deploy; there is no waiver.
+- **Not in this repo.** The `scraped` item needs a Prometheus job for `basket-app:3310` in lifekit-stack's
+  `compose/observability/prometheus/prometheus.yml` (path `/metrics`, like the `lifekit-dashboard` job). Until that job
+  lands, the live checker reports `scraped` and `labels` as FAIL for `basket-app`.
+- **No migration.**
 
 ## Product catalog base and deterministic candidate matching (2026-11-09, issue #9, part of the Shelf epic #21)
 

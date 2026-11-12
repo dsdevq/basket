@@ -54,7 +54,7 @@ public sealed class PricePullJob(
         }
 
         var pull = await source.PullAsync(
-            listings.Select(l => new ListingToCheck(l.Id, new Uri(l.Url))).ToList(),
+            listings.Select(l => new ListingToCheck(l.Id, new Uri(l.Url), l.Category is null)).ToList(),
             ct);
 
         var finished = clock.GetUtcNow();

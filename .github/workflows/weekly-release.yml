@@ -1,0 +1,35 @@
+name: Weekly Release
+
+# Cuts a release once a week by merging the Release Please PR that accumulates on main. Release
+# Please keeps that PR current on every merge; this job just lands it on a cadence. No releasable
+# commits since the last release means no PR, and the job no-ops.
+#
+# Delegates to the lifekit-hq/.github reusable template, which merges with the release-bot app token:
+# a real push to main, so release-please.yml's own push trigger tags and publishes the release and no
+# explicit dispatch back to it is needed.
+#
+# Off until the release bot app is installed on this repo and RELEASE_APP_ID (variable) and
+# RELEASE_APP_PRIVATE_KEY (secret) are set; until then the job is skipped, not failed.
+
+on:
+  schedule:
+    - cron: "7 0 * * 1" # Mondays 00:07 UTC, off the top of the hour to avoid GitHub's :00 schedule pile-up
+  workflow_dispatch: # manual "release now"
+
+permissions: {}
+
+concurrency:
+  group: weekly-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: vars.RELEASE_APP_ID != ''
+    permissions:
+      contents: write
+      pull-requests: write
+    uses: lifekit-hq/.github/.github/workflows/weekly-release.yml@v1
+    with:
+      app-id: ${{ vars.RELEASE_APP_ID }}
+    secrets:
+      app-private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}

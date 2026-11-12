@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using Basket.Api.Data;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
@@ -17,9 +18,15 @@ public sealed record SignInRequest(string? CredentialJson);
 
 public sealed record CreateInviteRequest(string? Label);
 
-public sealed record SessionUser(Guid Id, string DisplayName, string Role);
+public sealed record SessionUser(Guid Id, string DisplayName, string Role, string? Email = null);
 
-public sealed record SessionResponse(bool Authenticated, SessionUser? User);
+/// <param name="Authenticated">Whether the request carries a valid session.</param>
+/// <param name="User">Who the session is for.</param>
+/// <param name="LinkRequired">
+/// True when sign-in through the org provider is on and this session's account has no provider login yet: the SPA sends the
+/// person through the provider once, which links the account to them. Always false when the provider path is off.
+/// </param>
+public sealed record SessionResponse(bool Authenticated, SessionUser? User, bool LinkRequired = false);
 
 public sealed record InviteResponse(Guid Id, string? Label, DateTimeOffset CreatedAt, DateTimeOffset ExpiresAt);
 
@@ -50,6 +57,7 @@ public static class AuthEndpoints
         auth.MapPost("/passkey-failure", PasskeyFailureReport.Handle);
         auth.MapPost("/sign-in/options", SignInOptions);
         auth.MapPost("/sign-in", SignIn);
+        auth.MapOidcEndpoints();
         api.MapPost("/auth/sign-out", SignOut).RequireAuthorization();
 
         var owner = api.MapGroup("/invites").RequireAuthorization(Policies.Owner);
@@ -60,20 +68,25 @@ public static class AuthEndpoints
         api.MapGet("/members", ListMembers).RequireAuthorization(Policies.Owner);
     }
 
-    private static IResult Session(ClaimsPrincipal principal)
+    private static async Task<IResult> Session(
+        ClaimsPrincipal principal, IOptions<OidcLoginOptions> oidc, AppDbContext db, CancellationToken ct)
     {
         if (principal.Identity?.IsAuthenticated != true)
         {
             return Results.Ok(new SessionResponse(false, null));
         }
 
-        return Results.Ok(new SessionResponse(true, ToSessionUser(principal)));
+        var user = ToSessionUser(principal);
+        var linkRequired = oidc.Value.IsConfigured
+            && !await db.UserLogins.AnyAsync(l => l.UserId == user.Id && l.LoginProvider == OidcLoginOptions.Scheme, ct);
+        return Results.Ok(new SessionResponse(true, user, linkRequired));
     }
 
     internal static SessionUser ToSessionUser(ClaimsPrincipal principal) => new(
         Guid.Parse(principal.FindFirstValue(ClaimTypes.NameIdentifier)!),
         principal.FindFirstValue(Policies.DisplayNameClaim) ?? string.Empty,
-        principal.IsInRole(Roles.Owner) ? Roles.Owner : Roles.Member);
+        principal.IsInRole(Roles.Owner) ? Roles.Owner : Roles.Member,
+        principal.FindFirstValue(ClaimTypes.Email));
 
     private static async Task<IResult> CheckInvite(InviteRequest request, InviteService invites, CancellationToken ct)
     {
@@ -117,6 +130,7 @@ public static class AuthEndpoints
         AppDbContext db,
         UserManager<AppUser> users,
         SignInManager<AppUser> signIn,
+        IOptions<OidcLoginOptions> oidc,
         TimeProvider clock,
         ILogger<InviteService> log,
         CancellationToken ct)
@@ -162,7 +176,8 @@ public static class AuthEndpoints
         await tx.CommitAsync(ct);
         await signIn.SignInAsync(user, isPersistent: true);
         log.LogInformation("Registered {Role} {UserId} with invite {InviteId}", invite.Role, userId, invite.Id);
-        return Results.Ok(new SessionResponse(true, new SessionUser(user.Id, user.DisplayName, invite.Role)));
+        // A new passkey account has no provider login, so once the provider path is on it has to link like the older ones.
+        return Results.Ok(new SessionResponse(true, new SessionUser(user.Id, user.DisplayName, invite.Role), oidc.Value.IsConfigured));
     }
 
     private static async Task<IResult> SignInOptions(SignInManager<AppUser> signIn)
@@ -198,10 +213,18 @@ public static class AuthEndpoints
         return Results.NoContent();
     }
 
-    private static async Task<IResult> SignOut(SignInManager<AppUser> signIn)
+    private static async Task<IResult> SignOut(
+        HttpContext http,
+        SignInManager<AppUser> signIn,
+        IOptions<OidcLoginOptions> oidc,
+        IDataProtectionProvider protection,
+        ILogger<ExternalLoginService> log)
     {
         await signIn.SignOutAsync();
-        return Results.NoContent();
+
+        // A session that came from the org sign-in ends there too; otherwise the next sign-in would re-enter silently.
+        var provider = await OidcEndpoints.EndProviderSessionAsync(http, oidc.Value, protection, log);
+        return provider is null ? Results.NoContent() : Results.Ok(provider);
     }
 
     private static async Task<IResult> ListInvites(InviteService invites, CancellationToken ct)

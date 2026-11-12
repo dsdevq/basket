@@ -68,7 +68,13 @@ describe('StoreLinkSheetComponent', () => {
     const unlink = vi.fn().mockResolvedValue(undefined);
     const linked = {
       ...ENTRY,
-      listing: {url: 'https://www.lidl.ie/p/x/p11000', title: 'X', checkedAt: null, error: null},
+      listing: {
+        url: 'https://www.lidl.ie/p/x/p11000',
+        title: 'X',
+        checkedAt: null,
+        error: null,
+        imageUrl: null,
+      },
     };
     const {ref, host, submit} = render({link, unlink} as never, linked);
 

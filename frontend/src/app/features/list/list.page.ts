@@ -5,6 +5,7 @@ import {FormControl, FormGroup, ReactiveFormsModule} from '@angular/forms';
 import {
   ButtonComponent,
   CheckboxComponent,
+  CmnDialogService,
   CmnDrawerService,
   EmptyStateComponent,
   InputComponent,
@@ -12,10 +13,13 @@ import {
   ListSectionComponent,
   PageComponent,
   SkeletonComponent,
+  TagComponent,
 } from '@lifekit-hq/ui';
 import {firstValueFrom, fromEvent, interval} from 'rxjs';
 
 import {ComposerBarComponent} from '../../core/shell/composer-bar.component';
+import {STORE_NAMES} from '../prices/price-format';
+import type {StoreId} from '../prices/prices.model';
 import {type ItemAction, ItemActionsSheetComponent} from './item-actions.sheet';
 import type {ListItem} from './list.model';
 import {ListStore} from './list.store';
@@ -37,10 +41,11 @@ const REFRESH_MS = 15_000;
     ListSectionComponent,
     PageComponent,
     SkeletonComponent,
+    TagComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <cmn-page kind="list" fill>
+    <cmn-page [reload]="reload" kind="list" fill>
       @switch (store.status()) {
         @case ('loading') {
           <cmn-skeleton shape="section" />
@@ -74,6 +79,14 @@ const REFRESH_MS = 15_000;
           }
           @if (store.done().length) {
             <cmn-list-section [heading]="'Ticked · ' + store.done().length" card>
+              <cmn-button
+                [loading]="store.closing()"
+                (clicked)="finish()"
+                cmnListSectionAside
+                variant="primary"
+                icon="CheckCheck"
+                >Done shopping</cmn-button
+              >
               @for (item of store.done(); track item.id) {
                 <ng-container
                   [ngTemplateOutlet]="row"
@@ -106,8 +119,19 @@ const REFRESH_MS = 15_000;
         [label]="item.text"
         [sublabel]="item.addedBy.name"
         [dimmed]="item.checked"
+        [swipeLeading]="{
+          label: item.checked ? 'Untick' : 'Tick',
+          icon: item.checked ? 'Undo' : 'Check',
+          tone: 'positive',
+        }"
+        [swipeTrailing]="{label: 'Delete', icon: 'Trash2', tone: 'danger'}"
+        (swipeLeadingAction)="toggle(item, !item.checked)"
+        (swipeTrailingAction)="remove(item)"
         class="[&_.truncate]:overflow-visible [&_.truncate]:whitespace-normal [&_.truncate]:break-words"
       >
+        @if (item.store) {
+          <cmn-tag meta variant="neutral">{{ storeName(item.store) }}</cmn-tag>
+        }
         <cmn-checkbox
           [checked]="item.checked"
           [label]="(item.checked ? 'Untick ' : 'Tick ') + item.text"
@@ -118,7 +142,7 @@ const REFRESH_MS = 15_000;
           [aria-label]="'More for ' + item.text"
           (clicked)="more(item)"
           actions
-          variant="secondary"
+          variant="ghost"
           icon="Ellipsis"
         />
       </cmn-list-item-row>
@@ -127,6 +151,7 @@ const REFRESH_MS = 15_000;
 })
 export class ListPage implements OnInit {
   private readonly drawer = inject(CmnDrawerService);
+  private readonly dialog = inject(CmnDialogService);
   private readonly document = inject(DOCUMENT);
   private readonly destroyRef = inject(DestroyRef);
 
@@ -134,6 +159,9 @@ export class ListPage implements OnInit {
 
   protected readonly text = new FormControl('', {nonNullable: true});
   protected readonly form = new FormGroup({text: this.text});
+
+  /** Pull to refresh on this tab root: the shell's pull gesture calls it and waits for the promise. */
+  protected readonly reload = (): Promise<void> => this.store.load();
 
   public ngOnInit(): void {
     void this.store.load();
@@ -163,8 +191,36 @@ export class ListPage implements OnInit {
     }
   }
 
+  protected storeName(store: StoreId): string {
+    return STORE_NAMES[store];
+  }
+
   protected toggle(item: ListItem, checked: boolean): void {
     void this.store.toggle(item, checked);
+  }
+
+  protected remove(item: ListItem): void {
+    void this.store.remove(item);
+  }
+
+  /** Done shopping: after a confirm, the ticked items become a trip in the history and the list starts clean. */
+  protected async finish(): Promise<void> {
+    const ticked = this.store.done().length;
+    const left = this.store.toBuy().length;
+    const confirmed = await firstValueFrom(
+      this.dialog.confirm({
+        title: 'Done shopping?',
+        message:
+          (ticked === 1 ? '1 ticked item goes' : `${ticked} ticked items go`) +
+          ' to History' +
+          (left ? `. The ${left} not ticked stay on the list.` : '. The list will be empty.'),
+        confirmLabel: 'Done shopping',
+      }),
+      {defaultValue: false}
+    );
+    if (confirmed) {
+      await this.store.closeTrip();
+    }
   }
 
   protected async more(item: ListItem): Promise<void> {
@@ -174,7 +230,7 @@ export class ListPage implements OnInit {
       mode: 'sheet',
     });
     if ((await firstValueFrom(ref.afterClosed(), {defaultValue: undefined})) === 'delete') {
-      await this.store.remove(item);
+      this.remove(item);
     }
   }
 }

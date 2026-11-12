@@ -31,14 +31,63 @@ export const APP_ROUTES: Routes = [
       {
         path: 'list',
         title: 'Shopping list',
-        data: {title: 'Shopping list'} satisfies PageChromeData,
+        data: {
+          title: 'Shopping list',
+          actions: [{id: 'history', label: 'History', icon: 'History', route: '/history'}],
+        } satisfies PageChromeData,
         loadComponent: () => import('./features/list/list.page').then(m => m.ListPage),
+      },
+      {
+        path: 'history',
+        title: 'History',
+        data: {title: 'History', parent: '/list'} satisfies PageChromeData,
+        loadComponent: () => import('./features/history/history.page').then(m => m.HistoryPage),
+      },
+      {
+        path: 'shelf',
+        title: 'Shelf',
+        data: {title: 'Shelf'} satisfies PageChromeData,
+        loadComponent: () => import('./features/shelf/shelf.page').then(m => m.ShelfPage),
+      },
+      {
+        path: 'plan',
+        title: 'Plan',
+        data: {
+          title: 'Plan',
+          actions: [{id: 'by-shop', label: 'By shop', icon: 'Scale', route: '/plan/by-shop'}],
+        } satisfies PageChromeData,
+        loadComponent: () => import('./features/plan/plan.page').then(m => m.PlanPage),
+      },
+      {
+        path: 'plan/by-shop',
+        title: 'By shop',
+        data: {title: 'By shop', parent: '/plan'} satisfies PageChromeData,
+        loadComponent: () => import('./features/plan/by-shop.page').then(m => m.ByShopPage),
       },
       {
         path: 'prices',
         title: 'Prices',
         data: {title: 'Prices'} satisfies PageChromeData,
         loadComponent: () => import('./features/prices/prices.page').then(m => m.PricesPage),
+      },
+      {
+        path: 'promotions',
+        title: 'Promotions',
+        data: {title: 'Promotions', parent: '/more'} satisfies PageChromeData,
+        loadComponent: () =>
+          import('./features/promotions/promotions.page').then(m => m.PromotionsPage),
+      },
+      {
+        path: 'cards',
+        title: 'Cards',
+        data: {title: 'Cards'} satisfies PageChromeData,
+        loadComponent: () => import('./features/cards/cards.page').then(m => m.CardsPage),
+      },
+      {
+        path: 'cards/:store',
+        title: 'Loyalty card',
+        data: {title: 'Loyalty card', parent: '/cards'} satisfies PageChromeData,
+        loadComponent: () => import('./features/cards/card.page').then(m => m.CardPage),
       },
       {
         path: 'more',

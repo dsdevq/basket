@@ -2,18 +2,20 @@
 
 Where to buy what I buy: grocery app over Lidl, Aldi, Tesco and Dunnes in Dublin.
 
-For the two of us first: **one shared shopping list** on the phone, and (M2) **prices** read every night for the products
-we buy. Matching, a shop plan and Lidl Plus receipts come in later milestones (see [docs/decisions.md](docs/decisions.md)).
+For the two of us first: **one shared shopping list** on the phone ("Done shopping" files the ticked items as a trip in
+History, and a past trip can be reloaded onto the list; the Shelf tab adds products picked from a shop, no typing, and the Plan tab shows the best shop for each line), (M2) **prices** read every night for the products
+we buy, and the four shops' **loyalty cards** as barcodes to show at the till. Once Lidl Plus is connected, its **receipts** come in every night as past trips in History, with the last price paid. Matching comes in a later milestone (see [docs/decisions.md](docs/decisions.md)).
 
 ## What is here (M1, M2)
 
 - `backend/` - .NET 10 minimal API: ASP.NET Core Identity with passkeys and one-time invite links, the shared list,
-  EF Core + Postgres, Hangfire, Serilog. Tests in `backend/tests/Basket.Tests` (real WebAuthn ceremonies against a
+  the shop loyalty cards (`Cards`, numbers encrypted at rest), EF Core + Postgres, Hangfire, Serilog. Tests in `backend/tests/Basket.Tests` (real WebAuthn ceremonies against a
   software authenticator).
 - `backend/src/Basket.Api/Prices` - M2: the nightly Hangfire price pull (Lidl), its parsers and polite fetcher, the
-  product and price endpoints, and `Prices/Ingest`: the token-signed write-only endpoint the owner's PC posts Tesco, Aldi and Dunnes prices to. Tests use recorded shop pages in `backend/tests/Basket.Tests/Fixtures`, never the network.
+  product and price endpoints, `Prices/Promotions` (the Promotions view, under More: current promos ranked by unit price, rule in [decisions](docs/decisions.md)), and `Prices/Ingest`: the token-signed write-only endpoint the owner's PC posts Tesco, Aldi and Dunnes prices to. Tests use recorded shop pages in `backend/tests/Basket.Tests/Fixtures`, never the network.
 - `backend/src/Basket.Api/Matching` - the shelf's base: deterministic candidate matching (barcode, name and size rules, no model) that proposes each product's equivalent in the other shops and never overwrites a match the owner confirmed ([decisions](docs/decisions.md)).
-- `pc-reader/` - the small Node program that reads Tesco, Aldi and Dunnes product pages in a browser on the owner's PC and posts
+- `backend/src/Basket.Api/Plan` - `GET /api/plan`: the best shop per list line and whether one shop covers the whole list (if none does, the cheapest two-shop split that does); unmatched or stale lines are flagged, never guessed (rule in [decisions](docs/decisions.md)). The Plan tab shows it, and its "By shop" page (`GET /api/plan/by-shop`) prices the whole list at each shop, with what each lacks and the cheapest split.
+- `pc-reader/` - the small Node program that reads Aldi and Dunnes product pages (Tesco is paused) in a browser on the owner's PC and posts
   them to the ingest endpoint ([README](pc-reader/README.md)).
 - `frontend/` - Angular 22 on [lifekit-common](https://github.com/lifekit-hq/lifekit-common) (`@lifekit-hq/ui`,
   `core`, `tokens`), Violet `#7c3aed` seed, phone-first with bottom sheets.

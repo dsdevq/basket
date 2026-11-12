@@ -1,5 +1,5 @@
-import {expect, test} from '@playwright/test';
 import {checkScreen, formatScreen, SCREEN_VIEWPORTS} from '@lifekit-hq/tokens/screen';
+import {expect, test} from '@playwright/test';
 
 import {ROUTES} from './support/screens';
 
@@ -15,6 +15,7 @@ for (const [size, use] of Object.entries(SCREEN_VIEWPORTS)) {
         await route.setup(page);
         await page.goto(route.path);
         await page.locator('cmn-page').first().waitFor();
+        await route.reveal?.(page);
 
         const result = await checkScreen(page);
 

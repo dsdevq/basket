@@ -2,6 +2,12 @@ export type StoreId = 'tesco' | 'aldi' | 'dunnes';
 
 export const STORES: readonly StoreId[] = ['aldi', 'dunnes', 'tesco'];
 
+/**
+ * The stores a run actually reads. Tesco is paused (its prices are not worth keeping warm for now): entries for it in
+ * the page list are skipped with one log line per run. To read Tesco again, add 'tesco' back here.
+ */
+export const ENABLED_STORES: readonly StoreId[] = ['aldi', 'dunnes'];
+
 /** One reading in the shape `POST /api/ingest/prices` takes. Absent fields are left out, never sent as null. */
 export interface Reading {
   store: StoreId;
@@ -15,6 +21,10 @@ export interface Reading {
   validFrom?: string;
   validUntil?: string;
   inStock?: boolean;
+  /** The product photo's address (https, at most 500 characters); the server stores the address, never the picture. */
+  imageUrl?: string;
+  /** The page's breadcrumb as a path, outermost first, " > " between ("Chilled Food > Milk"). */
+  category?: string;
 }
 
 export interface WorkItem {

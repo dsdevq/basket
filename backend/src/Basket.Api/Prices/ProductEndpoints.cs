@@ -8,10 +8,10 @@ namespace Basket.Api.Prices;
 
 public sealed record AddProductRequest(string? Name, string? Barcode = null);
 
-public sealed record LinkStoreRequest(string? Url);
+public sealed record LinkStoreRequest(string? Url, string? ImageUrl = null);
 
 /// <summary><see cref="Confirmed"/>: a person chose this page as the product's equivalent here (see <c>StoreListing.ConfirmedAt</c>).</summary>
-public sealed record ListingResponse(string Url, string? Title, DateTimeOffset? CheckedAt, string? Error, bool Confirmed);
+public sealed record ListingResponse(string Url, string? Title, DateTimeOffset? CheckedAt, string? Error, string? Category, string? ImageUrl, bool Confirmed);
 
 /// <summary>
 /// One dated reading. <see cref="State"/>: <c>current</c> (usable today), <c>upcoming</c> (the offer starts later),
@@ -28,9 +28,13 @@ public sealed record PriceResponse(
     string? PromoText,
     DateOnly? ValidFrom,
     DateOnly? ValidUntil,
-    decimal? Best);
+    decimal? Best,
+    bool InStock);
 
-/// <summary>The last price really paid. <c>not_connected</c> until the owner's one-off Lidl Plus login exists (M4).</summary>
+/// <summary>
+/// The last price really paid, from Lidl Plus receipts. <c>known</c> with the price and day; <c>none</c> when Lidl Plus is connected
+/// but no receipt has this product; <c>not_connected</c> until the owner has pasted the Lidl Plus token.
+/// </summary>
 public sealed record PaidResponse(string State, decimal? Price, DateOnly? PaidOn);
 
 public sealed record ProductStoreResponse(
@@ -72,6 +76,7 @@ public static class ProductEndpoints
         var products = await db.Products.AsNoTracking().OrderBy(p => p.Name).ToListAsync(ct);
         var listings = (await db.StoreListings.AsNoTracking().ToListAsync(ct)).ToLookup(l => l.ProductId);
         var latest = await LatestObservationsAsync(db, ct);
+        var connected = await db.LidlPlusConnections.AnyAsync(ct);
         var paid = (await db.PaidPrices.AsNoTracking().ToListAsync(ct))
             .GroupBy(p => (p.ProductId, p.Store))
             .ToDictionary(g => g.Key, g => g.OrderByDescending(p => p.PaidOn).First());
@@ -83,12 +88,12 @@ public static class ProductEndpoints
             {
                 var listing = listings[product.Id].FirstOrDefault(l => l.Store == store);
                 return new ProductStoreResponse(
-                    Slug(store),
+                    store.Slug(),
                     store.DisplayName(),
                     store.ReadBy(),
-                    listing is null ? null : new ListingResponse(listing.Url, listing.Title, listing.LastCheckedAt, listing.LastError, listing.ConfirmedAt is not null),
+                    listing is null ? null : new ListingResponse(listing.Url, listing.Title, listing.LastCheckedAt, listing.LastError, listing.Category, listing.ImageUrl, listing.ConfirmedAt is not null),
                     listing is not null && latest.TryGetValue(listing.Id, out var observation) ? ToPrice(observation, today) : null,
-                    LastPaid(store, paid.GetValueOrDefault((product.Id, store))));
+                    LastPaid(store, paid.GetValueOrDefault((product.Id, store)), connected));
             }).ToList(),
             product.Barcode)).ToList();
 
@@ -100,7 +105,7 @@ public static class ProductEndpoints
         {
             var run = runs.FirstOrDefault(r => r.Store == store);
             return new StoreStatusResponse(
-                Slug(store),
+                store.Slug(),
                 store.DisplayName(),
                 store.ReadBy(),
                 run is null ? null : new RunResponse(run.FinishedAt, run.Outcome.ToString().ToLowerInvariant(), run.Listings, run.Read, run.Message));
@@ -163,10 +168,11 @@ public static class ProductEndpoints
         db.Products.Add(product);
         await db.SaveChangesAsync(ct);
 
+        var connected = await db.LidlPlusConnections.AnyAsync(ct);
         var created = new ProductResponse(
             product.Id,
             product.Name,
-            Stores.All.Select(s => new ProductStoreResponse(Slug(s), s.DisplayName(), s.ReadBy(), null, null, LastPaid(s, null))).ToList(),
+            Stores.All.Select(s => new ProductStoreResponse(s.Slug(), s.DisplayName(), s.ReadBy(), null, null, LastPaid(s, null, connected))).ToList(),
             product.Barcode);
         return Results.Created($"/api/products/{product.Id}", created);
     }
@@ -183,14 +189,18 @@ public static class ProductEndpoints
             return Guid.Parse(http.User.FindFirstValue(ClaimTypes.NameIdentifier)!);
         }
 
-        return await (
+        return await OwnerIdAsync(db, ct);
+    }
+
+    /// <summary>The household owner (the first one, should there ever be more), who anything made without a person is recorded against.</summary>
+    internal static async Task<Guid?> OwnerIdAsync(AppDbContext db, CancellationToken ct) =>
+        await (
             from u in db.Users.AsNoTracking()
             join ur in db.UserRoles on u.Id equals ur.UserId
             join r in db.Roles on ur.RoleId equals r.Id
             where r.Name == Roles.Owner
             orderby u.CreatedAt
             select (Guid?)u.Id).FirstOrDefaultAsync(ct);
-    }
 
     private static async Task<IResult> DeleteProduct(Guid id, AppDbContext db, CancellationToken ct) =>
         await db.Products.Where(p => p.Id == id).ExecuteDeleteAsync(ct) == 0 ? Results.NotFound() : Results.NoContent();
@@ -222,6 +232,12 @@ public static class ProductEndpoints
         }
 
         var byPerson = !FleetAgent.HasBearer(http.Request);
+        string? imageUrl = null;
+        if (!string.IsNullOrWhiteSpace(request.ImageUrl) && !ImageUrls.TryNormalize(request.ImageUrl, out imageUrl))
+        {
+            return Results.Json(new { error = "image_invalid", message = "The photo has to be an https address." }, statusCode: 400);
+        }
+
         var listing = await db.StoreListings.SingleOrDefaultAsync(l => l.ProductId == id && l.Store == shop, ct);
         if (!byPerson && listing?.ConfirmedAt is not null && listing.Url != url.ToString())
         {
@@ -240,12 +256,15 @@ public static class ProductEndpoints
         {
             // A different page is a different product: forget what the old one said.
             listing.Title = null;
+            listing.ImageUrl = null;
+            listing.Category = null;
             listing.LastCheckedAt = null;
             listing.LastError = null;
             await db.PriceObservations.Where(o => o.ListingId == listing.Id).ExecuteDeleteAsync(ct);
         }
 
         listing.Url = url.ToString();
+        listing.ImageUrl = imageUrl ?? listing.ImageUrl;
         if (byPerson)
         {
             // A person pasting a page is choosing it: that is a confirmed match, and the shop's open proposals are settled.
@@ -254,7 +273,7 @@ public static class ProductEndpoints
         }
 
         await db.SaveChangesAsync(ct);
-        return Results.Ok(new ListingResponse(listing.Url, listing.Title, listing.LastCheckedAt, listing.LastError, listing.ConfirmedAt is not null));
+        return Results.Ok(new ListingResponse(listing.Url, listing.Title, listing.LastCheckedAt, listing.LastError, listing.Category, listing.ImageUrl, listing.ConfirmedAt is not null));
     }
 
     private static async Task<IResult> UnlinkStore(Guid id, string store, AppDbContext db, CancellationToken ct) =>
@@ -269,28 +288,23 @@ public static class ProductEndpoints
             .ToListAsync(ct))
         .ToDictionary(o => o.ListingId);
 
-    private static PaidResponse? LastPaid(Store store, PaidPrice? paid) =>
+    private static PaidResponse? LastPaid(Store store, PaidPrice? paid, bool connected) =>
         store != Store.Lidl
             ? null
             : paid is not null
                 ? new PaidResponse("known", paid.Price, paid.PaidOn)
-                // The receipts feed needs the owner's one-off Lidl Plus login, which is built in milestone 4.
-                : new PaidResponse("not_connected", null, null);
+                // Receipts come in through the owner's Lidl Plus connection; without it nothing can be known.
+                : new PaidResponse(connected ? "none" : "not_connected", null, null);
 
     private static PriceResponse ToPrice(PriceObservation o, DateOnly today)
     {
-        var state = o.ValidFrom is { } from && from > today ? "upcoming"
-            : o.ValidUntil is { } until && until < today ? "ended"
-            : o.Price is null && o.LoyaltyPrice is null ? "unavailable"
-            : "current";
-        decimal? best = state == "current"
+        var state = PriceStates.Of(o, today);
+        decimal? best = state == PriceStates.Current
             ? new[] { o.Price, o.LoyaltyPrice }.Where(p => p is not null).Min()
             : null;
-        return new PriceResponse(o.ObservedOn, state, o.Price, o.WasPrice, o.LoyaltyPrice, o.LoyaltyScheme, o.PromoText, o.ValidFrom, o.ValidUntil, best);
+        return new PriceResponse(o.ObservedOn, state, o.Price, o.WasPrice, o.LoyaltyPrice, o.LoyaltyScheme, o.PromoText, o.ValidFrom, o.ValidUntil, best, o.InStock);
     }
 
     private static DateOnly Today(TimeProvider clock) =>
         DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(clock.GetUtcNow(), Dublin).DateTime);
-
-    private static string Slug(Store store) => store.ToString().ToLowerInvariant();
 }

@@ -1,40 +1,36 @@
 import {
   ChangeDetectionStrategy,
   Component,
-  computed,
   CUSTOM_ELEMENTS_SCHEMA,
   inject,
+  input,
 } from '@angular/core';
-import {Router, RouterOutlet} from '@angular/router';
+import {RouterOutlet} from '@angular/router';
 import {AppUpdateService} from '@lifekit-hq/core/pwa';
-import {
-  ACCOUNT_SIGN_OUT_ID,
-  accountMenu,
-  type AppLayoutAccount,
-  AppLayoutComponent,
-  type MenuItem,
-  type NavItem,
-} from '@lifekit-hq/ui';
+import {AppLayoutComponent, type MenuItem, PageComponent, SkeletonComponent} from '@lifekit-hq/ui';
 
-import {SessionStore} from '../auth/session.store';
+import type {PendingPage} from './pending-route';
+import {ShellChromeService} from './shell-chrome.service';
 
-const LIST: NavItem = {label: 'List', icon: 'ShoppingBasket', route: '/list'};
-const PRICES: NavItem = {label: 'Prices', icon: 'Tag', route: '/prices'};
-const PEOPLE: NavItem = {label: 'People', icon: 'Users', route: '/people'};
-
-/** The signed-in frame: the lifekit app layout with List and Prices as the tabs and People/Settings behind More. */
+/** The signed-in frame: the lifekit app layout with List, Shelf, Plan and Cards as the tabs and Prices, Promotions, People and Settings behind More. */
 @Component({
   selector: 'bk-app-shell',
-  imports: [AppLayoutComponent, RouterOutlet],
+  imports: [AppLayoutComponent, PageComponent, RouterOutlet, SkeletonComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   schemas: [CUSTOM_ELEMENTS_SCHEMA],
   template: `
     <cmn-app-layout
-      [navItems]="navItems()"
-      [tabRoutes]="tabRoutes"
-      [account]="account()"
+      [navItems]="chrome.navItems()"
+      [paletteItems]="chrome.paletteItems()"
+      [tabRoutes]="chrome.tabRoutes"
+      [account]="chrome.account()"
+      [accountPending]="!!pending()"
+      [versionLabel]="chrome.versionLabel"
+      [versionDot]="chrome.versionDot()"
       [phoneOverlay]="true"
       (avatarMenuSelect)="onMenu($event)"
+      (paletteAction)="onPaletteAction($event)"
+      (versionClick)="chrome.openWhatsNew()"
       brand="basket"
       moreRoute="/more"
     >
@@ -44,36 +40,34 @@ const PEOPLE: NavItem = {label: 'People', icon: 'Users', route: '/people'};
           [ready]="update.updateReady()"
           (lk-update-prompt-reload)="update.reload()"
         />
+        <lk-install-hint />
       </div>
-      <router-outlet />
+      @if (pending(); as page) {
+        <cmn-page [kind]="page.kind" [title]="page.title" fill>
+          <div role="status" aria-label="Loading">
+            <cmn-skeleton [shape]="page.shape" />
+          </div>
+        </cmn-page>
+      } @else {
+        <router-outlet />
+      }
     </cmn-app-layout>
   `,
 })
 export class AppShellComponent {
-  private readonly session = inject(SessionStore);
-  private readonly router = inject(Router);
+  /** The page to hold while the session call is out; unset once the routed page can show. */
+  public readonly pending = input<PendingPage | null>(null);
 
+  protected readonly chrome = inject(ShellChromeService);
   protected readonly update = inject(AppUpdateService);
 
-  protected readonly tabRoutes = [LIST.route, PRICES.route];
-  protected readonly navItems = computed<NavItem[]>(() =>
-    this.session.isOwner() ? [LIST, PRICES, PEOPLE] : [LIST, PRICES]
-  );
-  protected readonly account = computed<AppLayoutAccount | undefined>(() => {
-    const user = this.session.user();
-    return user
-      ? {
-          label: user.displayName,
-          name: user.displayName,
-          menuItems: accountMenu({settingsRoute: '/settings'}),
-        }
-      : undefined;
-  });
-
+  /** The layout navigates to Settings itself; the app handles What's new and Sign out. */
   protected async onMenu(item: MenuItem): Promise<void> {
-    if (item.id === ACCOUNT_SIGN_OUT_ID) {
-      await this.session.signOut();
-      await this.router.navigateByUrl('/sign-in');
-    }
+    await this.chrome.handle(item.id);
+  }
+
+  /** The layout navigates to pages and applies the appearance entries itself. */
+  protected async onPaletteAction(id: string): Promise<void> {
+    await this.chrome.handle(id);
   }
 }

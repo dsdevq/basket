@@ -15,6 +15,8 @@ export interface Price {
   readonly validUntil: string | null;
   /** The lowest price a card holder pays today, when `current`. */
   readonly best: number | null;
+  /** False when the shop listed the product as out of stock on the day it was read. */
+  readonly inStock: boolean;
 }
 
 export interface Listing {
@@ -22,11 +24,16 @@ export interface Listing {
   readonly title: string | null;
   readonly checkedAt: string | null;
   readonly error: string | null;
+  /** The shop's photo of the product (https), once a reader has sent one. */
+  readonly imageUrl: string | null;
 }
 
-/** The last price really paid; `not_connected` until the one-off Lidl Plus login exists. */
+/**
+ * The last price really paid, from Lidl Plus receipts: `known`, `none` (connected, but no receipt has this product) or
+ * `not_connected` (the Lidl Plus token has not been pasted yet).
+ */
 export interface Paid {
-  readonly state: 'not_connected' | 'known';
+  readonly state: 'not_connected' | 'none' | 'known';
   readonly price: number | null;
   readonly paidOn: string | null;
 }

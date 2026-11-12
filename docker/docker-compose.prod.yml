@@ -1,21 +1,17 @@
 # basket - production stack on the VPS. Project name `basket`: always run it with `-p basket` (the name below
 # also pins it), so it never collides with another stack on the box.
 #
-#   docker compose -f docker/docker-compose.prod.yml --env-file ~/.config/basket/env up -d --build
+#   IMAGE_TAG=<full commit SHA> docker/deploy.sh
 #
-# The env file holds the secrets and is NOT in git (~/.config/basket/env; see docs/vps-setup.md and
-# docker/.env.example). docker/deploy.sh wraps the command above.
+# The app runs the image CI published for one commit, ghcr.io/dsdevq/basket:<IMAGE_TAG>; the deploy pulls it and builds
+# nothing, so IMAGE_TAG is required. The secrets are docker/.env.sops (SOPS + age), which deploy.sh decrypts into the git-ignored
+# docker/.env; see docs/vps-setup.md and docker/.env.example.
 # The app listens on 127.0.0.1:3310 only; Tailscale Funnel (port 10000) is the one public way in.
 name: basket
 
 services:
   app:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
-      secrets:
-        - npm_token
-    image: basket-app:${IMAGE_TAG:-local}
+    image: ghcr.io/dsdevq/basket:${IMAGE_TAG:?set IMAGE_TAG to the full commit SHA to deploy}
     container_name: basket-app
     restart: unless-stopped
     depends_on:
@@ -30,12 +26,31 @@ services:
       # The fleet's machine identity (docs/decisions.md "Fleet identity"). Empty = the path is off; neither is a secret.
       FleetAgent__Authority: "${FLEET_AGENT_AUTHORITY:-}"
       FleetAgent__BackchannelAuthority: "${FLEET_AGENT_BACKCHANNEL_AUTHORITY:-}"
+      # Sign-in through the org identity provider (Logto), like finance-sentry (docs/decisions.md "Org sign-in"). All empty =
+      # passkeys only, as before. The client secret is a secret: it comes from the env file, never from git.
+      Auth__Oidc__Authority: "${AUTH_OIDC_AUTHORITY:-}"
+      Auth__Oidc__ClientId: "${AUTH_OIDC_CLIENT_ID:-}"
+      Auth__Oidc__ClientSecret: "${AUTH_OIDC_CLIENT_SECRET:-}"
+      Auth__Oidc__PublicBaseUrl: "${AUTH_OIDC_PUBLIC_BASE_URL:-}"
+      Auth__Oidc__BackchannelAuthority: "${AUTH_OIDC_BACKCHANNEL_AUTHORITY:-}"
       TZ: Europe/Dublin
     volumes:
       - keys:/keys
     # `default` reaches db; `identity-oidc` is the external network the identity service (Logto) shares with its on-box
-    # clients, so FleetAgent__BackchannelAuthority=http://logto:3001/oidc resolves (docs/decisions.md "Fleet identity").
-    networks: [default, identity-oidc]
+    # clients, so FleetAgent__BackchannelAuthority and Auth__Oidc__BackchannelAuthority = http://logto:3001/oidc resolve
+    # (docs/decisions.md "Fleet identity", "Org sign-in").
+    # `lifekit-shared` is where the box Prometheus reaches basket-app:3310/metrics (lifekit-stack scrape job `basket`).
+    networks: [default, identity-oidc, lifekit-shared]
+    # The platform contract (lifekit-stack docs/platform-contract.md): checked by docker/deploy.sh before `up`
+    # (--static) and after (--project basket). The loopback port above is the tailnet edge's upstream, so `edge`.
+    labels:
+      lifekit.contract: "v1"
+      lifekit.contract.port: "3310"
+      lifekit.contract.health: /api/health
+      lifekit.contract.ready: /api/health/ready
+      lifekit.contract.metrics: /metrics
+      lifekit.contract.ingress: edge
+      lifekit.contract.service: basket
     tmpfs:
       - /tmp:size=16m
     read_only: true
@@ -53,6 +68,9 @@ services:
     image: postgres:17-alpine
     container_name: basket-db
     restart: unless-stopped
+    # A datastore, not a product: no HTTP surface to probe (the contract's `none`). Nothing else reaches it.
+    labels:
+      lifekit.contract: "none"
     environment:
       POSTGRES_DB: basket
       POSTGRES_USER: basket
@@ -92,11 +110,9 @@ networks:
   # Created by lifekit-stack's deploy.sh, not by this stack; joined only by the app, never the database.
   identity-oidc:
     external: true
-
-secrets:
-  # The npm registry token for the image build only (@lifekit-hq/* on GitHub Packages): export NODE_AUTH_TOKEN.
-  npm_token:
-    environment: NODE_AUTH_TOKEN
+  # Created by lifekit-stack's deploy.sh too; `up` fails if it is missing.
+  lifekit-shared:
+    external: true
 
 volumes:
   pgdata:
