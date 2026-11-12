@@ -1,15 +1,17 @@
 using System.Security.Claims;
 using Basket.Api.Auth;
 using Basket.Api.Data;
+using Basket.Api.Matching;
 using Microsoft.EntityFrameworkCore;
 
 namespace Basket.Api.Prices;
 
-public sealed record AddProductRequest(string? Name);
+public sealed record AddProductRequest(string? Name, string? Barcode = null);
 
 public sealed record LinkStoreRequest(string? Url, string? ImageUrl = null);
 
-public sealed record ListingResponse(string Url, string? Title, DateTimeOffset? CheckedAt, string? Error, string? Category, string? ImageUrl);
+/// <summary><see cref="Confirmed"/>: a person chose this page as the product's equivalent here (see <c>StoreListing.ConfirmedAt</c>).</summary>
+public sealed record ListingResponse(string Url, string? Title, DateTimeOffset? CheckedAt, string? Error, string? Category, string? ImageUrl, bool Confirmed);
 
 /// <summary>
 /// One dated reading. <see cref="State"/>: <c>current</c> (usable today), <c>upcoming</c> (the offer starts later),
@@ -43,7 +45,7 @@ public sealed record ProductStoreResponse(
     PriceResponse? Price,
     PaidResponse? LastPaid);
 
-public sealed record ProductResponse(Guid Id, string Name, IReadOnlyList<ProductStoreResponse> Stores);
+public sealed record ProductResponse(Guid Id, string Name, IReadOnlyList<ProductStoreResponse> Stores, string? Barcode);
 
 public sealed record RunResponse(DateTimeOffset FinishedAt, string Outcome, int Listings, int Read, string? Message);
 
@@ -89,10 +91,11 @@ public static class ProductEndpoints
                     store.Slug(),
                     store.DisplayName(),
                     store.ReadBy(),
-                    listing is null ? null : new ListingResponse(listing.Url, listing.Title, listing.LastCheckedAt, listing.LastError, listing.Category, listing.ImageUrl),
+                    listing is null ? null : new ListingResponse(listing.Url, listing.Title, listing.LastCheckedAt, listing.LastError, listing.Category, listing.ImageUrl, listing.ConfirmedAt is not null),
                     listing is not null && latest.TryGetValue(listing.Id, out var observation) ? ToPrice(observation, today) : null,
                     LastPaid(store, paid.GetValueOrDefault((product.Id, store)), connected));
-            }).ToList())).ToList();
+            }).ToList(),
+            product.Barcode)).ToList();
 
         var runs = await db.PricePullRuns.AsNoTracking()
             .GroupBy(r => r.Store)
@@ -134,6 +137,20 @@ public static class ProductEndpoints
             return Results.Json(new { error = "product_exists", message = "That product is already tracked." }, statusCode: 409);
         }
 
+        string? barcode = null;
+        if (!string.IsNullOrWhiteSpace(request.Barcode))
+        {
+            if (!Gtin.TryNormalize(request.Barcode, out barcode))
+            {
+                return Results.Json(new { error = "barcode_invalid", message = "That is not a valid barcode (8, 12, 13 or 14 digits with a correct check digit)." }, statusCode: 400);
+            }
+
+            if (await db.Products.AnyAsync(p => p.Barcode == barcode, ct))
+            {
+                return MatchEndpoints.BarcodeExists();
+            }
+        }
+
         var addedBy = await AddedByAsync(http, db, ct);
         if (addedBy is null)
         {
@@ -146,15 +163,24 @@ public static class ProductEndpoints
             Name = name,
             AddedAt = clock.GetUtcNow(),
             AddedByUserId = addedBy.Value,
+            Barcode = barcode,
         };
         db.Products.Add(product);
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException) when (barcode is not null)
+        {
+            return MatchEndpoints.BarcodeExists();
+        }
 
         var connected = await db.LidlPlusConnections.AnyAsync(ct);
         var created = new ProductResponse(
             product.Id,
             product.Name,
-            Stores.All.Select(s => new ProductStoreResponse(s.Slug(), s.DisplayName(), s.ReadBy(), null, null, LastPaid(s, null, connected))).ToList());
+            Stores.All.Select(s => new ProductStoreResponse(s.Slug(), s.DisplayName(), s.ReadBy(), null, null, LastPaid(s, null, connected))).ToList(),
+            product.Barcode);
         return Results.Created($"/api/products/{product.Id}", created);
     }
 
@@ -190,6 +216,7 @@ public static class ProductEndpoints
         Guid id,
         string store,
         LinkStoreRequest request,
+        HttpContext http,
         AppDbContext db,
         TimeProvider clock,
         CancellationToken ct)
@@ -211,6 +238,7 @@ public static class ProductEndpoints
                 statusCode: 400);
         }
 
+        var byPerson = !FleetAgent.HasBearer(http.Request);
         string? imageUrl = null;
         if (!string.IsNullOrWhiteSpace(request.ImageUrl) && !ImageUrls.TryNormalize(request.ImageUrl, out imageUrl))
         {
@@ -218,6 +246,14 @@ public static class ProductEndpoints
         }
 
         var listing = await db.StoreListings.SingleOrDefaultAsync(l => l.ProductId == id && l.Store == shop, ct);
+        if (!byPerson && listing?.ConfirmedAt is not null && listing.Url != url.ToString())
+        {
+            // A person chose that page; a machine does not get to swap it. Only a person relinking can.
+            return Results.Json(
+                new { error = "match_confirmed", message = $"{shop.DisplayName()} already has a confirmed page for this product." },
+                statusCode: 409);
+        }
+
         if (listing is null)
         {
             listing = new StoreListing { Id = Guid.NewGuid(), ProductId = id, Store = shop, AddedAt = clock.GetUtcNow() };
@@ -236,8 +272,15 @@ public static class ProductEndpoints
 
         listing.Url = url.ToString();
         listing.ImageUrl = imageUrl ?? listing.ImageUrl;
+        if (byPerson)
+        {
+            // A person pasting a page is choosing it: that is a confirmed match, and the shop's open proposals are settled.
+            listing.ConfirmedAt = clock.GetUtcNow();
+            await db.MatchCandidates.Where(c => c.ProductId == id && c.Store == shop && c.Status == CandidateStatus.Proposed).ExecuteDeleteAsync(ct);
+        }
+
         await db.SaveChangesAsync(ct);
-        return Results.Ok(new ListingResponse(listing.Url, listing.Title, listing.LastCheckedAt, listing.LastError, listing.Category, listing.ImageUrl));
+        return Results.Ok(new ListingResponse(listing.Url, listing.Title, listing.LastCheckedAt, listing.LastError, listing.Category, listing.ImageUrl, listing.ConfirmedAt is not null));
     }
 
     private static async Task<IResult> UnlinkStore(Guid id, string store, AppDbContext db, CancellationToken ct) =>

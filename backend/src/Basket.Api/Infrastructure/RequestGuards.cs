@@ -28,7 +28,8 @@ public sealed partial class OriginCheckMiddleware(RequestDelegate next, IOptions
     /// <summary>
     /// The price reader and the fleet identity are programs, not pages: they send no Origin and sign with a bearer
     /// token. The ingest endpoint never looks at the session cookie and answers 401 without a valid token. The catalog
-    /// add (<c>POST /api/products</c>) and the store-page link (<c>PUT /api/products/{id}/stores/{store}</c>) take the
+    /// add (<c>POST /api/products</c>), the store-page link (<c>PUT /api/products/{id}/stores/{store}</c>), the barcode
+    /// (<c>PUT /api/products/{id}/barcode</c>) and the match proposals (<c>POST /api/products/{id}/candidates</c>) take the
     /// bearer path only when the request carries a bearer header, and then ignore the cookie entirely; a cross-site page
     /// cannot set that header, so there is nothing for a forged request to ride on. No other product route is skipped.
     /// </summary>
@@ -40,11 +41,19 @@ public sealed partial class OriginCheckMiddleware(RequestDelegate next, IOptions
     {
         var path = (request.Path.Value ?? string.Empty).TrimEnd('/');
         return (HttpMethods.IsPost(request.Method) && string.Equals(path, "/api/products", StringComparison.OrdinalIgnoreCase))
-            || (HttpMethods.IsPut(request.Method) && StoreLinkPath().IsMatch(path));
+            || (HttpMethods.IsPut(request.Method) && StoreLinkPath().IsMatch(path))
+            || (HttpMethods.IsPut(request.Method) && BarcodePath().IsMatch(path))
+            || (HttpMethods.IsPost(request.Method) && CandidatesPath().IsMatch(path));
     }
 
     [GeneratedRegex("^/api/products/[0-9a-fA-F-]{36}/stores/[^/]+$")]
     private static partial Regex StoreLinkPath();
+
+    [GeneratedRegex("^/api/products/[0-9a-fA-F-]{36}/barcode$")]
+    private static partial Regex BarcodePath();
+
+    [GeneratedRegex("^/api/products/[0-9a-fA-F-]{36}/candidates$")]
+    private static partial Regex CandidatesPath();
 }
 
 /// <summary>Response headers for a public surface. The CSP is configuration so the theme script's hash can be pinned in it.</summary>
