@@ -41,6 +41,10 @@ secrets; `docker/.env.example` and `docs/decisions.md` "Fleet identity" say what
 Docker network `identity-oidc`, which lifekit-stack creates; check that `docker network inspect identity-oidc` works
 before the deploy. Both empty keeps the path off.
 
+Sign-in through the org Logto is a separate optional path: the five `AUTH_OIDC_*` values in `docker/.env.example` (the
+client secret is a secret) switch it on, and all empty keeps sign-in passkey-only. Leave them empty in production until
+the account-linking step ships (`docs/decisions.md` "Org sign-in").
+
 ### 2. Start the stack
 
 ```sh
