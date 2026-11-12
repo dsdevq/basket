@@ -39,7 +39,18 @@ services:
     # `default` reaches db; `identity-oidc` is the external network the identity service (Logto) shares with its on-box
     # clients, so FleetAgent__BackchannelAuthority and Auth__Oidc__BackchannelAuthority = http://logto:3001/oidc resolve
     # (docs/decisions.md "Fleet identity", "Org sign-in").
-    networks: [default, identity-oidc]
+    # `lifekit-shared` is where the box Prometheus reaches basket-app:3310/metrics (lifekit-stack scrape job `basket`).
+    networks: [default, identity-oidc, lifekit-shared]
+    # The platform contract (lifekit-stack docs/platform-contract.md): checked by docker/deploy.sh before `up`
+    # (--static) and after (--project basket). The loopback port above is the tailnet edge's upstream, so `edge`.
+    labels:
+      lifekit.contract: "v1"
+      lifekit.contract.port: "3310"
+      lifekit.contract.health: /api/health
+      lifekit.contract.ready: /api/health/ready
+      lifekit.contract.metrics: /metrics
+      lifekit.contract.ingress: edge
+      lifekit.contract.service: basket
     tmpfs:
       - /tmp:size=16m
     read_only: true
@@ -57,6 +68,9 @@ services:
     image: postgres:17-alpine
     container_name: basket-db
     restart: unless-stopped
+    # A datastore, not a product: no HTTP surface to probe (the contract's `none`). Nothing else reaches it.
+    labels:
+      lifekit.contract: "none"
     environment:
       POSTGRES_DB: basket
       POSTGRES_USER: basket
@@ -95,6 +109,9 @@ services:
 networks:
   # Created by lifekit-stack's deploy.sh, not by this stack; joined only by the app, never the database.
   identity-oidc:
+    external: true
+  # Created by lifekit-stack's deploy.sh too; `up` fails if it is missing.
+  lifekit-shared:
     external: true
 
 volumes:

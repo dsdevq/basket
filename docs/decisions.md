@@ -80,8 +80,8 @@ and so on. Design and stuff like that. The only difference is domain basket appl
 the same as our apps. Like its one family bro, family of products. Same UI, same UX, same library, everything is the same. Only
 difference is basket use cases and business logic." And on reach: "my gf is on tailnet bro, we have her account for finance
 sentry." Q2 (invite link, then a passkey) was chosen because her phone was assumed to be off the tailnet; it is not, so the
-reason is gone and the org identity provider is the sign-in. This is the backend step (A2); the family sign-in pages, linking
-the two existing passkey accounts, the tailnet-only cutover and removing the passkey code are separate steps that follow.
+reason is gone and the org identity provider is the sign-in. This is the backend step (A2), and A3 below links the two existing
+passkey accounts; the family sign-in pages, the tailnet-only cutover and removing the passkey code are separate steps that follow.
 
 - **Off until configured.** `Auth:Oidc` (compose: `AUTH_OIDC_AUTHORITY`, `AUTH_OIDC_CLIENT_ID`, `AUTH_OIDC_CLIENT_SECRET`,
   `AUTH_OIDC_PUBLIC_BASE_URL`, `AUTH_OIDC_BACKCHANNEL_AUTHORITY`, all empty by default) switches it on only when the first four
@@ -100,11 +100,14 @@ the two existing passkey accounts, the tailnet-only cutover and removing the pas
   {endSessionUrl}` (RP-initiated logout with the `id_token_hint` kept at sign-in) for the SPA to navigate to, otherwise `204`.
   A refused sign-in redirects to `/access-denied`; a failed handshake to `/sign-in?error=OIDC_FAILED`; the provider returns to
   `/sign-in?info=signed_out` after sign-out. Those pages are the frontend step's.
-- **Which account.** A linked `sub` (an Identity `user_logins` row, provider `lifekit`) signs in, with or without the role. Otherwise
-  a **verified** email that matches exactly one account links to it, unless that account is already linked to another `sub`.
+- **Which account.** A linked `sub` (an Identity `user_logins` row, provider `lifekit`) signs in, with or without the role. Otherwise,
+  if the request also carries a **valid basket session** for an account with no `lifekit` login, that account takes the `sub` and the
+  person continues as it (the passkey accounts that predate the provider; see "Linking the passkey accounts" below). Otherwise a
+  **verified** email that matches exactly one account links to it, unless that account is already linked to another `sub`.
   Otherwise holding the provider role `basket` (`RequiredRole`) creates a Member, display name from `name`, else the email's local
-  part. Otherwise access is denied. An unverified email never links and never creates, even with the role; two accounts holding
-  the same email are never guessed between. Existing accounts are not role-checked, as in finance-sentry.
+  part, **but only while every usable account already has a `lifekit` login**. Otherwise access is denied. An unverified email never links
+  and never creates, even with the role; two accounts holding the same email are never guessed between. Existing accounts are not
+  role-checked, as in finance-sentry.
 - **The email.** It is stored on `users.email` when an account is created or linked from the provider, and a linked account that
   has none takes the provider's verified one (it never replaces one). `/api/session` returns `email` (null for an account that has
   none, such as a passkey-only one). No migration: `users.email` and `user_logins` are already in the Identity schema.
@@ -116,12 +119,26 @@ the two existing passkey accounts, the tailnet-only cutover and removing the pas
   external-login cookie (`basket-oidc-external`) and the OIDC correlation (`basket-oidc-correlation.`) and nonce
   (`basket-oidc-nonce.`) cookies are renamed from the defaults other apps use. The correlation and nonce cookies are SameSite=Lax
   because the provider returns by a cross-site GET.
-- **Until the linking step lands**, a person with the role whose email matches no account (the two existing accounts have none)
-  would get a new Member next to the old account. That is why the path stays off in production until the linking step ships.
+- **Linking the passkey accounts (2026-11-12, step A3).** The two existing accounts have no email, so the email match cannot find
+  them, and a role-holder who matched nothing would have been created as a second account beside the old one. Instead the
+  account's own session is the proof of whose it is (Logto vouches for the person, the `__Host-basket` cookie for the account),
+  the standard Identity "add an external login" pair. The cookie is SameSite=Strict, and the provider and basket share a site
+  (the same tailnet host, different ports), so it reaches the callback on the redirect from the provider.
+  - **At the callback**, a valid session for an account with no `lifekit` login gets the provider login added and continues as that
+    account, passkeys untouched. An account that already has a `lifekit` login never takes a second, and a locked-out account takes
+    none; the `sub` is then judged as if there were no session. A `sub` already linked to another account signs in as that account.
+  - **No duplicates.** While any usable (not locked-out) account has no `lifekit` login, a role-holder who matches no account is not created: the callback
+    redirects to `/link-required`, a page (the frontend step's, like `/access-denied`) that says to open basket on the phone they
+    already use, or to sign in with the passkey first. A locked-out account never blocks: it cannot link, so nobody could clear it. Once every usable account is linked, creation works as before.
+  - **`/api/session` reports `linkRequired: true`** for a session whose account has no `lifekit` login once the provider path is
+    configured (the passkey registration response does too: a new passkey account has none). It is always `false` when the path is
+    off. The SPA uses it to send the person through the provider once.
+  - No migration: the link is an Identity `user_logins` row.
 - **Tests** use an in-process fake provider (`FakeIdentityProvider`): a signing key generated per run, discovery, keys, the token
   exchange with the client secret and PKCE checked, and userinfo, all on the back-channel host through the real rewrite handler.
   They run the real OpenID Connect handler end to end and cover role present, role absent, unverified email, a verified email
-  linking, a linked `sub`, a second `sub` refused, duplicate emails, a forged or foreign-issuer callback, the cookie names, the
+  linking, a linked `sub`, a second `sub` refused, duplicate emails, a session linking exactly its own account, nothing created while
+  an account is unlinked (a locked-out one not counting), `linkRequired` on the session, a forged or foreign-issuer callback, the cookie names, the
   back channel, the logout URL with the hint, and the path off.
 
 ## Several passkeys per person
@@ -400,6 +417,7 @@ not a new one.
   item is never lost.
 - **Not done here.** The install hint (`lk-install-hint`), push, background sync and the iOS launch screen are separate; the
   hint was left out because it would add a banner to every browser visit and is not part of "offline shell and update prompt".
+  It was added to the notice slot on 2026-11-12 with the shared shell chrome (`ShellChromeService`).
   The e2e config keeps `serviceWorkers: 'block'` for every other spec (the worker fetches around `page.route`); only
   `offline-shell.spec.ts` allows it, against its own server that answers `/api`.
 
@@ -861,7 +879,8 @@ carried for them. Additive: no endpoint, schema or migration changes.
   manifest are unchanged: they name the same file names. While the user has their own colour, the library rewrites the tab icon to
   a `data:` URL; the CSP's `img-src` already allows `data:`.
 - **Alert frame (#84), Custom theme start (#89), command palette (#90)** need nothing from basket: they are library components
-  (`cmn-alert`, the theme picker in Settings > Appearance, the palette) that basket already uses.
+  (`cmn-alert`, the theme picker in Settings > Appearance, the palette). The palette's entries were supplied by basket from
+  2026-11-12, by `ShellChromeService`.
 - **Carbon is remembered.** The library keeps an explicit Carbon choice now, and its pre-paint script changed to match it, so
   `index.html`'s generated `theme-init` block was regenerated with `npm run sync:theme`. The inline script's `sha256` in
   `Security:ContentSecurityPolicy` (`backend/src/Basket.Api/appsettings.json`) changed with it; `npm run lint` checks the two
@@ -924,7 +943,7 @@ and no migration.
   is now **List, Shelf, Plan, Cards**; **Prices** joins Promotions behind More, in the order of the desktop sidebar (List, Shelf, Plan,
   Prices, Cards, Promotions, People). Plan took Prices' slot because Prices is where products are set up and shop pages linked
   (occasional), while the Shelf and the Plan are the weekly shopping loop and Cards must stay one tap away at the till. Reversible:
-  it is the `tabRoutes` list of the shell and of the More page.
+  it is the `PHONE_TAB_ROUTES` list in `ShellChromeService`, which the shell and the More page both read.
 - **The answer on top is the coverage.** A `cmn-verdict-header` says "One shop covers it" with that shop (and how many can, when
   several), or "No one shop covers it" with the closest shop and how many lines block it, or "No shop prices it yet". Under it, when
   one shop does not cover the list, a card "Not priced at <closest shop>" lists the blocking lines each with a short reason tag. The
@@ -1184,3 +1203,33 @@ Owner's words: "It should compare the products and show the best for price/value
 - **On the phone.** The answer on top keeps "No one shop covers it" and adds the pills "Best two: Lidl + Aldi", the total and the closest shop; under it one card per shop of the pair, "Buy at Lidl · €0.99", with its lines and prices, before the per-line cards. The rule card gains one sentence when a pair is shown. No migration, no new collection, no new route, no new component.
 - **Not in this change:** quantities on lines, a three-shop split, and routing (which shop to walk first).
 - **Tests.** Backend: `PlanTests` (the cheapest pair with a card price and dates, the pair chosen by lowest total and not by most lines, a tie, a line bought at the lower unit price although its pack costs more, a pair dropped when a line priced at both shops cannot be compared, no split when a line has no usable price or the list is empty, old and out-of-stock prices not counted). Frontend: the verdict wording (`plan-format.spec.ts`) and the page against a recorded response (`plan.page.spec.ts`), plus a `plan-split` screen in `e2e/support/screens.ts` for the route scan and the baselines. The new `plan-split` baseline is rendered by the Update screen baselines workflow on the PR branch after the pipeline's push is final, never committed by hand.
+
+## The platform contract (2026-11-12, family-align step B5)
+
+basket meets the box's platform contract (lifekit-stack `docs/platform-contract.md`, checked by `scripts/platform-contract.py`),
+the way finance-sentry and the dashboard do. Before this the live checker reported `basket-app` and `basket-db` as
+`UNDECLARED`.
+
+- **Declarations.** `docker/docker-compose.prod.yml` labels `basket-app` `lifekit.contract: "v1"` with port `3310`, health
+  `/api/health`, ready `/api/health/ready`, metrics `/metrics`, ingress `edge` (the loopback port is the tailnet edge's
+  upstream, as for the dashboard) and service `basket`. `basket-db` is `none`: a datastore with no HTTP surface and no
+  network but `default`.
+- **Metrics.** OpenTelemetry's ASP.NET Core and runtime instruments, exported as Prometheus text on `/metrics` (the same
+  packages as finance-sentry, metrics only; no traces exporter, the contract's traces item is not enforced yet). The app
+  joins the external `lifekit-shared` network so the box Prometheus reaches `basket-app:3310/metrics`. The meters are
+  process-wide, so the test hosts (dozens side by side) run with `Observability:Metrics:Enabled=false` and only the
+  platform-contract tests turn it on; in production it is on.
+- **`/metrics` is for Prometheus only.** It needs no sign-in, so a request that came through Tailscale (Serve or Funnel
+  always proxy with `X-Forwarded-For`; Prometheus never does) is answered 404. The numbers are not served on the public
+  address while the Funnel is still on, and not to tailnet devices either. The check runs before the forwarded-headers
+  middleware, which consumes the header.
+- **Logs.** The console sink writes one compact JSON object per line (`RenderedCompactJsonFormatter`), the trace id as
+  `@tr`. The container healthcheck's `/api/health` polls stay out of the log, but a health request that carries a
+  `traceparent` (the contract checker's probe) is logged, so a quiet app still shows a traced line.
+- **Deploy.** `docker/deploy.sh` runs `platform-contract.py --static` on the composed config before `up`, and after the app is healthy
+  runs `--project basket` with four attempts 15 s apart (Prometheus' `scraped` item reads its last scrape). A missing
+  checker fails the deploy; there is no waiver.
+- **Not in this repo.** The `scraped` item needs a Prometheus job for `basket-app:3310` in lifekit-stack's
+  `compose/observability/prometheus/prometheus.yml` (path `/metrics`, like the `lifekit-dashboard` job). Until that job
+  lands, the live checker reports `scraped` and `labels` as FAIL for `basket-app`.
+- **No migration.**

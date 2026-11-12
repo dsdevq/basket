@@ -1,4 +1,5 @@
-// Registers the shared lk-* PWA elements (the update prompt and offline banner in the app shell) before bootstrap.
+// Registers the shared lk-* PWA elements (update prompt, offline banner, install hint) before bootstrap so
+// lk-install-hint captures the browser's one-shot `beforeinstallprompt` event.
 import '@lifekit-hq/elements';
 
 import {bootstrapApplication} from '@angular/platform-browser';
