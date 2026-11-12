@@ -14,7 +14,7 @@ public enum ExternalLoginRefusal
     AccessDenied,
 
     /// <summary>
-    /// The person holds the app role and matches no account, but some account still has no provider login. Creating a Member now could
+    /// The person holds the app role and matches no account, but some usable account still has no provider login. Creating a Member now could
     /// duplicate that account's owner, so the person is sent to sign in with the old method first (see <see cref="ExternalLoginService"/>).
     /// </summary>
     LinkRequired,
@@ -34,7 +34,7 @@ public sealed record ExternalLoginResult(AppUser? User, ExternalLoginRefusal Ref
 /// Turns a provider identity into a basket account. A linked subject signs in. Otherwise a person who also holds a valid basket
 /// session for an account with no provider login links that account (the passkey accounts that predate the provider; the session
 /// is the proof of whose they are). Otherwise a verified email that matches an account links to it. Otherwise holding the app role
-/// creates a Member, but only while every account already has a provider login: while one has none, the person is told to sign in
+/// creates a Member, but only while every usable account already has a provider login: while one has none, the person is told to sign in
 /// with the old method first, so a legacy account is never duplicated. Anything else is refused.
 /// An unverified email never links and never creates, and an account already linked to another subject is never taken over.
 /// </summary>
@@ -129,8 +129,14 @@ public sealed class ExternalLoginService(
         return true;
     }
 
-    private Task<bool> HasAccountWithoutProviderLoginAsync(CancellationToken ct) =>
-        db.Users.AnyAsync(u => !db.UserLogins.Any(l => l.UserId == u.Id && l.LoginProvider == OidcLoginOptions.Scheme), ct);
+    private Task<bool> HasAccountWithoutProviderLoginAsync(CancellationToken ct)
+    {
+        var now = clock.GetUtcNow();
+        return db.Users.AnyAsync(
+            u => !(u.LockoutEnabled && u.LockoutEnd > now)
+                && !db.UserLogins.Any(l => l.UserId == u.Id && l.LoginProvider == OidcLoginOptions.Scheme),
+            ct);
+    }
 
     private async Task<AppUser?> CreateMemberAsync(ExternalIdentity identity, string email, CancellationToken ct)
     {

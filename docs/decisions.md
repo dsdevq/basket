@@ -105,7 +105,7 @@ the two existing passkey accounts, the tailnet-only cutover and removing the pas
   person continues as it (the passkey accounts that predate the provider; see "Linking the passkey accounts" below). Otherwise a
   **verified** email that matches exactly one account links to it, unless that account is already linked to another `sub`.
   Otherwise holding the provider role `basket` (`RequiredRole`) creates a Member, display name from `name`, else the email's local
-  part, **but only while every account already has a `lifekit` login**. Otherwise access is denied. An unverified email never links
+  part, **but only while every usable account already has a `lifekit` login**. Otherwise access is denied. An unverified email never links
   and never creates, even with the role; two accounts holding the same email are never guessed between. Existing accounts are not
   role-checked, as in finance-sentry.
 - **The email.** It is stored on `users.email` when an account is created or linked from the provider, and a linked account that
@@ -127,9 +127,9 @@ the two existing passkey accounts, the tailnet-only cutover and removing the pas
   - **At the callback**, a valid session for an account with no `lifekit` login gets the provider login added and continues as that
     account, passkeys untouched. An account that already has a `lifekit` login never takes a second, and a locked-out account takes
     none; the `sub` is then judged as if there were no session. A `sub` already linked to another account signs in as that account.
-  - **No duplicates.** While any account has no `lifekit` login, a role-holder who matches no account is not created: the callback
+  - **No duplicates.** While any usable (not locked-out) account has no `lifekit` login, a role-holder who matches no account is not created: the callback
     redirects to `/link-required`, a page (the frontend step's, like `/access-denied`) that says to open basket on the phone they
-    already use, or to sign in with the passkey first. Once every account is linked, creation works as before.
+    already use, or to sign in with the passkey first. A locked-out account never blocks: it cannot link, so nobody could clear it. Once every usable account is linked, creation works as before.
   - **`/api/session` reports `linkRequired: true`** for a session whose account has no `lifekit` login once the provider path is
     configured (the passkey registration response does too: a new passkey account has none). It is always `false` when the path is
     off. The SPA uses it to send the person through the provider once.
