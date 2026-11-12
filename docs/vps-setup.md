@@ -47,7 +47,7 @@ required, and deletes the fallback branch from `deploy.sh` and the old env file.
 
 To accept the fleet's machine identity, also add `FLEET_AGENT_AUTHORITY` and `FLEET_AGENT_BACKCHANNEL_AUTHORITY` (not
 secrets; `docker/.env.example` and `docs/decisions.md` "Fleet identity" say what each is). The app joins the external
-Docker network `identity-oidc`, which lifekit-stack creates (`docker/deploy.sh` creates it when missing). Both empty
+Docker network `identity-oidc`, which lifekit-stack creates (`up` fails if it is missing). Both empty
 keeps the path off.
 
 Sign-in through the org Logto is a separate optional path: the five `AUTH_OIDC_*` values in `docker/.env.example` (the

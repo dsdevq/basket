@@ -55,12 +55,6 @@ CONTRACT="${PLATFORM_CONTRACT:-/srv/lifekit-stack/scripts/platform-contract.py}"
 echo "[deploy] platform contract: declarations"
 "${compose[@]}" config --format json | python3 "$CONTRACT" --static -
 
-# basket-app joins these two external networks (Logto's back channel, the box Prometheus). lifekit-stack's deploy
-# creates them too; creating them idempotently here keeps the deploy order irrelevant.
-for network in identity-oidc lifekit-shared; do
-  docker network inspect "$network" >/dev/null 2>&1 || docker network create "$network" >/dev/null
-done
-
 # Fail before anything changes when the commit has no published image (CI failed or never ran for it, or it was pruned).
 echo "[deploy] pull basket @ $IMAGE_TAG"
 if ! "${compose[@]}" pull app; then

@@ -1195,10 +1195,9 @@ the way finance-sentry and the dashboard do. Before this the live checker report
 - **Logs.** The console sink writes one compact JSON object per line (`RenderedCompactJsonFormatter`), the trace id as
   `@tr`. The container healthcheck's `/api/health` polls stay out of the log, but a health request that carries a
   `traceparent` (the contract checker's probe) is logged, so a quiet app still shows a traced line.
-- **Deploy.** `docker/deploy.sh` runs `platform-contract.py --static` on the composed config before `up`, creates
-  `identity-oidc` and `lifekit-shared` when missing, and after the app is healthy runs `--project basket` with four
-  attempts 15 s apart (Prometheus' `scraped` item reads its last scrape). A missing checker fails the deploy; there is no
-  waiver.
+- **Deploy.** `docker/deploy.sh` runs `platform-contract.py --static` on the composed config before `up`, and after the app is healthy
+  runs `--project basket` with four attempts 15 s apart (Prometheus' `scraped` item reads its last scrape). A missing
+  checker fails the deploy; there is no waiver.
 - **Not in this repo.** The `scraped` item needs a Prometheus job for `basket-app:3310` in lifekit-stack's
   `compose/observability/prometheus/prometheus.yml` (path `/metrics`, like the `lifekit-dashboard` job). Until that job
   lands, the live checker reports `scraped` and `labels` as FAIL for `basket-app`.

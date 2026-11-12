@@ -110,7 +110,7 @@ networks:
   # Created by lifekit-stack's deploy.sh, not by this stack; joined only by the app, never the database.
   identity-oidc:
     external: true
-  # Also created by lifekit-stack's deploy; docker/deploy.sh creates it when missing so the deploy order does not matter.
+  # Created by lifekit-stack's deploy.sh too; `up` fails if it is missing.
   lifekit-shared:
     external: true
 
