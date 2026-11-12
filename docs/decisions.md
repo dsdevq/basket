@@ -80,8 +80,8 @@ and so on. Design and stuff like that. The only difference is domain basket appl
 the same as our apps. Like its one family bro, family of products. Same UI, same UX, same library, everything is the same. Only
 difference is basket use cases and business logic." And on reach: "my gf is on tailnet bro, we have her account for finance
 sentry." Q2 (invite link, then a passkey) was chosen because her phone was assumed to be off the tailnet; it is not, so the
-reason is gone and the org identity provider is the sign-in. This is the backend step (A2); the family sign-in pages, linking
-the two existing passkey accounts, the tailnet-only cutover and removing the passkey code are separate steps that follow.
+reason is gone and the org identity provider is the sign-in. This is the backend step (A2), and A3 below links the two existing
+passkey accounts; the family sign-in pages, the tailnet-only cutover and removing the passkey code are separate steps that follow.
 
 - **Off until configured.** `Auth:Oidc` (compose: `AUTH_OIDC_AUTHORITY`, `AUTH_OIDC_CLIENT_ID`, `AUTH_OIDC_CLIENT_SECRET`,
   `AUTH_OIDC_PUBLIC_BASE_URL`, `AUTH_OIDC_BACKCHANNEL_AUTHORITY`, all empty by default) switches it on only when the first four
@@ -138,7 +138,7 @@ the two existing passkey accounts, the tailnet-only cutover and removing the pas
   exchange with the client secret and PKCE checked, and userinfo, all on the back-channel host through the real rewrite handler.
   They run the real OpenID Connect handler end to end and cover role present, role absent, unverified email, a verified email
   linking, a linked `sub`, a second `sub` refused, duplicate emails, a session linking exactly its own account, nothing created while
-  an account is unlinked, `linkRequired` on the session, a forged or foreign-issuer callback, the cookie names, the
+  an account is unlinked (a locked-out one not counting), `linkRequired` on the session, a forged or foreign-issuer callback, the cookie names, the
   back channel, the logout URL with the hint, and the path off.
 
 ## Several passkeys per person
