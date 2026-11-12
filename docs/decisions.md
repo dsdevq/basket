@@ -100,11 +100,14 @@ the two existing passkey accounts, the tailnet-only cutover and removing the pas
   {endSessionUrl}` (RP-initiated logout with the `id_token_hint` kept at sign-in) for the SPA to navigate to, otherwise `204`.
   A refused sign-in redirects to `/access-denied`; a failed handshake to `/sign-in?error=OIDC_FAILED`; the provider returns to
   `/sign-in?info=signed_out` after sign-out. Those pages are the frontend step's.
-- **Which account.** A linked `sub` (an Identity `user_logins` row, provider `lifekit`) signs in, with or without the role. Otherwise
-  a **verified** email that matches exactly one account links to it, unless that account is already linked to another `sub`.
+- **Which account.** A linked `sub` (an Identity `user_logins` row, provider `lifekit`) signs in, with or without the role. Otherwise,
+  if the request also carries a **valid basket session** for an account with no `lifekit` login, that account takes the `sub` and the
+  person continues as it (the passkey accounts that predate the provider; see "Linking the passkey accounts" below). Otherwise a
+  **verified** email that matches exactly one account links to it, unless that account is already linked to another `sub`.
   Otherwise holding the provider role `basket` (`RequiredRole`) creates a Member, display name from `name`, else the email's local
-  part. Otherwise access is denied. An unverified email never links and never creates, even with the role; two accounts holding
-  the same email are never guessed between. Existing accounts are not role-checked, as in finance-sentry.
+  part, **but only while every account already has a `lifekit` login**. Otherwise access is denied. An unverified email never links
+  and never creates, even with the role; two accounts holding the same email are never guessed between. Existing accounts are not
+  role-checked, as in finance-sentry.
 - **The email.** It is stored on `users.email` when an account is created or linked from the provider, and a linked account that
   has none takes the provider's verified one (it never replaces one). `/api/session` returns `email` (null for an account that has
   none, such as a passkey-only one). No migration: `users.email` and `user_logins` are already in the Identity schema.
@@ -116,12 +119,26 @@ the two existing passkey accounts, the tailnet-only cutover and removing the pas
   external-login cookie (`basket-oidc-external`) and the OIDC correlation (`basket-oidc-correlation.`) and nonce
   (`basket-oidc-nonce.`) cookies are renamed from the defaults other apps use. The correlation and nonce cookies are SameSite=Lax
   because the provider returns by a cross-site GET.
-- **Until the linking step lands**, a person with the role whose email matches no account (the two existing accounts have none)
-  would get a new Member next to the old account. That is why the path stays off in production until the linking step ships.
+- **Linking the passkey accounts (2026-11-12, step A3).** The two existing accounts have no email, so the email match cannot find
+  them, and a role-holder who matched nothing would have been created as a second account beside the old one. Instead the
+  account's own session is the proof of whose it is (Logto vouches for the person, the `__Host-basket` cookie for the account),
+  the standard Identity "add an external login" pair. The cookie is SameSite=Strict, and the provider and basket share a site
+  (the same tailnet host, different ports), so it reaches the callback on the redirect from the provider.
+  - **At the callback**, a valid session for an account with no `lifekit` login gets the provider login added and continues as that
+    account, passkeys untouched. An account that already has a `lifekit` login never takes a second, and a locked-out account takes
+    none; the `sub` is then judged as if there were no session. A `sub` already linked to another account signs in as that account.
+  - **No duplicates.** While any account has no `lifekit` login, a role-holder who matches no account is not created: the callback
+    redirects to `/link-required`, a page (the frontend step's, like `/access-denied`) that says to open basket on the phone they
+    already use, or to sign in with the passkey first. Once every account is linked, creation works as before.
+  - **`/api/session` reports `linkRequired: true`** for a session whose account has no `lifekit` login once the provider path is
+    configured (the passkey registration response does too: a new passkey account has none). It is always `false` when the path is
+    off. The SPA uses it to send the person through the provider once.
+  - No migration: the link is an Identity `user_logins` row.
 - **Tests** use an in-process fake provider (`FakeIdentityProvider`): a signing key generated per run, discovery, keys, the token
   exchange with the client secret and PKCE checked, and userinfo, all on the back-channel host through the real rewrite handler.
   They run the real OpenID Connect handler end to end and cover role present, role absent, unverified email, a verified email
-  linking, a linked `sub`, a second `sub` refused, duplicate emails, a forged or foreign-issuer callback, the cookie names, the
+  linking, a linked `sub`, a second `sub` refused, duplicate emails, a session linking exactly its own account, nothing created while
+  an account is unlinked, `linkRequired` on the session, a forged or foreign-issuer callback, the cookie names, the
   back channel, the logout URL with the hint, and the path off.
 
 ## Several passkeys per person

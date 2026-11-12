@@ -25,6 +25,12 @@ public sealed class OidcLoginOptions
     /// <summary>The SPA page a refused sign-in lands on.</summary>
     public const string AccessDeniedPath = "/access-denied";
 
+    /// <summary>
+    /// The SPA page a sign-in lands on when the person holds the app role but some basket account has no provider login yet: it asks
+    /// them to open basket on the phone they already use, or sign in with their passkey, first.
+    /// </summary>
+    public const string LinkRequiredPath = "/link-required";
+
     /// <summary>The SPA page a failed sign-in, and a finished sign-out, land on.</summary>
     public const string SignInPath = "/sign-in";
 
@@ -80,6 +86,9 @@ public sealed class OidcLoginOptions
 
     /// <summary>Where a sign-in the app refuses (no account and no app role, or an unverified email) sends the browser.</summary>
     public string AccessDeniedUrl => PublicBaseUrl.TrimEnd('/') + AccessDeniedPath;
+
+    /// <summary>Where a sign-in that must link an existing account first sends the browser.</summary>
+    public string LinkRequiredUrl => PublicBaseUrl.TrimEnd('/') + LinkRequiredPath;
 
     /// <summary>Whether the provider's role claims grant this app (<see cref="RequiredRole"/>).</summary>
     public bool GrantsApp(IEnumerable<string> roles) =>
