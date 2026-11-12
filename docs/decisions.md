@@ -1268,7 +1268,9 @@ store search and size rules, no model in the app.
 - **Barcodes are GTINs, kept as 14 digits.** `Gtin.TryNormalize` accepts 8, 12, 13 or 14 digits (spaces and hyphens tolerated) with
   a correct check digit and pads to 14, so UPC-A and EAN-13 of one product compare equal. `product.barcode` is unique. A product
   takes one on `POST /api/products` (`barcode`) or `PUT /api/products/{id}/barcode` (empty clears); `GET /api/products` returns
-  it. An invalid candidate barcode is ignored (the names then decide), never trusted.
+  it. An invalid candidate barcode is ignored (the names then decide), never trusted. A barcode another product already holds is
+  refused with `409 barcode_exists` (also when two writes race, where the unique index decides). Changing a product's barcode
+  re-runs the matcher over its open proposals: those that can no longer match are deleted and the rest are rescored.
 - **The store search is brought to the app, not run by it.** tesco.ie, aldi.ie and the Dunnes grocery site refuse the VPS (see
   the Tesco, Aldi and Dunnes sections), and Lidl's search has no stable machine shape that has been checked, so the server does no
   searching. `POST /api/products/{id}/candidates` takes `{store, results: [{url, title, barcode?}]}` (up to 50), the results of a
