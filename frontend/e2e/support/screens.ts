@@ -525,7 +525,10 @@ const PLAN_SPLIT = {
     planLine('Whole milk 2L', {
       productId: 'p1',
       bestStore: 'lidl',
-      stores: [MILK_LIDL, MILK_TESCO],
+      stores: [
+        {...MILK_LIDL, wasPrice: null},
+        {...MILK_TESCO, wasPrice: null},
+      ],
       lastPaid: [MILK_LIDL_PAID],
     }),
     planLine('Kerrygold butter 227g', {
