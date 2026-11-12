@@ -63,8 +63,6 @@ export interface PlanPairSplit {
   readonly total: number;
   /** The day of the oldest price in the total. */
   readonly oldestSeenOn: string | null;
-  readonly promoLines: number;
-  readonly cards: readonly string[];
   readonly groups: readonly ByShopGroup[];
 }
 

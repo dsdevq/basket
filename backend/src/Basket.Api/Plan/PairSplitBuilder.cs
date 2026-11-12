@@ -10,8 +10,6 @@ namespace Basket.Api.Plan;
 public sealed record PlanPairSplit(
     decimal Total,
     DateOnly? OldestSeenOn,
-    int PromoLines,
-    IReadOnlyList<string> Cards,
     IReadOnlyList<ByShopGroup> Groups);
 
 /// <summary>
@@ -53,7 +51,6 @@ public static class PairSplitBuilder
     private static PlanPairSplit? Pair(IReadOnlyList<PlanItem> items, (string Slug, string Name) first, (string Slug, string Name) second)
     {
         var lines = new Dictionary<string, List<ByShopLine>> { [first.Slug] = [], [second.Slug] = [] };
-        var cards = new List<string>();
         foreach (var item in items)
         {
             var at = new[] { first.Slug, second.Slug }
@@ -74,10 +71,6 @@ public static class PairSplitBuilder
             var pick = at.MinBy(c => c.Entry!.Offer!.Rank);
             var line = ByShopBuilder.Line(item, pick.Entry!);
             lines[pick.Slug].Add(line);
-            if (line.Card is not null)
-            {
-                cards.Add(line.Card);
-            }
         }
 
         var groups = new[] { first, second }
@@ -88,8 +81,6 @@ public static class PairSplitBuilder
         return new PlanPairSplit(
             groups.Sum(g => g.Total),
             all.Min(l => l.ObservedOn),
-            all.Count(l => l.IsPromo),
-            cards.Distinct().Order().ToList(),
             groups);
     }
 }

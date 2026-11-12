@@ -147,8 +147,6 @@ describe('plan-format', () => {
       const split: PlanPairSplit = {
         total: 3.9,
         oldestSeenOn: '2026-11-05',
-        promoLines: 1,
-        cards: ['Lidl Plus'],
         groups: [],
       };
       const groups = [

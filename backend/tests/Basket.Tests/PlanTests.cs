@@ -414,7 +414,6 @@ public sealed class PlanTests : IClassFixture<BasketFactory>
         tesco.Total.Should().Be(1.00m);
         split.Total.Should().Be(6.00m, "the card price counts: milk at Tesco 1.00, eggs and butter at Aldi 5.00");
         split.OldestSeenOn.Should().Be(Today.AddDays(-2));
-        split.Cards.Should().Equal("Clubcard");
     }
 
     [Fact]
@@ -631,7 +630,6 @@ public sealed class PlanTests : IClassFixture<BasketFactory>
         coverage.GetProperty("singleStore").GetBoolean().Should().BeFalse();
         var split = coverage.GetProperty("split");
         split.GetProperty("total").GetDecimal().Should().Be(6.00m, "milk at Tesco on the Clubcard price 1.00, eggs and butter at Aldi 5.00");
-        split.GetProperty("cards").EnumerateArray().Select(c => c.GetString()).Should().Equal("Clubcard");
         var groups = split.GetProperty("groups").EnumerateArray().ToList();
         groups.Select(g => g.GetProperty("store").GetString()).Should().Equal("aldi", "tesco");
         groups[0].GetProperty("lines").EnumerateArray().Select(l => l.GetProperty("text").GetString()).Should().Equal("Eggs 12 pack", "Butter 250g");
