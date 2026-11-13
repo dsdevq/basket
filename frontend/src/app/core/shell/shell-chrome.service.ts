@@ -12,6 +12,7 @@ import {
   whatsNewMenuItem,
 } from '@lifekit-hq/ui';
 
+import {BrowserNavigation} from '../auth/browser-navigation';
 import {SessionStore} from '../auth/session.store';
 import {APP_VERSION} from '../version';
 
@@ -53,6 +54,7 @@ function initialsOf(name: string): string {
 export class ShellChromeService {
   private readonly session = inject(SessionStore);
   private readonly router = inject(Router);
+  private readonly navigation = inject(BrowserNavigation);
   private readonly whatsNew = inject(CmnWhatsNewService);
 
   /** The sidebar and More footer line; the click opens What's new. */
@@ -108,8 +110,13 @@ export class ShellChromeService {
       return true;
     }
     if (id === ACCOUNT_SIGN_OUT_ID) {
-      await this.session.signOut();
-      await this.router.navigateByUrl('/sign-in');
+      const endSessionUrl = await this.session.signOut();
+      if (endSessionUrl) {
+        // The lifekit account's own session ends there, then it returns to the sign-in page.
+        this.navigation.assign(endSessionUrl);
+      } else {
+        await this.router.navigateByUrl('/sign-in');
+      }
       return true;
     }
     return false;

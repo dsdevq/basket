@@ -15,6 +15,11 @@ export interface SessionResponse {
   readonly linkRequired?: boolean;
 }
 
+/** The lifekit account's sign-out address, sent when the session came from it. */
+export interface EndSession {
+  readonly endSessionUrl: string;
+}
+
 export interface Member {
   readonly id: string;
   readonly displayName: string;
