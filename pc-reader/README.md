@@ -31,7 +31,7 @@ There are two ways to prove itself to basket; the reader uses the first one that
   `basket:price-ingest` (push prices) and `basket:catalog-read` (read the tracked pages). It renews the token a minute before it
   expires. No token is minted in basket and no page list is kept by hand: the list comes from basket's catalog (below). Basket
   already validates these tokens (docs/decisions.md, "Fleet identity on the machine endpoints"); the reader asks for nothing else.
-- **The `bsk_` token.** Make it in basket under **Settings > Price reader** (owner only); it is shown once. It pushes prices
+- **The `bsk_` token.** Make it in basket under **Settings > Workspace > Price reader** (owner only); it is shown once. It pushes prices
   but cannot read the catalog, so with it alone you keep the URL file (below), `cp urls.example.json urls.local.json`.
 
 Files you fill in (`.env.local`, `urls.local.json`) are ignored by git. The secret and the token are never logged.
