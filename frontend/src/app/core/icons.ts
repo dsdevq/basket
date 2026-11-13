@@ -1,4 +1,4 @@
-import {RotateCcw, Store} from 'lucide-angular';
+import {PackagePlus, RotateCcw, Store} from 'lucide-angular';
 
 // eslint-disable-next-line @typescript-eslint/naming-convention -- Lucide icon names are PascalCase
-export const APP_ICONS = {RotateCcw, Store};
+export const APP_ICONS = {PackagePlus, RotateCcw, Store};

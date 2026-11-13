@@ -6,6 +6,8 @@ export interface TripItem {
   readonly checkedAt: string | null;
   /** Who ticked it; null once that person's account is gone. */
   readonly checkedBy: Person | null;
+  /** The Shelf product the line was picked as; null for a typed one-off, which can be promoted to the Shelf. */
+  readonly productId: string | null;
 }
 
 /** A shopping trip closed with "Done shopping". */

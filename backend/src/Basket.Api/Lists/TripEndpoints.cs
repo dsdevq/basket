@@ -5,7 +5,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Basket.Api.Lists;
 
-public sealed record TripItemResponse(Guid Id, string Text, DateTimeOffset? CheckedAt, Person? CheckedBy);
+/// <summary><see cref="ProductId"/> is the Shelf product the line was picked as; null for a typed (free-text) line, which a closed trip offers to promote to the Shelf.</summary>
+public sealed record TripItemResponse(Guid Id, string Text, DateTimeOffset? CheckedAt, Person? CheckedBy, Guid? ProductId);
 
 /// <summary><see cref="Source"/> is null for a trip closed on the list and <c>lidl_plus</c> for one made from a receipt, which also has its <see cref="Total"/>.</summary>
 public sealed record TripResponse(Guid Id, DateTimeOffset ClosedAt, string? Source, decimal? Total, IReadOnlyList<TripItemResponse> Items);
@@ -34,7 +35,7 @@ public static class TripEndpoints
             select new
             {
                 i.TripId,
-                Item = new TripItemResponse(i.Id, i.Text, i.CheckedAt, c == null ? null : new Person(c.Id, c.DisplayName)),
+                Item = new TripItemResponse(i.Id, i.Text, i.CheckedAt, c == null ? null : new Person(c.Id, c.DisplayName), i.ProductId),
             }).ToListAsync(ct);
         return trips.Select(trip => new TripResponse(
             trip.Id,

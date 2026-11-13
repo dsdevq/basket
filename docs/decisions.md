@@ -1307,3 +1307,23 @@ Workspace or People section.
 - **Screens.** The page's layout changed on purpose, so the four `settings` Linux baselines (390 / 1280, light and dark) differ
   from the committed images. They are re-rendered by the "Update screen baselines" workflow dispatched on this branch, not
   committed from a local run; review the images in that commit before merging.
+
+## Typed one-offs stay text; a closed trip offers "Add to shelf" (2026-11-13, issue #34, epic #22)
+
+Owner's words: "I dont need to enter the product, I should be able to select it and see the image i believe. Like shopping basket
+you know ?" Typing stays for a one-off that is not on the shelf; after a trip the item can be promoted to the shelf.
+
+- **Borrowed pattern, named:** Bring!'s custom items: something you typed once is kept as plain text on the list, and when it
+  turns out to be a regular you save it into your own catalogue. No new interaction is invented.
+- **A typed item is unchanged.** The composer, the row and `POST /api/list/items {text}` are not touched: it is a free-text line
+  (`product_id` null) on the list, in the closed trip and when reloaded with "Same as last time".
+- **The offer lives on the closed trip, in History.** A trip item with no product shows a ghost "Add to shelf" button on its row
+  (`PackagePlus`). A Shelf pick never shows it. `GET /api/trips` items gain `productId` (null for a typed item); that is
+  how the page tells them apart. Receipt-made trips follow the same rule.
+- **"Starts the add-to-shelf flow" is the flow that exists.** Search-add (#31) and the match sheet (#10) are not built yet, so the
+  tap goes to the Prices tab (`/prices?add=<text>`) with the typed text already in its "Add a product" box. A person edits it if
+  needed and taps Add (nothing is added by the navigation itself), then links the shop pages in the same tab, the way every shelf
+  product is made today. When #31 and #10 land, this link is the one place to point at their search-and-match start.
+- **No migration.** No column or table changes; the response field reads the existing `trip_item.product_id`.
+- **Screens.** No new route. The History mock gains `productId`, so the History baselines change (a button per typed item); Linux
+  baselines are drawn on CI only, by the "Update screen baselines" workflow dispatched on the branch.

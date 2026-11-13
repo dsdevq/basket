@@ -1,4 +1,5 @@
 import {type ComponentFixture, TestBed} from '@angular/core/testing';
+import {ActivatedRoute, convertToParamMap} from '@angular/router';
 import {CmnDrawerService, ToastService} from '@lifekit-hq/ui';
 import {of} from 'rxjs';
 
@@ -94,7 +95,7 @@ function milk(): Product {
   };
 }
 
-async function render(response: PricesResponse) {
+async function render(response: PricesResponse, query: Record<string, string> = {}) {
   const api = {
     all: vi.fn().mockResolvedValue(response),
     add: vi.fn(),
@@ -107,6 +108,7 @@ async function render(response: PricesResponse) {
     providers: [
       {provide: PricesApi, useValue: api},
       {provide: CmnDrawerService, useValue: drawer},
+      {provide: ActivatedRoute, useValue: {snapshot: {queryParamMap: convertToParamMap(query)}}},
       {provide: ToastService, useValue: {error: vi.fn(), success: vi.fn()}},
     ],
   });
@@ -194,11 +196,19 @@ describe('PricesPage', () => {
     });
   });
 
+  it('fills the add box with the typed item that History sent, and adds nothing until Add is tapped', async () => {
+    const {host, api} = await render({products: [], stores: []}, {add: ' Oat milk '});
+
+    expect(host.querySelector('input')?.value).toBe('Oat milk');
+    expect(api.add).not.toHaveBeenCalled();
+  });
+
   it('shows an error state with a retry when the prices do not load', async () => {
     TestBed.configureTestingModule({
       providers: [
         {provide: PricesApi, useValue: {all: vi.fn().mockRejectedValue(new Error('offline'))}},
         {provide: CmnDrawerService, useValue: {open: vi.fn()}},
+        {provide: ActivatedRoute, useValue: {snapshot: {queryParamMap: convertToParamMap({})}}},
         {provide: ToastService, useValue: {error: vi.fn()}},
       ],
     });

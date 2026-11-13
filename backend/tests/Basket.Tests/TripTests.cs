@@ -285,7 +285,7 @@ public sealed class TripTests
     }
 
     [Fact]
-    public async Task A_shelf_line_picked_from_all_shops_reloads_with_no_shop_and_the_trip_history_shows_only_text()
+    public async Task A_shelf_line_picked_from_all_shops_reloads_with_no_shop_and_the_trip_history_shows_the_product_but_no_shop()
     {
         await using var factory = new BasketFactory();
         var (owner, _) = await factory.OwnerAsync();
@@ -294,7 +294,7 @@ public sealed class TripTests
         var tripId = await CloseAsync(owner);
 
         (await TripsAsync(owner)).GetProperty("trips")[0].GetProperty("items")[0].EnumerateObject().Select(p => p.Name)
-            .Should().BeEquivalentTo("id", "text", "checkedAt", "checkedBy");
+            .Should().BeEquivalentTo("id", "text", "checkedAt", "checkedBy", "productId");
         await owner.PostAsync($"/api/trips/{tripId}/reload", null);
 
         (await ItemsAsync(owner)).Select(Identity).Should().Equal((milk.ToString(), (string?)null));
@@ -403,5 +403,25 @@ public sealed class TripTests
         var item = (await TripsAsync(owner)).GetProperty("trips")[0].GetProperty("items")[0];
         item.GetProperty("text").GetString().Should().Be("Milk");
         item.GetProperty("checkedBy").ValueKind.Should().Be(JsonValueKind.Null);
+    }
+
+    [Fact]
+    public async Task A_closed_trip_tells_a_typed_item_from_a_shelf_pick_so_only_the_typed_one_offers_promote()
+    {
+        await using var factory = new BasketFactory();
+        var (owner, _) = await factory.OwnerAsync();
+        var milk = await SeedMilkAsync(factory);
+        await AddAsync(owner, "Oat drink");
+        (await PickAsync(owner, milk, "tesco")).EnsureSuccessStatusCode();
+        foreach (var item in await ItemsAsync(owner))
+        {
+            await TickAsync(owner, item.GetProperty("id").GetGuid());
+        }
+
+        await CloseAsync(owner);
+
+        var items = (await TripsAsync(owner)).GetProperty("trips")[0].GetProperty("items").EnumerateArray().ToArray();
+        items.Single(i => i.GetProperty("text").GetString() == "Oat drink").GetProperty("productId").ValueKind.Should().Be(JsonValueKind.Null);
+        items.Single(i => i.GetProperty("text").GetString() == "Whole milk 2L").GetProperty("productId").GetGuid().Should().Be(milk);
     }
 }
