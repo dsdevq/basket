@@ -115,7 +115,7 @@ export class ShellChromeService {
         // The lifekit account's own session ends there, then it returns to the sign-in page.
         this.navigation.assign(endSessionUrl);
       } else {
-        await this.router.navigateByUrl('/sign-in');
+        await this.router.navigateByUrl('/sign-in?info=signed_out');
       }
       return true;
     }

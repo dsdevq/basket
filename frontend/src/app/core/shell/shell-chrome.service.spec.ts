@@ -111,7 +111,7 @@ describe('ShellChromeService', () => {
 
     expect(handled).toBe(true);
     expect(signOut).toHaveBeenCalledOnce();
-    expect(navigateByUrl).toHaveBeenCalledWith('/sign-in');
+    expect(navigateByUrl).toHaveBeenCalledWith('/sign-in?info=signed_out');
     expect(assign).not.toHaveBeenCalled();
   });
 
