@@ -1296,3 +1296,14 @@ store search and size rules, no model in the app.
 - **Migration `ProductMatching`, additive:** `product.barcode` (nullable, unique index), `store_listing.confirmed_at` (nullable, the
   dated backfill above) and the `match_candidate` table. No column is dropped or retyped. It waits for the owner's go before merge.
 - **Not here:** the match sheet (#10), product images (#30), search-to-add (#31) and the shelf screen (#32). No frontend change.
+
+## Settings in the family order (B2)
+
+Owner's words (2026-11-12): "Basket should be just in our ecosystem ... Same UI, same UX, same library, everything is the same.
+Only difference is basket use cases and business logic." Settings now lists its sections in the family order: Account,
+Appearance, Workspace (owner), Security, People (owner), About, Sign out. Name and email are read-only; a member sees no
+Workspace or People section.
+
+- **Screens.** The page's layout changed on purpose, so the four `settings` Linux baselines (390 / 1280, light and dark) differ
+  from the committed images. They are re-rendered by the "Update screen baselines" workflow dispatched on this branch, not
+  committed from a local run; review the images in that commit before merging.
