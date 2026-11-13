@@ -911,6 +911,13 @@ export async function guest(page: Page): Promise<void> {
   await page.route('**/api/auth/invite', r => r.fulfill({json: {role: 'member', label: null}}));
 }
 
+/** The lifekit account sign-in switched on: the server's start address answers with a redirect to the provider. */
+async function lifekitSignInOn(page: Page): Promise<void> {
+  await page.route('**/api/auth/oidc/start*', r =>
+    r.fulfill({status: 302, headers: {location: 'https://id.example.test/oidc/auth'}})
+  );
+}
+
 export const ROUTES: readonly Route[] = [
   {name: 'list', path: '/list', setup: signedIn},
   {name: 'history', path: '/history', setup: signedIn},
@@ -983,6 +990,25 @@ export const ROUTES: readonly Route[] = [
     },
   },
   {name: 'sign-in', path: '/sign-in', setup: guest},
+  {
+    // The page a person lands on after signing out: held (no forward), the lifekit button first, the passkey second.
+    name: 'sign-in-signed-out',
+    path: '/sign-in?info=signed_out',
+    setup: async page => {
+      await guest(page);
+      await lifekitSignInOn(page);
+    },
+  },
+  {
+    name: 'sign-in-failed',
+    path: '/sign-in?error=OIDC_FAILED',
+    setup: async page => {
+      await guest(page);
+      await lifekitSignInOn(page);
+    },
+  },
+  {name: 'access-denied', path: '/access-denied', setup: guest},
+  {name: 'link-required', path: '/link-required', setup: guest},
   {name: 'join', path: '/join#invite-token', setup: guest},
   {
     // The same link in a browser that cannot make passkeys: the open-in-browser notice.

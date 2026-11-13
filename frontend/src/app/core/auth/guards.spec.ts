@@ -3,6 +3,7 @@ import {ActivatedRouteSnapshot, type RouterStateSnapshot, UrlTree} from '@angula
 import {provideRouter} from '@angular/router';
 
 import {AuthApi} from './auth.api';
+import {BrowserNavigation} from './browser-navigation';
 import {authGuard, guestGuard, ownerGuard} from './guards';
 import type {SessionUser} from './session.model';
 
@@ -30,6 +31,27 @@ async function run(
   return TestBed.runInInjectionContext(() => guard(guarded, state));
 }
 
+async function runLinkRequired(url: string, assign = vi.fn()): Promise<unknown> {
+  TestBed.configureTestingModule({
+    providers: [
+      provideRouter([]),
+      {provide: BrowserNavigation, useValue: {assign}},
+      {
+        provide: AuthApi,
+        useValue: {
+          session: () =>
+            Promise.resolve({
+              authenticated: true,
+              user: {id: '1', displayName: 'A', role: 'member'},
+              linkRequired: true,
+            }),
+        },
+      },
+    ],
+  });
+  return TestBed.runInInjectionContext(() => authGuard(route, {url, root: route}));
+}
+
 async function runOffline(guard: typeof authGuard, guarded = route): Promise<unknown> {
   TestBed.configureTestingModule({
     providers: [
@@ -41,6 +63,20 @@ async function runOffline(guard: typeof authGuard, guarded = route): Promise<unk
 }
 
 describe('route guards', () => {
+  beforeEach(() => sessionStorage.clear());
+
+  it('starts the lifekit sign-in once for an unlinked account, returning to the page asked for', async () => {
+    const assign = vi.fn();
+
+    expect(await runLinkRequired('/shelf', assign)).toBe(false);
+    expect(assign).toHaveBeenCalledWith('/api/auth/oidc/start?returnUrl=%2Fshelf');
+
+    TestBed.resetTestingModule();
+    assign.mockClear();
+    expect(await runLinkRequired('/shelf', assign)).toBe(true);
+    expect(assign).not.toHaveBeenCalled();
+  });
+
   it('sends a signed-out visitor to sign-in', async () => {
     const result = await run(authGuard, null);
 

@@ -72,4 +72,34 @@ describe('SessionStore', () => {
 
     expect(store.isSignedIn()).toBe(false);
   });
+
+  it('returns the end-session address, clears the user and forgets the link attempt', async () => {
+    const store = setup({
+      signOut: vi.fn().mockResolvedValue({endSessionUrl: 'https://id.example/end'}),
+    });
+    store.setUser(OWNER);
+    sessionStorage.setItem('basket.oidc.linkAttempted', '1');
+
+    expect(await store.signOut()).toBe('https://id.example/end');
+
+    expect(store.isSignedIn()).toBe(false);
+    expect(sessionStorage.getItem('basket.oidc.linkAttempted')).toBeNull();
+  });
+
+  it('returns null when the session did not come from the lifekit account', async () => {
+    const store = setup({signOut: vi.fn().mockResolvedValue(null)});
+    store.setUser(OWNER);
+
+    expect(await store.signOut()).toBeNull();
+  });
+
+  it('carries linkRequired from the session answer', async () => {
+    const store = setup({
+      session: vi.fn().mockResolvedValue({authenticated: true, user: OWNER, linkRequired: true}),
+    });
+
+    await store.ensureLoaded();
+
+    expect(store.linkRequired()).toBe(true);
+  });
 });

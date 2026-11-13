@@ -1,6 +1,7 @@
 import {inject} from '@angular/core';
 import {type CanActivateFn, Router} from '@angular/router';
 
+import {OidcSignIn} from './oidc-sign-in';
 import {SessionStore} from './session.store';
 
 /** Where people land when the server cannot be asked who they are. */
@@ -8,13 +9,20 @@ export const UNREACHABLE_PATH = '/unreachable';
 
 // Everything is injected before the first await: after it, the injection context is gone.
 
-/** Signed-in people only; everyone else is sent to the sign-in page. */
-export const authGuard: CanActivateFn = async () => {
+/**
+ * Signed-in people only; everyone else is sent to the sign-in page. A passkey session whose account is not linked to
+ * the lifekit account yet goes through that sign-in once, and comes back to the page it asked for.
+ */
+export const authGuard: CanActivateFn = async (_route, state) => {
   const session = inject(SessionStore);
   const router = inject(Router);
+  const oidc = inject(OidcSignIn);
   await session.ensureLoaded();
   if (session.loadFailure()) {
     return router.createUrlTree([UNREACHABLE_PATH]);
+  }
+  if (session.isSignedIn() && session.linkRequired() && oidc.startLinkOnce(state.url)) {
+    return false;
   }
   return session.isSignedIn() || router.createUrlTree(['/sign-in']);
 };

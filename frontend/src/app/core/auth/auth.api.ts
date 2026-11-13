@@ -2,7 +2,14 @@ import {HttpClient} from '@angular/common/http';
 import {inject, Injectable} from '@angular/core';
 import {firstValueFrom} from 'rxjs';
 
-import type {CreatedInvite, Member, Passkey, PendingInvite, SessionResponse} from './session.model';
+import type {
+  CreatedInvite,
+  EndSession,
+  Member,
+  Passkey,
+  PendingInvite,
+  SessionResponse,
+} from './session.model';
 
 /** The fixed-vocabulary labels the server accepts; anything else it logs as "other". Never a token, name or credential. */
 export interface PasskeyFailureReport {
@@ -58,8 +65,9 @@ export class AuthApi {
     return firstValueFrom(this.http.post<void>('/api/auth/sign-in', {credentialJson}));
   }
 
-  public signOut(): Promise<void> {
-    return firstValueFrom(this.http.post<void>('/api/auth/sign-out', {}));
+  /** Ends the basket session; the answer carries the lifekit account's end-session address when that session came from it. */
+  public signOut(): Promise<EndSession | null> {
+    return firstValueFrom(this.http.post<EndSession | null>('/api/auth/sign-out', {}));
   }
 
   public members(): Promise<Member[]> {

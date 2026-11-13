@@ -8,6 +8,7 @@ import {
   WHATS_NEW_MENU_ID,
 } from '@lifekit-hq/ui';
 
+import {BrowserNavigation} from '../auth/browser-navigation';
 import type {SessionUser} from '../auth/session.model';
 import {SessionStore} from '../auth/session.store';
 import {APP_VERSION} from '../version';
@@ -17,6 +18,7 @@ describe('ShellChromeService', () => {
   const user = signal<SessionUser | null>(null);
   const signOut = vi.fn().mockResolvedValue(undefined);
   const navigateByUrl = vi.fn().mockResolvedValue(true);
+  const assign = vi.fn();
   const open = vi.fn();
   const hasUnread = signal(false);
 
@@ -28,6 +30,7 @@ describe('ShellChromeService', () => {
           useValue: {user, isOwner: () => user()?.role === 'owner', signOut},
         },
         {provide: Router, useValue: {navigateByUrl}},
+        {provide: BrowserNavigation, useValue: {assign}},
         {provide: CmnWhatsNewService, useValue: {open, hasUnread}},
       ],
     });
@@ -39,6 +42,8 @@ describe('ShellChromeService', () => {
     hasUnread.set(false);
     signOut.mockClear();
     navigateByUrl.mockClear();
+    assign.mockClear();
+    signOut.mockResolvedValue(null);
     open.mockClear();
   });
 
@@ -106,7 +111,17 @@ describe('ShellChromeService', () => {
 
     expect(handled).toBe(true);
     expect(signOut).toHaveBeenCalledOnce();
-    expect(navigateByUrl).toHaveBeenCalledWith('/sign-in');
+    expect(navigateByUrl).toHaveBeenCalledWith('/sign-in?info=signed_out');
+    expect(assign).not.toHaveBeenCalled();
+  });
+
+  it("leaves for the lifekit account's end-session address when sign-out returns one", async () => {
+    signOut.mockResolvedValue('https://id.example/oidc/session/end?x=1');
+
+    await service().handle(ACCOUNT_SIGN_OUT_ID);
+
+    expect(assign).toHaveBeenCalledWith('https://id.example/oidc/session/end?x=1');
+    expect(navigateByUrl).not.toHaveBeenCalled();
   });
 
   it('leaves any other id to the layout', async () => {

@@ -81,7 +81,7 @@ the same as our apps. Like its one family bro, family of products. Same UI, same
 difference is basket use cases and business logic." And on reach: "my gf is on tailnet bro, we have her account for finance
 sentry." Q2 (invite link, then a passkey) was chosen because her phone was assumed to be off the tailnet; it is not, so the
 reason is gone and the org identity provider is the sign-in. This is the backend step (A2), and A3 below links the two existing
-passkey accounts; the family sign-in pages, the tailnet-only cutover and removing the passkey code are separate steps that follow.
+passkey accounts; the family sign-in pages (step A4, below) have landed, while the tailnet-only cutover and removing the passkey code are separate steps that follow.
 
 - **Off until configured.** `Auth:Oidc` (compose: `AUTH_OIDC_AUTHORITY`, `AUTH_OIDC_CLIENT_ID`, `AUTH_OIDC_CLIENT_SECRET`,
   `AUTH_OIDC_PUBLIC_BASE_URL`, `AUTH_OIDC_BACKCHANNEL_AUTHORITY`, all empty by default) switches it on only when the first four
@@ -99,7 +99,7 @@ passkey accounts; the family sign-in pages, the tailnet-only cutover and removin
   `POST /api/auth/sign-out` ends the basket session as before; when the session came from the provider it answers `200
   {endSessionUrl}` (RP-initiated logout with the `id_token_hint` kept at sign-in) for the SPA to navigate to, otherwise `204`.
   A refused sign-in redirects to `/access-denied`; a failed handshake to `/sign-in?error=OIDC_FAILED`; the provider returns to
-  `/sign-in?info=signed_out` after sign-out. Those pages are the frontend step's.
+  `/sign-in?info=signed_out` after sign-out. Those pages are the frontend step's (A4, below).
 - **Which account.** A linked `sub` (an Identity `user_logins` row, provider `lifekit`) signs in, with or without the role. Otherwise,
   if the request also carries a **valid basket session** for an account with no `lifekit` login, that account takes the `sub` and the
   person continues as it (the passkey accounts that predate the provider; see "Linking the passkey accounts" below). Otherwise a
@@ -128,12 +128,22 @@ passkey accounts; the family sign-in pages, the tailnet-only cutover and removin
     account, passkeys untouched. An account that already has a `lifekit` login never takes a second, and a locked-out account takes
     none; the `sub` is then judged as if there were no session. A `sub` already linked to another account signs in as that account.
   - **No duplicates.** While any usable (not locked-out) account has no `lifekit` login, a role-holder who matches no account is not created: the callback
-    redirects to `/link-required`, a page (the frontend step's, like `/access-denied`) that says to open basket on the phone they
+    redirects to `/link-required`, a page (the frontend step's, A4 below, like `/access-denied`) that says to open basket on the phone they
     already use, or to sign in with the passkey first. A locked-out account never blocks: it cannot link, so nobody could clear it. Once every usable account is linked, creation works as before.
   - **`/api/session` reports `linkRequired: true`** for a session whose account has no `lifekit` login once the provider path is
     configured (the passkey registration response does too: a new passkey account has none). It is always `false` when the path is
     off. The SPA uses it to send the person through the provider once.
   - No migration: the link is an Identity `user_logins` row.
+- **Family sign-in pages (step A4).** The frontend follows finance-sentry's `/login`. `/sign-in` asks `/api/auth/oidc/start` (without
+  following the redirect: a redirect means on, `404` means off) and, when on, forwards to it. It is held instead of forwarding by
+  `?info=` (`signed_out`, `link_required`) or `?error=`, so a signed-out or failed attempt shows its message and cannot loop. While
+  the provider is not live for everyone it keeps a secondary "Sign in with a passkey"; with the provider off it is the primary action
+  and the page is as before. `/access-denied` says the account has no access and its "Try again" restarts the sign-in. `/link-required`
+  points to the phone already in use or to the passkey sign-in (`/sign-in?info=link_required`). `linkRequired` from the session makes the
+  route guard start the same flow once per browser tab session, returning to the page asked for. Sign-out navigates to the returned
+  `endSessionUrl` and clears the session store; with no `endSessionUrl` it goes to `/sign-in?info=signed_out`, which holds, so a
+  Logto session that is still alive (finance-sentry on the same Logto) cannot sign the person straight back in. A `401` redirect goes
+  to plain `/sign-in` (an expiry, so forwarding is right). Screen baselines are re-rendered by the "Update screen baselines" workflow.
 - **Tests** use an in-process fake provider (`FakeIdentityProvider`): a signing key generated per run, discovery, keys, the token
   exchange with the client secret and PKCE checked, and userinfo, all on the back-channel host through the real rewrite handler.
   They run the real OpenID Connect handler end to end and cover role present, role absent, unverified email, a verified email
@@ -378,7 +388,7 @@ change borrows one named pattern; the audit is the 2026-11-07 phone UX audit (39
 - **Sign-in leads with the explanation and one primary action (Carbon Empty states; HIG Onboarding).** A `cmn-empty-state`
   (icon, "The shopping list for the two of you", "Sign in with the passkey on this phone. There is no password.", the
   passkey button in its `cta` slot) in the middle of the screen, the invite hint under it. The join and unreachable
-  pages keep `bk-auth-intro`; they are not part of this change.
+  pages keep `bk-auth-intro`; they are not part of this change. (Step A4 later made the lifekit account the primary action; see "Family sign-in pages".)
 - **A Prices row is a value on the right and two short lines on the left (HIG Lists and tables; Carbon content density).**
   `detailLines` replaces the run-on `detail` string: line one is what the price is (card price, old price, promo, end
   date), line two is the reading (seen date, last paid, a failed read). A shop with no price yet ("Waiting for the next PC

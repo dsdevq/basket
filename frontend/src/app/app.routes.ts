@@ -18,6 +18,16 @@ export const APP_ROUTES: Routes = [
     loadComponent: () => import('./features/join/join.page').then(m => m.JoinPage),
   },
   {
+    path: 'access-denied',
+    title: 'Access denied',
+    loadComponent: () => import('./core/auth/access-denied.page').then(m => m.AccessDeniedPage),
+  },
+  {
+    path: 'link-required',
+    title: 'One more step',
+    loadComponent: () => import('./core/auth/link-required.page').then(m => m.LinkRequiredPage),
+  },
+  {
     path: 'unreachable',
     title: 'Cannot reach basket',
     loadComponent: () => import('./core/auth/unreachable.page').then(m => m.UnreachablePage),
