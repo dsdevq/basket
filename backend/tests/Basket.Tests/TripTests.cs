@@ -285,7 +285,7 @@ public sealed class TripTests
     }
 
     [Fact]
-    public async Task A_shelf_line_picked_from_all_shops_reloads_with_no_shop_and_the_trip_history_shows_only_text()
+    public async Task A_shelf_line_picked_from_all_shops_reloads_with_no_shop_and_the_trip_history_shows_the_product_but_no_shop()
     {
         await using var factory = new BasketFactory();
         var (owner, _) = await factory.OwnerAsync();
@@ -294,7 +294,7 @@ public sealed class TripTests
         var tripId = await CloseAsync(owner);
 
         (await TripsAsync(owner)).GetProperty("trips")[0].GetProperty("items")[0].EnumerateObject().Select(p => p.Name)
-            .Should().BeEquivalentTo("id", "text", "checkedAt", "checkedBy");
+            .Should().BeEquivalentTo("id", "text", "checkedAt", "checkedBy", "productId");
         await owner.PostAsync($"/api/trips/{tripId}/reload", null);
 
         (await ItemsAsync(owner)).Select(Identity).Should().Equal((milk.ToString(), (string?)null));
