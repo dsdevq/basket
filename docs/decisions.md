@@ -1318,8 +1318,7 @@ you know ?" Typing stays for a one-off that is not on the shelf; after a trip th
 - **A typed item is unchanged.** The composer, the row and `POST /api/list/items {text}` are not touched: it is a free-text line
   (`product_id` null) on the list, in the closed trip and when reloaded with "Same as last time".
 - **The offer lives on the closed trip, in History.** A trip item with no product shows a ghost "Add to shelf" button on its row
-  (`PackagePlus`). A Shelf pick never shows it. It is also hidden when a shelf product with the same name (any letter case)
-  already exists, so a promoted item is not offered again. `GET /api/trips` items gain `productId` (null for a typed item); that is
+  (`PackagePlus`). A Shelf pick never shows it. `GET /api/trips` items gain `productId` (null for a typed item); that is
   how the page tells them apart. Receipt-made trips follow the same rule.
 - **"Starts the add-to-shelf flow" is the flow that exists.** Search-add (#31) and the match sheet (#10) are not built yet, so the
   tap goes to the Prices tab (`/prices?add=<text>`) with the typed text already in its "Add a product" box. A person edits it if

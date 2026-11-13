@@ -11,7 +11,6 @@ import {
 } from '@lifekit-hq/ui';
 
 import {euro} from '../prices/price-format';
-import {PricesStore} from '../prices/prices.store';
 import type {Trip, TripItem} from './history.model';
 import {HistoryStore} from './history.store';
 
@@ -110,21 +109,15 @@ import {HistoryStore} from './history.store';
 export class HistoryPage implements OnInit {
   private readonly router = inject(Router);
 
-  private readonly prices = inject(PricesStore);
-
   protected readonly store = inject(HistoryStore);
 
   public ngOnInit(): void {
     void this.store.load();
-    void this.prices.load(true);
   }
 
-  /** A typed one-off (no product) that is not already on the Shelf under that name. */
+  /** A typed one-off: a line with no product behind it. */
   protected canPromote(item: TripItem): boolean {
-    const name = item.text.trim().toLowerCase();
-    return (
-      item.productId === null && !this.prices.products().some(p => p.name.toLowerCase() === name)
-    );
+    return item.productId === null;
   }
 
   /** Starts the add-to-shelf flow: the Prices tab's add-a-product box with the typed text in it, ready to confirm. */

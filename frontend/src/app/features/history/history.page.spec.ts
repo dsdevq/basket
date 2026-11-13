@@ -2,7 +2,6 @@ import {type ComponentFixture, TestBed} from '@angular/core/testing';
 import {Router} from '@angular/router';
 import {ToastService} from '@lifekit-hq/ui';
 
-import {PricesApi} from '../prices/prices.api';
 import {HistoryApi} from './history.api';
 import type {Trip} from './history.model';
 import {HistoryPage} from './history.page';
@@ -49,12 +48,11 @@ const TRIPS: Trip[] = [
   },
 ];
 
-async function render(trips: Trip[], hasMore = false, shelf: {name: string}[] = []) {
+async function render(trips: Trip[], hasMore = false) {
   const api = {
     trips: vi.fn().mockResolvedValue({trips, hasMore}),
     reload: vi.fn().mockResolvedValue({added: 1, alreadyOnList: 0}),
   };
-  const prices = {all: vi.fn().mockResolvedValue({products: shelf, stores: []})};
   const router = {
     navigateByUrl: vi.fn().mockResolvedValue(true),
     navigate: vi.fn().mockResolvedValue(true),
@@ -62,7 +60,6 @@ async function render(trips: Trip[], hasMore = false, shelf: {name: string}[] = 
   TestBed.configureTestingModule({
     providers: [
       {provide: HistoryApi, useValue: api},
-      {provide: PricesApi, useValue: prices},
       {provide: Router, useValue: router},
       {provide: ToastService, useValue: {error: vi.fn(), success: vi.fn()}},
     ],
@@ -159,15 +156,12 @@ describe('HistoryPage', () => {
     });
   });
 
-  it('does not offer Add to shelf on an item that came from the shelf, or whose name is already there', async () => {
+  it('does not offer Add to shelf on an item that came from the shelf', async () => {
     const picked: Trip = {
       ...TRIPS[0],
-      items: [
-        {id: 'x1', text: 'Butter', checkedAt: null, checkedBy: null, productId: 'p9'},
-        {id: 'x2', text: 'Bananas', checkedAt: null, checkedBy: null, productId: null},
-      ],
+      items: [{id: 'x1', text: 'Butter', checkedAt: null, checkedBy: null, productId: 'p9'}],
     };
-    const {host} = await render([picked], false, [{name: 'bananas'}]);
+    const {host} = await render([picked]);
 
     expect(addButtons(host)).toHaveLength(0);
   });
