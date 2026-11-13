@@ -404,4 +404,24 @@ public sealed class TripTests
         item.GetProperty("text").GetString().Should().Be("Milk");
         item.GetProperty("checkedBy").ValueKind.Should().Be(JsonValueKind.Null);
     }
+
+    [Fact]
+    public async Task A_closed_trip_tells_a_typed_item_from_a_shelf_pick_so_only_the_typed_one_offers_promote()
+    {
+        await using var factory = new BasketFactory();
+        var (owner, _) = await factory.OwnerAsync();
+        var milk = await SeedMilkAsync(factory);
+        await AddAsync(owner, "Oat drink");
+        (await PickAsync(owner, milk, "tesco")).EnsureSuccessStatusCode();
+        foreach (var item in await ItemsAsync(owner))
+        {
+            await TickAsync(owner, item.GetProperty("id").GetGuid());
+        }
+
+        await CloseAsync(owner);
+
+        var items = (await TripsAsync(owner)).GetProperty("trips")[0].GetProperty("items").EnumerateArray().ToArray();
+        items.Single(i => i.GetProperty("text").GetString() == "Oat drink").GetProperty("productId").ValueKind.Should().Be(JsonValueKind.Null);
+        items.Single(i => i.GetProperty("text").GetString() == "Whole milk 2L").GetProperty("productId").GetGuid().Should().Be(milk);
+    }
 }

@@ -2,6 +2,7 @@ import {DOCUMENT} from '@angular/common';
 import {ChangeDetectionStrategy, Component, DestroyRef, inject, type OnInit} from '@angular/core';
 import {takeUntilDestroyed} from '@angular/core/rxjs-interop';
 import {FormControl, FormGroup, ReactiveFormsModule} from '@angular/forms';
+import {ActivatedRoute} from '@angular/router';
 import {
   AlertComponent,
   ButtonComponent,
@@ -114,6 +115,7 @@ export class PricesPage implements OnInit {
   private readonly drawer = inject(CmnDrawerService);
   private readonly document = inject(DOCUMENT);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly route = inject(ActivatedRoute);
 
   protected readonly store = inject(PricesStore);
 
@@ -125,6 +127,11 @@ export class PricesPage implements OnInit {
   protected readonly reload = (): Promise<void> => this.store.load();
 
   public ngOnInit(): void {
+    // "Add to shelf" on a History item arrives with the typed text; it fills the box, a person still confirms with Add.
+    const typed = this.route.snapshot.queryParamMap.get('add')?.trim();
+    if (typed) {
+      this.name.setValue(typed);
+    }
     void this.store.load();
     fromEvent(this.document, 'visibilitychange')
       .pipe(takeUntilDestroyed(this.destroyRef))

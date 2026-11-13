@@ -12,7 +12,13 @@ function trip(id: string, closedAt = '2026-11-05T12:00:00Z'): Trip {
     source: null,
     total: null,
     items: [
-      {id: `${id}-1`, text: 'Milk', checkedAt: closedAt, checkedBy: {id: 'u1', name: 'Anna'}},
+      {
+        id: `${id}-1`,
+        text: 'Milk',
+        checkedAt: closedAt,
+        checkedBy: {id: 'u1', name: 'Anna'},
+        productId: null,
+      },
     ],
   };
 }

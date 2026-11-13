@@ -2,6 +2,7 @@ import {type ComponentFixture, TestBed} from '@angular/core/testing';
 import {Router} from '@angular/router';
 import {ToastService} from '@lifekit-hq/ui';
 
+import {PricesApi} from '../prices/prices.api';
 import {HistoryApi} from './history.api';
 import type {Trip} from './history.model';
 import {HistoryPage} from './history.page';
@@ -21,8 +22,20 @@ const TRIPS: Trip[] = [
     source: null,
     total: null,
     items: [
-      {id: 'i1', text: 'Whole milk 2L', checkedAt: '2026-11-05T11:00:00Z', checkedBy: ANNA},
-      {id: 'i2', text: 'Bananas', checkedAt: '2026-11-05T11:05:00Z', checkedBy: null},
+      {
+        id: 'i1',
+        text: 'Whole milk 2L',
+        checkedAt: '2026-11-05T11:00:00Z',
+        checkedBy: ANNA,
+        productId: null,
+      },
+      {
+        id: 'i2',
+        text: 'Bananas',
+        checkedAt: '2026-11-05T11:05:00Z',
+        checkedBy: null,
+        productId: null,
+      },
     ],
   },
   {
@@ -30,19 +43,26 @@ const TRIPS: Trip[] = [
     closedAt: '2026-10-29T12:00:00Z',
     source: null,
     total: null,
-    items: [{id: 'i3', text: 'Rice', checkedAt: '2026-10-29T11:00:00Z', checkedBy: ANNA}],
+    items: [
+      {id: 'i3', text: 'Rice', checkedAt: '2026-10-29T11:00:00Z', checkedBy: ANNA, productId: null},
+    ],
   },
 ];
 
-async function render(trips: Trip[], hasMore = false) {
+async function render(trips: Trip[], hasMore = false, shelf: {name: string}[] = []) {
   const api = {
     trips: vi.fn().mockResolvedValue({trips, hasMore}),
     reload: vi.fn().mockResolvedValue({added: 1, alreadyOnList: 0}),
   };
-  const router = {navigateByUrl: vi.fn().mockResolvedValue(true)};
+  const prices = {all: vi.fn().mockResolvedValue({products: shelf, stores: []})};
+  const router = {
+    navigateByUrl: vi.fn().mockResolvedValue(true),
+    navigate: vi.fn().mockResolvedValue(true),
+  };
   TestBed.configureTestingModule({
     providers: [
       {provide: HistoryApi, useValue: api},
+      {provide: PricesApi, useValue: prices},
       {provide: Router, useValue: router},
       {provide: ToastService, useValue: {error: vi.fn(), success: vi.fn()}},
     ],
@@ -81,7 +101,15 @@ describe('HistoryPage', () => {
       closedAt: '2026-11-07T12:00:00Z',
       source: 'lidl_plus',
       total: 12.5,
-      items: [{id: 'i4', text: 'Butter', checkedAt: '2026-11-07T12:00:00Z', checkedBy: null}],
+      items: [
+        {
+          id: 'i4',
+          text: 'Butter',
+          checkedAt: '2026-11-07T12:00:00Z',
+          checkedBy: null,
+          productId: null,
+        },
+      ],
     };
     const {host} = await render([receipt, ...TRIPS]);
 
@@ -112,5 +140,35 @@ describe('HistoryPage', () => {
 
     const without = await render(TRIPS, false);
     expect(without.host.textContent).not.toContain('Show older trips');
+  });
+
+  const addButtons = (host: HTMLElement) =>
+    Array.from(host.querySelectorAll('button')).filter(b =>
+      b.textContent?.includes('Add to shelf')
+    );
+
+  it('offers Add to shelf on a typed item and starts the add flow with its text', async () => {
+    const {fixture, router, host} = await render(TRIPS);
+
+    expect(addButtons(host)).toHaveLength(3);
+    addButtons(host)[0]?.click();
+    await settle(fixture);
+
+    expect(router.navigate).toHaveBeenCalledWith(['/prices'], {
+      queryParams: {add: 'Whole milk 2L'},
+    });
+  });
+
+  it('does not offer Add to shelf on an item that came from the shelf, or whose name is already there', async () => {
+    const picked: Trip = {
+      ...TRIPS[0],
+      items: [
+        {id: 'x1', text: 'Butter', checkedAt: null, checkedBy: null, productId: 'p9'},
+        {id: 'x2', text: 'Bananas', checkedAt: null, checkedBy: null, productId: null},
+      ],
+    };
+    const {host} = await render([picked], false, [{name: 'bananas'}]);
+
+    expect(addButtons(host)).toHaveLength(0);
   });
 });

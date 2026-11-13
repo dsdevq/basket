@@ -11,12 +11,14 @@ import {
 } from '@lifekit-hq/ui';
 
 import {euro} from '../prices/price-format';
-import type {Trip} from './history.model';
+import {PricesStore} from '../prices/prices.store';
+import type {Trip, TripItem} from './history.model';
 import {HistoryStore} from './history.store';
 
 /**
  * Past shopping trips, newest first (AnyList and OurGroceries keep the same history): the day each was closed, what
- * was bought and who ticked it. "Same as last time" puts a trip's items back on the list.
+ * was bought and who ticked it. "Same as last time" puts a trip's items back on the list. A typed one-off offers
+ * "Add to shelf", the way Bring! lets a custom item you typed be saved into your own catalogue once you have it.
  */
 @Component({
   selector: 'bk-history-page',
@@ -65,7 +67,18 @@ import {HistoryStore} from './history.store';
                   [label]="item.text"
                   [sublabel]="item.checkedBy ? 'Ticked by ' + item.checkedBy.name : null"
                   class="[&_.truncate]:overflow-visible [&_.truncate]:whitespace-normal [&_.truncate]:break-words"
-                />
+                >
+                  @if (canPromote(item)) {
+                    <cmn-button
+                      [aria-label]="'Add ' + item.text + ' to the shelf'"
+                      (clicked)="promote(item)"
+                      actions
+                      variant="ghost"
+                      icon="PackagePlus"
+                      >Add to shelf</cmn-button
+                    >
+                  }
+                </cmn-list-item-row>
               }
               <div class="p-cmn-3">
                 <cmn-button
@@ -97,10 +110,26 @@ import {HistoryStore} from './history.store';
 export class HistoryPage implements OnInit {
   private readonly router = inject(Router);
 
+  private readonly prices = inject(PricesStore);
+
   protected readonly store = inject(HistoryStore);
 
   public ngOnInit(): void {
     void this.store.load();
+    void this.prices.load(true);
+  }
+
+  /** A typed one-off (no product) that is not already on the Shelf under that name. */
+  protected canPromote(item: TripItem): boolean {
+    const name = item.text.trim().toLowerCase();
+    return (
+      item.productId === null && !this.prices.products().some(p => p.name.toLowerCase() === name)
+    );
+  }
+
+  /** Starts the add-to-shelf flow: the Prices tab's add-a-product box with the typed text in it, ready to confirm. */
+  protected promote(item: TripItem): void {
+    void this.router.navigate(['/prices'], {queryParams: {add: item.text}});
   }
 
   protected count(trip: Trip): string {

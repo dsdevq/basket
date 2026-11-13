@@ -44,6 +44,7 @@ const TRIPS = {
       text: item.text,
       checkedAt: trip.closedAt,
       checkedBy: {id: item.by === 'Anna' ? 'u1' : 'u2', name: item.by},
+      productId: item.text === 'Whole milk 2L' ? 'p1' : null,
     })),
   })),
   hasMore: false,
