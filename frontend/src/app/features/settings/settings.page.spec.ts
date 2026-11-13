@@ -2,8 +2,11 @@ import {TestBed} from '@angular/core/testing';
 import {provideRouter} from '@angular/router';
 import {CmnWhatsNewService} from '@lifekit-hq/ui';
 
+import {AuthApi} from '../../core/auth/auth.api';
 import {SessionStore} from '../../core/auth/session.store';
 import {ShellChromeService} from '../../core/shell/shell-chrome.service';
+import {LidlPlusApi} from './lidl-plus.api';
+import {PriceRelayApi} from './price-relay.api';
 import {SettingsPage} from './settings.page';
 
 function sessionStub(role: 'owner' | 'member') {
@@ -11,10 +14,15 @@ function sessionStub(role: 'owner' | 'member') {
   return {user: () => user, isOwner: () => role === 'owner'};
 }
 
+const pending = () => new Promise<never>(() => undefined);
+
 function render(role: 'owner' | 'member') {
   TestBed.configureTestingModule({
     providers: [
       provideRouter([]),
+      {provide: AuthApi, useValue: {passkeys: pending}},
+      {provide: LidlPlusApi, useValue: {status: pending}},
+      {provide: PriceRelayApi, useValue: {tokens: pending}},
       {provide: SessionStore, useValue: sessionStub(role)},
       {provide: ShellChromeService, useValue: {openWhatsNew: vi.fn(), handle: vi.fn()}},
       {provide: CmnWhatsNewService, useValue: {open: vi.fn(), hasUnread: () => false}},
