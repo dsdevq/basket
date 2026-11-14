@@ -19,13 +19,13 @@ namespace Basket.Tests;
 public sealed class IngestImageTests : IClassFixture<BasketFactory>
 {
     private const string TescoUrl = "https://www.tesco.ie/groceries/en-IE/products/254317390";
-    private const string AldiUrl = "https://www.aldi.ie/product/clonbawn-protein-milk-000000000000422541";
+    private const string DunnesUrl = "https://www.dunnesstoresgrocery.com/product/dunnes-stores-swede-100317581";
 
     private readonly BasketFactory _factory;
 
     public IngestImageTests(BasketFactory factory) => _factory = factory;
 
-    /// <summary>Starts from no products, runs or tokens, with Milk linked to the Tesco and Aldi pages above.</summary>
+    /// <summary>Starts from no products, runs or tokens, with Milk linked to the Tesco and Dunnes pages above.</summary>
     private async Task<HttpClient> SeedAsync()
     {
         var (owner, _) = await _factory.OwnerAsync();
@@ -38,7 +38,7 @@ public sealed class IngestImageTests : IClassFixture<BasketFactory>
             db.Products.Add(product);
             db.StoreListings.AddRange(
                 new StoreListing { Id = Guid.NewGuid(), ProductId = product.Id, Store = Store.Tesco, Url = TescoUrl, AddedAt = DateTimeOffset.UtcNow },
-                new StoreListing { Id = Guid.NewGuid(), ProductId = product.Id, Store = Store.Aldi, Url = AldiUrl, AddedAt = DateTimeOffset.UtcNow });
+                new StoreListing { Id = Guid.NewGuid(), ProductId = product.Id, Store = Store.Dunnes, Url = DunnesUrl, AddedAt = DateTimeOffset.UtcNow });
             await db.SaveChangesAsync();
             return 0;
         });
@@ -95,7 +95,7 @@ public sealed class IngestImageTests : IClassFixture<BasketFactory>
         var relay = await RelayAsync();
         (await PostAsync(relay, new { store = "tesco", url = TescoUrl, price = 2.15m, imageUrl = "https://img.example/ok.png" })).EnsureSuccessStatusCode();
 
-        var response = await PostAsync(relay, new { store = "tesco", url = TescoUrl, price = 2.99m, imageUrl = bad }, new { store = "aldi", url = AldiUrl, price = 1.19m });
+        var response = await PostAsync(relay, new { store = "tesco", url = TescoUrl, price = 2.99m, imageUrl = bad }, new { store = "dunnes", url = DunnesUrl, price = 1.19m });
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         Reasons(await response.Content.ReadFromJsonAsync<JsonElement>()).Should().Equal("ok", "ok");

@@ -1,0 +1,26 @@
+{
+  "_note": "Invented for the tests: shaped like the category tree of Aldi's product API, with made-up ids and names. Not recorded from Aldi.",
+  "data": [
+    {
+      "key": "1000000000",
+      "name": "Products",
+      "children": [
+        {
+          "key": "1100000000",
+          "name": "Chilled Food",
+          "children": [
+            { "key": "1110000000", "name": "Cheese", "children": [] },
+            { "key": "1120000000", "name": "Milk", "children": [] }
+          ]
+        },
+        {
+          "key": "1200000000",
+          "name": "Drinks",
+          "children": [
+            { "key": "1210000000", "name": "Water", "children": [] }
+          ]
+        }
+      ]
+    }
+  ]
+}

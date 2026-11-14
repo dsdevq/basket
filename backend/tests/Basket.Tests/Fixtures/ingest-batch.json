@@ -15,9 +15,9 @@
       "imageUrl": "https://digitalcontent.api.tesco.com/v2/media/ghs/0a1b2c3d/tesco-fresh-whole-milk.jpeg?h=225&w=225"
     },
     {
-      "store": "aldi",
-      "url": "https://www.aldi.ie/product/clonbawn-protein-milk-000000000000422541",
-      "title": "Clonbawn Protein Milk 1L",
+      "store": "dunnes",
+      "url": "https://www.dunnesstoresgrocery.com/product/dunnes-stores-swede-100317581",
+      "title": "Dunnes Stores Swede",
       "price": 1.19,
       "inStock": true
     }

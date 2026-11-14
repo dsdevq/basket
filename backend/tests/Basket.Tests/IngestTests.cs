@@ -13,11 +13,11 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Basket.Tests;
 
-/// <summary>The write-only price endpoint the PC-side reader posts Tesco, Aldi and Dunnes readings to.</summary>
+/// <summary>The write-only price endpoint the PC-side reader posts Tesco and Dunnes readings to.</summary>
 public sealed class IngestTests : IClassFixture<BasketFactory>
 {
     private const string TescoUrl = "https://www.tesco.ie/groceries/en-IE/products/254317390";
-    private const string AldiUrl = "https://www.aldi.ie/product/clonbawn-protein-milk-000000000000422541";
+    private const string SwedeUrl = "https://www.dunnesstoresgrocery.com/product/dunnes-stores-swede-100317581";
     private const string DunnesUrl = "https://www.dunnesstoresgrocery.com/product/dunnes-stores-irish-whole-milk-2l-id-100317001";
     private const string LidlUrl = "https://www.lidl.ie/p/aubergine/p11214436";
 
@@ -25,7 +25,7 @@ public sealed class IngestTests : IClassFixture<BasketFactory>
 
     public IngestTests(BasketFactory factory) => _factory = factory;
 
-    /// <summary>Starts from no products, runs or tokens, with Milk linked to the Tesco and Aldi pages above.</summary>
+    /// <summary>Starts from no products, runs or tokens, with Milk linked to the Tesco and Dunnes pages above.</summary>
     private async Task<HttpClient> SeedAsync()
     {
         var (owner, _) = await _factory.OwnerAsync();
@@ -38,7 +38,7 @@ public sealed class IngestTests : IClassFixture<BasketFactory>
             db.Products.Add(product);
             db.StoreListings.AddRange(
                 new StoreListing { Id = Guid.NewGuid(), ProductId = product.Id, Store = Store.Tesco, Url = TescoUrl, AddedAt = DateTimeOffset.UtcNow },
-                new StoreListing { Id = Guid.NewGuid(), ProductId = product.Id, Store = Store.Aldi, Url = AldiUrl, AddedAt = DateTimeOffset.UtcNow });
+                new StoreListing { Id = Guid.NewGuid(), ProductId = product.Id, Store = Store.Dunnes, Url = SwedeUrl, AddedAt = DateTimeOffset.UtcNow });
             await db.SaveChangesAsync();
             return 0;
         });
@@ -194,15 +194,15 @@ public sealed class IngestTests : IClassFixture<BasketFactory>
             tesco.l.LastCheckedAt.Should().BeCloseTo(_factory.Clock.GetUtcNow(), TimeSpan.FromMilliseconds(1));
             tesco.l.LastError.Should().BeNull();
 
-            var aldi = await db.PriceObservations.Join(db.StoreListings, o => o.ListingId, l => l.Id, (o, l) => new { o, l }).SingleAsync(x => x.l.Store == Store.Aldi);
-            aldi.o.Price.Should().Be(1.19m);
-            aldi.o.LoyaltyPrice.Should().BeNull();
-            aldi.o.LoyaltyScheme.Should().BeNull();
-            aldi.l.ImageUrl.Should().BeNull("the Aldi reading sent no photo");
+            var swede = await db.PriceObservations.Join(db.StoreListings, o => o.ListingId, l => l.Id, (o, l) => new { o, l }).SingleAsync(x => x.l.Store == Store.Dunnes);
+            swede.o.Price.Should().Be(1.19m);
+            swede.o.LoyaltyPrice.Should().BeNull();
+            swede.o.LoyaltyScheme.Should().BeNull();
+            swede.l.ImageUrl.Should().BeNull("the Dunnes reading sent no photo");
 
             var runs = await db.PricePullRuns.OrderBy(r => r.Store).ToListAsync();
             runs.Select(r => (r.Store, r.Outcome, r.Listings, r.Read)).Should().Equal(
-                (Store.Aldi, PullOutcome.Ok, 1, 1),
+                (Store.Dunnes, PullOutcome.Ok, 1, 1),
                 (Store.Tesco, PullOutcome.Ok, 1, 1));
             return 0;
         });
@@ -253,6 +253,7 @@ public sealed class IngestTests : IClassFixture<BasketFactory>
         var owner = await SeedAsync();
         await _factory.WithDb(async db =>
         {
+            await db.StoreListings.Where(l => l.Store == Store.Dunnes).ExecuteDeleteAsync();
             db.StoreListings.Add(new StoreListing { Id = Guid.NewGuid(), ProductId = await db.Products.Select(p => p.Id).SingleAsync(), Store = Store.Dunnes, Url = DunnesUrl, AddedAt = DateTimeOffset.UtcNow });
             await db.SaveChangesAsync();
             return 0;
@@ -311,14 +312,14 @@ public sealed class IngestTests : IClassFixture<BasketFactory>
         var response = await PostAsync(
             Relay(token),
             new { store = "tesco", url = TescoUrl, price = 2.15m, loyaltyPrice = 1.89m },
-            new { store = "aldi", url = AldiUrl, price = 1.19m, loyaltyScheme = "Aldi Club" });
+            new { store = "dunnes", url = SwedeUrl, price = 1.19m, loyaltyScheme = "Dunnes Club" });
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         await _factory.WithDb(async db =>
         {
             var rows = await db.PriceObservations.Join(db.StoreListings, o => o.ListingId, l => l.Id, (o, l) => new { l.Store, o.LoyaltyScheme }).ToListAsync();
             rows.Single(r => r.Store == Store.Tesco).LoyaltyScheme.Should().Be("Clubcard");
-            rows.Single(r => r.Store == Store.Aldi).LoyaltyScheme.Should().BeNull();
+            rows.Single(r => r.Store == Store.Dunnes).LoyaltyScheme.Should().BeNull();
             return 0;
         });
     }
@@ -329,7 +330,7 @@ public sealed class IngestTests : IClassFixture<BasketFactory>
         var owner = await SeedAsync();
         var (_, token) = await MintAsync(owner);
 
-        var response = await PostAsync(Relay(token), new { store = "aldi", url = AldiUrl, inStock = false });
+        var response = await PostAsync(Relay(token), new { store = "dunnes", url = SwedeUrl, inStock = false });
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         await _factory.WithDb(async db =>
@@ -352,15 +353,16 @@ public sealed class IngestTests : IClassFixture<BasketFactory>
             Tesco(2.15m),
             new { store = "waitrose", url = TescoUrl, price = 1m },
             new { store = "lidl", url = LidlUrl, price = 1m },
+            new { store = "aldi", url = "https://www.aldi.ie/product/clonbawn-protein-milk-000000000000422541", price = 1m },
             new { store = "tesco", url = "https://evil.example/groceries/en-IE/products/254317390", price = 1m },
             new { store = "tesco", url = "https://www.tesco.ie/groceries/en-IE/products/999999999", price = 1m },
-            new { store = "aldi", url = AldiUrl, price = -1.19m },
-            new { store = "aldi", url = AldiUrl, price = 0m },
-            new { store = "aldi", url = AldiUrl, price = 1.199m },
-            new { store = "aldi", url = AldiUrl, price = 100000m },
-            new { store = "aldi", url = AldiUrl, loyaltyPrice = -0.5m, price = 1.19m },
-            new { store = "aldi", url = AldiUrl },
-            new { store = "aldi", url = AldiUrl, price = 1.19m, validFrom = "2026-11-10", validUntil = "2026-11-02" },
+            new { store = "dunnes", url = SwedeUrl, price = -1.19m },
+            new { store = "dunnes", url = SwedeUrl, price = 0m },
+            new { store = "dunnes", url = SwedeUrl, price = 1.199m },
+            new { store = "dunnes", url = SwedeUrl, price = 100000m },
+            new { store = "dunnes", url = SwedeUrl, loyaltyPrice = -0.5m, price = 1.19m },
+            new { store = "dunnes", url = SwedeUrl },
+            new { store = "dunnes", url = SwedeUrl, price = 1.19m, validFrom = "2026-11-10", validUntil = "2026-11-02" },
             Tesco(1.50m));
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -368,6 +370,7 @@ public sealed class IngestTests : IClassFixture<BasketFactory>
         Reasons(body).Should().Equal(
             "ok",
             "unknown_store",
+            "store_not_ingested",
             "store_not_ingested",
             "url_invalid",
             "unknown_listing",
@@ -380,7 +383,7 @@ public sealed class IngestTests : IClassFixture<BasketFactory>
             "dates_invalid",
             "duplicate");
         body.GetProperty("accepted").GetInt32().Should().Be(1);
-        body.GetProperty("rejected").GetInt32().Should().Be(12);
+        body.GetProperty("rejected").GetInt32().Should().Be(13);
 
         await _factory.WithDb(async db =>
         {

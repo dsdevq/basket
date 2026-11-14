@@ -189,8 +189,8 @@ public sealed class CatalogIngestTests : IClassFixture<CatalogIngestTests.RoomyF
         body.GetProperty("rejected").GetInt32().Should().Be(0);
         await _factory.WithDb(async db =>
         {
-            var mozzarella = await db.StoreProducts.SingleAsync(p => p.ExternalId == "000000000000900101");
-            mozzarella.Store.Should().Be(Store.Aldi);
+            var mozzarella = await db.StoreProducts.SingleAsync(p => p.ExternalId == "900101");
+            mozzarella.Store.Should().Be(Store.Dunnes);
             mozzarella.Name.Should().Be("Grated Mozzarella");
             mozzarella.Brand.Should().Be("GREENFIELD");
             (mozzarella.SizeAmount, mozzarella.SizeUnit, mozzarella.SizePacks).Should().Be((250m, "g", 1));
@@ -199,10 +199,10 @@ public sealed class CatalogIngestTests : IClassFixture<CatalogIngestTests.RoomyF
             mozzarella.Category.Should().Be("Chilled Food > Cheese");
             mozzarella.ImageUrl.Should().Be("https://images.example.test/product/jpg/scaleWidth/300/aaaa-0001");
 
-            var water = await db.StoreProducts.SingleAsync(p => p.ExternalId == "000000000000900103");
+            var water = await db.StoreProducts.SingleAsync(p => p.ExternalId == "900103");
             (water.SizeAmount, water.SizeUnit, water.SizePacks).Should().Be((330m, "ml", 6));
 
-            var slices = await db.StoreProducts.SingleAsync(p => p.ExternalId == "000000000000900102");
+            var slices = await db.StoreProducts.SingleAsync(p => p.ExternalId == "900102");
             var price = await db.StoreProductPrices.SingleAsync(p => p.StoreProductId == slices.Id);
             (price.Price, price.WasPrice).Should().Be((1.29m, 1.35m));
             return 0;
@@ -265,6 +265,7 @@ public sealed class CatalogIngestTests : IClassFixture<CatalogIngestTests.RoomyF
 
     [Theory]
     [InlineData("lidl", "store_not_ingested")]
+    [InlineData("aldi", "store_not_ingested")]
     [InlineData("superquinn", "unknown_store")]
     [InlineData(null, "unknown_store")]
     public async Task A_shop_the_server_reads_itself_or_does_not_know_is_refused_item_by_item(string? store, string reason)
@@ -647,6 +648,7 @@ public sealed class CatalogIngestTests : IClassFixture<CatalogIngestTests.RoomyF
 
     [Theory]
     [InlineData("lidl", "store_not_ingested")]
+    [InlineData("aldi", "store_not_ingested")]
     [InlineData("superquinn", "unknown_store")]
     public async Task A_sweep_of_a_shop_the_server_reads_or_does_not_know_is_a_422(string store, string error)
     {

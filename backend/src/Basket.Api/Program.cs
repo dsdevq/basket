@@ -60,6 +60,7 @@ builder.Services.AddHttpClient<IPageFetcher, PoliteFetcher>((services, client) =
     PooledConnectionLifetime = TimeSpan.FromMinutes(5),
 });
 builder.Services.AddScoped<IStorePriceSource, LidlPriceSource>();
+builder.Services.AddScoped<IStorePriceSource, AldiCatalogSource>();
 builder.Services.AddScoped<PriceRecorder>();
 builder.Services.AddScoped<PricePullJob>();
 builder.Services.AddScoped<IngestTokenService>();
