@@ -190,8 +190,8 @@ describe('ShelfPage', () => {
     await choose('Usually bought');
     await choose('Aldi');
 
-    expect(host.textContent).not.toContain('Nothing usual yet');
-    expect(host.textContent).toContain('Nothing at Aldi yet');
+    expect(host.textContent).toContain('Nothing usual at Aldi yet');
+    expect(host.textContent).not.toContain('No product has a');
   });
 
   it('opens on All with every product as a card', async () => {

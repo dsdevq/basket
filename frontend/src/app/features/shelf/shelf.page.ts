@@ -136,9 +136,10 @@ export class ShelfPage implements OnInit {
   );
   protected readonly empty = computed(() => {
     const filter = this.filter();
-    if (this.view() === 'usual' && filter === 'all') {
+    if (this.view() === 'usual') {
       return {
-        message: 'Nothing usual yet',
+        message:
+          filter === 'all' ? 'Nothing usual yet' : `Nothing usual at ${STORE_NAMES[filter]} yet`,
         detail:
           'Products you buy on two or more trips show up here. Tap Done shopping on the list to count a trip.',
       };
