@@ -613,6 +613,7 @@ const PLAN_SPLIT = {
               unit: 'l',
               unitPrice: 0.5,
               observedOn: '2026-11-05',
+              section: 'Dairy & eggs',
             }),
           ],
         },
@@ -625,6 +626,7 @@ const PLAN_SPLIT = {
               packSize: '227 g',
               unit: 'kg',
               unitPrice: 12.82,
+              section: 'Dairy & eggs',
             }),
           ],
         },
@@ -694,6 +696,7 @@ function byShopLine(
     unit?: string;
     unitPrice?: number;
     observedOn?: string;
+    section?: string;
   } = {}
 ) {
   return {
@@ -707,6 +710,7 @@ function byShopLine(
     unit: null,
     unitPrice: null,
     observedOn: '2026-11-06',
+    section: 'Other',
     ...over,
   };
 }
@@ -787,6 +791,7 @@ const BY_SHOP = {
             unit: 'l',
             unitPrice: 0.5,
             observedOn: '2026-11-05',
+            section: 'Dairy & eggs',
           }),
         ],
       },
@@ -799,6 +804,7 @@ const BY_SHOP = {
             packSize: '227 g',
             unit: 'kg',
             unitPrice: 12.82,
+            section: 'Dairy & eggs',
           }),
         ],
       },
@@ -815,21 +821,24 @@ const BY_SHOP = {
   },
 };
 
-/** The happy case: Aldi prices both lines for least, and splitting saves a little more. */
+/**
+ * The happy case: Aldi prices all four lines for least, and splitting saves a little more. The split's lines are in the order each
+ * shop is walked: Aldi fruit, then dairy; Lidl bakery, then drinks.
+ */
 const BY_SHOP_COMPLETE = {
   asOf: '2026-11-06',
   staleAfterDays: 3,
-  lineCount: 2,
+  lineCount: 4,
   stores: [
     byShopStore('lidl', {
-      priced: 2,
-      total: 3.7,
+      priced: 4,
+      total: 6.3,
       complete: true,
       oldestSeenOn: '2026-11-05',
     }),
     byShopStore('aldi', {
-      priced: 2,
-      total: 3.5,
+      priced: 4,
+      total: 6.25,
       complete: true,
       cheapest: true,
       oldestSeenOn: '2026-11-06',
@@ -838,36 +847,63 @@ const BY_SHOP_COMPLETE = {
       priced: 1,
       total: 1.85,
       oldestSeenOn: '2026-11-06',
-      missing: [absent('Whole milk 2L', 'stale')],
+      missing: [
+        absent('Whole milk 2L', 'stale'),
+        absent('Bananas 1kg', 'not_linked'),
+        absent('Brennans sliced pan 800g', 'not_linked'),
+      ],
     }),
     byShopStore('dunnes', {
       missing: [
         absent('Whole milk 2L', 'not_linked'),
+        absent('Bananas 1kg', 'not_linked'),
         absent('Brennans sliced pan 800g', 'not_linked'),
+        absent('Cola 2L', 'not_linked'),
       ],
     }),
   ],
   split: {
-    total: 3.4,
+    total: 6.1,
     complete: true,
-    versusCheapest: -0.1,
+    versusCheapest: -0.15,
     groups: [
-      {
-        store: 'aldi',
-        storeName: 'Aldi',
-        total: 1.1,
-        lines: [byShopLine('Whole milk 2L', 1.1, {packSize: '2 L', unit: 'l', unitPrice: 0.55})],
-      },
       {
         store: 'lidl',
         storeName: 'Lidl',
-        total: 2.3,
+        total: 3.8,
         lines: [
           byShopLine('Brennans sliced pan 800g', 2.3, {
             packSize: '800 g',
             unit: 'kg',
             unitPrice: 2.88,
             observedOn: '2026-11-05',
+            section: 'Bakery',
+          }),
+          byShopLine('Cola 2L', 1.5, {
+            packSize: '2 L',
+            unit: 'l',
+            unitPrice: 0.75,
+            observedOn: '2026-11-05',
+            section: 'Drinks',
+          }),
+        ],
+      },
+      {
+        store: 'aldi',
+        storeName: 'Aldi',
+        total: 2.3,
+        lines: [
+          byShopLine('Bananas 1kg', 1.2, {
+            packSize: '1 kg',
+            unit: 'kg',
+            unitPrice: 1.2,
+            section: 'Fruit & veg',
+          }),
+          byShopLine('Whole milk 2L', 1.1, {
+            packSize: '2 L',
+            unit: 'l',
+            unitPrice: 0.55,
+            section: 'Dairy & eggs',
           }),
         ],
       },

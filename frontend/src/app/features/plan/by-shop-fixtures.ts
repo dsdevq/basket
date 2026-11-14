@@ -30,6 +30,7 @@ export function bought(over: Partial<ByShopLine> = {}): ByShopLine {
     unitPrice: 0.65,
     unit: 'l',
     observedOn: '2026-11-05',
+    section: 'Other',
     ...over,
   };
 }

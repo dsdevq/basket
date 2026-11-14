@@ -105,6 +105,22 @@ const section = (host: HTMLElement, heading: string): HTMLElement | undefined =>
     squash(s.textContent).startsWith(heading)
   );
 
+/** One shop's walk, section by section: each header ("Lidl · Fruit & veg") with its rows, and the shop total on the first. */
+const walk = (
+  host: HTMLElement,
+  chain: string
+): {header: string; rows: string[]; total: string}[] =>
+  [...host.querySelectorAll<HTMLElement>('cmn-list-section')]
+    .map(s => {
+      const total = squash(s.querySelector('[data-testid="shop-total"]')?.textContent);
+      return {
+        header: squash(s.querySelector('h2')?.textContent).replace(total, '').trim(),
+        rows: [...s.querySelectorAll('cmn-list-item-row')].map(r => squash(r.textContent)),
+        total,
+      };
+    })
+    .filter(s => s.header.startsWith(`${chain} · `));
+
 const text = (host: HTMLElement, selector: string): string =>
   (host.querySelector(selector)?.textContent ?? '').replace(/\s+/g, ' ').trim();
 
@@ -209,6 +225,7 @@ describe('PlanPage', () => {
                   isPromo: true,
                   card: 'Lidl Plus',
                   observedOn: '2026-11-05',
+                  section: 'Dairy & eggs',
                 }),
               ],
             },
@@ -216,7 +233,14 @@ describe('PlanPage', () => {
               store: 'aldi',
               storeName: 'Aldi',
               total: 2.91,
-              lines: [bought({itemId: 'd', text: 'Kerrygold butter 227g', price: 2.91})],
+              lines: [
+                bought({
+                  itemId: 'd',
+                  text: 'Kerrygold butter 227g',
+                  price: 2.91,
+                  section: 'Dairy & eggs',
+                }),
+              ],
             },
           ],
         },
@@ -227,12 +251,14 @@ describe('PlanPage', () => {
     const answer = text(host, '[data-testid="coverage"]');
     expect(answer).toContain('Best two: Lidl + Aldi');
     expect(answer).toContain('€3.90');
-    const lidl = squash(section(host, 'Buy at Lidl · €0.99')?.textContent);
-    expect(lidl).toContain('Whole milk 2L');
-    expect(lidl).toContain('Seen 5 Nov · Lidl Plus price');
-    expect(squash(section(host, 'Buy at Aldi · €2.91')?.textContent)).toContain(
-      'Kerrygold butter 227g'
-    );
+    const lidl = walk(host, 'Lidl');
+    expect(lidl.map(s => s.header)).toEqual(['Lidl · Dairy & eggs']);
+    expect(lidl[0].total).toBe('Shop total €0.99');
+    expect(lidl[0].rows[0]).toContain('Whole milk 2L');
+    expect(lidl[0].rows[0]).toContain('Seen 5 Nov · Lidl Plus price');
+    const aldi = walk(host, 'Aldi');
+    expect(aldi[0].total).toBe('Shop total €2.91');
+    expect(aldi[0].rows[0]).toContain('Kerrygold butter 227g');
     expect(text(host, '[data-testid="rule"]')).toContain('the two shops that together do');
     expect(text(host, '[data-testid="rule"]')).toContain(
       'the shop of the two with the lower price'

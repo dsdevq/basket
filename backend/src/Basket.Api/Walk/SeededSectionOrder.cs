@@ -76,7 +76,10 @@ public static class SeededSectionOrder
     /// Where a product falls in <paramref name="store"/>'s walk: the position of its category's section, 0 first. A product with
     /// no category sorts last, in <see cref="Other"/>.
     /// </summary>
-    public static int Rank(Store store, string? category) => IndexOf(For(store), SectionOf(category));
+    public static int Rank(Store store, string? category) => RankOfSection(store, SectionOf(category));
+
+    /// <summary>The position of a section (as <see cref="SectionOf"/> names it) in <paramref name="store"/>'s walk; a name no order lists sorts last, with <see cref="Other"/>.</summary>
+    public static int RankOfSection(Store store, string section) => IndexOf(For(store), section);
 
     private static int IndexOf(IReadOnlyList<string> order, string section)
     {

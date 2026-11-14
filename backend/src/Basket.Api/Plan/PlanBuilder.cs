@@ -44,7 +44,8 @@ public static class PlanStoreStates
 /// <summary>
 /// One linked shop for one line. <see cref="Offer"/> is the normalised price (the promotions rule: the cheapest way to buy
 /// it, per pack and per unit) when the shop has a usable reading, even a stale or out-of-stock one; the raw shelf
-/// <see cref="Price"/>, <see cref="WasPrice"/> and <see cref="PromoText"/> are the reading itself.
+/// <see cref="Price"/>, <see cref="WasPrice"/> and <see cref="PromoText"/> are the reading itself. <see cref="Category"/> is the
+/// shop-page breadcrumb kept on the listing (null until it is read), which walk order sorts by.
 /// </summary>
 public sealed record PlanStorePrice(
     string Store,
@@ -55,7 +56,8 @@ public sealed record PlanStorePrice(
     decimal? WasPrice,
     string? PromoText,
     PromoOffer? Offer,
-    bool Best);
+    bool Best,
+    string? Category = null);
 
 /// <summary>
 /// A price the household really paid at a shop, from a receipt, with the day it was paid. Not a shelf price: it never takes part in
@@ -174,7 +176,7 @@ public static class PlanBuilder
                 : offer.Flags.Contains(PromotionBuilder.FlagOutOfStock) ? PlanStoreStates.OutOfStock
                 : PlanStoreStates.Priced
             : comparison.Gaps.FirstOrDefault(g => g.Store == slug)?.Reason ?? PlanStoreStates.NotRead;
-        return new PlanStorePrice(slug, store.DisplayName(), state, reading?.ObservedOn, reading?.Price, reading?.WasPrice, reading?.PromoText, offer, false);
+        return new PlanStorePrice(slug, store.DisplayName(), state, reading?.ObservedOn, reading?.Price, reading?.WasPrice, reading?.PromoText, offer, false, listing.Category);
     }
 
     /// <summary>

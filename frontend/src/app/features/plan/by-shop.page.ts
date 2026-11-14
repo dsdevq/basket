@@ -21,7 +21,7 @@ import {fromEvent} from 'rxjs';
 
 import {euro, shortDate} from '../prices/price-format';
 import {ByShopStore} from './by-shop.store';
-import {lineDetail, orderedShops, storeDetail, verdict} from './by-shop-format';
+import {lineDetail, orderedShops, storeDetail, verdict, walkSections} from './by-shop-format';
 import {flagText, missingTag} from './plan-format';
 
 /**
@@ -108,18 +108,25 @@ import {flagText, missingTag} from './plan-format';
               }
 
               @for (group of basket.split.groups; track group.store) {
-                <cmn-list-section
-                  [heading]="'Split: buy at ' + group.storeName + ' · ' + price(group.total)"
-                  card
-                >
-                  @for (line of group.lines; track line.itemId) {
-                    <cmn-list-item-row [label]="line.text" [sublabel]="lineText(line)">
-                      <span amount class="font-semibold text-text-primary text-cmn-sm">{{
-                        price(line.price)
-                      }}</span>
-                    </cmn-list-item-row>
-                  }
-                </cmn-list-section>
+                @for (walk of sections(group.lines); track walk.section; let first = $first) {
+                  <cmn-list-section [heading]="group.storeName + ' · ' + walk.section" card>
+                    @if (first) {
+                      <span
+                        cmnListSectionAside
+                        class="text-cmn-sm text-text-secondary"
+                        data-testid="shop-total"
+                        >Shop total {{ price(group.total) }}</span
+                      >
+                    }
+                    @for (line of walk.lines; track line.itemId) {
+                      <cmn-list-item-row [label]="line.text" [sublabel]="lineText(line)">
+                        <span amount class="font-semibold text-text-primary text-cmn-sm">{{
+                          price(line.price)
+                        }}</span>
+                      </cmn-list-item-row>
+                    }
+                  </cmn-list-section>
+                }
               }
 
               @if (basket.split.unplaced.length) {
@@ -142,7 +149,8 @@ import {flagText, missingTag} from './plan-format';
                   the last {{ basket.staleAfterDays }} days that are in stock. A line a shop cannot
                   price adds nothing and is listed, so only a shop with none missing can be
                   cheapest. The split buys each line at the shop with the lowest price per kilo,
-                  litre or piece, so it can cost more than a shop whose packs are smaller.
+                  litre or piece, so it can cost more than a shop whose packs are smaller. Under
+                  each shop its lines come in the order that shop's sections are usually walked.
                 </p>
               </cmn-list-section>
             }
@@ -171,6 +179,7 @@ export class ByShopPage implements OnInit {
   protected readonly price = euro;
   protected readonly detail = storeDetail;
   protected readonly lineText = lineDetail;
+  protected readonly sections = walkSections;
   protected readonly missing = missingTag;
 
   /** Prices change at most once a night, so the page re-reads when it opens and when it comes back into view. */

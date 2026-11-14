@@ -14,6 +14,8 @@ export interface ByShopLine {
   readonly unitPrice: number | null;
   readonly unit: 'kg' | 'l' | 'each' | null;
   readonly observedOn: string;
+  /** Where the shop keeps it, one of the chain's walk-order sections ("Fruit & veg", "Meat & fish"); "Other" when it has no category. */
+  readonly section: string;
 }
 
 /** A line a shop cannot price (or the split cannot place), and why. */
@@ -42,6 +44,7 @@ export interface ByShopStore {
   readonly missing: readonly ByShopMissing[];
 }
 
+/** One shop's lines, `lines` in the order that shop is walked (section by section), as the API sends them. */
 export interface ByShopGroup {
   readonly store: StoreId;
   readonly storeName: string;
