@@ -39,7 +39,7 @@ public sealed class AldiCatalogSourceTests : IClassFixture<BasketFactory>
     private async Task<T> SweepAsync<T>(FakeFetcher fetcher, Func<AldiCatalogSource, Task<T>> run) =>
         await _factory.WithDb(async db =>
         {
-            var recorder = new CatalogRecorder(db);
+            var recorder = new CatalogRecorder(db, new PriceRecorder(db));
             var source = new AldiCatalogSource(
                 fetcher,
                 recorder,
