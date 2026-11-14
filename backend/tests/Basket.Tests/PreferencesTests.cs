@@ -115,6 +115,7 @@ public sealed class PreferencesTests : IClassFixture<BasketFactory>
     [InlineData("{\"appearance\":{}}", "theme_invalid")]
     [InlineData("{\"appearance\":{\"theme\":\"dark\",\"seed\":\"7c3aed\"}}", "seed_invalid")]
     [InlineData("{\"appearance\":{\"theme\":\"dark\",\"seed\":\"#7c3aedff\"}}", "seed_invalid")]
+    [InlineData("{\"appearance\":{\"theme\":\"dark\",\"seed\":\"#7c3aed\\n\"}}", "seed_invalid")]
     [InlineData("{\"appearance\":{\"theme\":\"dark\",\"intensity\":1.5}}", "intensity_invalid")]
     [InlineData("{\"appearance\":{\"theme\":\"dark\",\"intensity\":-0.1}}", "intensity_invalid")]
     public async Task An_invalid_value_is_refused_and_nothing_is_stored(string body, string error)

@@ -126,6 +126,6 @@ public static partial class PreferencesEndpoints
 
     private static IResult Refused(string error, string message) => Results.Json(new { error, message }, statusCode: 400);
 
-    [GeneratedRegex("^#[0-9a-fA-F]{6}$")]
+    [GeneratedRegex("^#[0-9a-fA-F]{6}\\z")]
     private static partial Regex HexColour();
 }
