@@ -132,8 +132,8 @@ public sealed class ScorecardTests
     {
         await using var factory = new BasketFactory();
         var (owner, _) = await factory.OwnerAsync();
-        factory.Clock.SetUtcNow(new DateTimeOffset(2026, 11, 14, 12, 0, 0, TimeSpan.Zero));
-        var day = new DateOnly(2026, 11, 14);
+        // The factory's clock starts at the real time; the prices and the trip hang off that same day, so the test never depends on today's date.
+        var day = PriceRecorder.DublinDay(factory.Clock.GetUtcNow());
         await factory.WithDb(async db =>
         {
             var by = db.Users.Select(u => u.Id).First();
