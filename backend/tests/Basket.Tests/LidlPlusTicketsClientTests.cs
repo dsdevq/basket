@@ -32,19 +32,35 @@ public sealed class LidlPlusTicketsClientTests
         return (new LidlPlusTicketsClient(http, Options.Create(new LidlPlusOptions())), handler);
     }
 
-    private const string Receipt = """
-        {
-          "id": "R-2026-11-02-001",
-          "date": "2026-11-02T18:30:00+00:00",
-          "totalAmount": "5,16",
-          "itemsLine": [
-            { "description": "Whole milk 2L", "quantity": "1", "isWeight": false, "currentUnitPrice": "1,29", "originalAmount": "1,29", "extendedAmount": "1,29" },
-            { "description": "Bananas", "quantity": "0,612", "isWeight": true, "currentUnitPrice": "1,69", "originalAmount": "1,03", "extendedAmount": "1,03" },
-            { "description": "Cola 1.5L", "quantity": 2, "isWeight": false, "currentUnitPrice": 1.2, "originalAmount": 2.4, "extendedAmount": 2.4 },
-            { "quantity": "1", "extendedAmount": "9,99" }
-          ]
-        }
+    /// <summary>A printed receipt with invented products, in the structure Lidl prints (spans in a pre); the discount follows its article.</summary>
+    internal const string Printed = """
+        <html><head><meta http-equiv="content-type" content="text/html; charset=utf-8"/></head><body><pre>
+        <span class="header" data-till-country="IE" data-receipt-language="en"><span id="header_line_1"></span> <span id="header_line_2"> Test Store - IE0000000 </span> </span><span class="purchase_list"><span id="purchase_list_line_1" class="currency" data-currency="EUR"> EUR</span>
+        <span id="purchase_list_line_2" class="article" data-art-id="1000001" data-unit-price="1.29" data-tax-type="B" data-art-description="Test whole milk 2L">Test whole milk 2L 1.29 B</span>
+        <span id="purchase_list_line_3" class="discount" data-promotion-id="1000-IE-TESTPROMO-0001"> Test coupon -0.30</span>
+        <span id="purchase_list_line_4"> ----------- </span>
+        <span id="purchase_list_line_5" class="article" data-art-id="1000002" data-art-quantity="3" data-unit-price="1.49" data-tax-type="A" data-art-description="Test oat biscuits">Test oat biscuits 4.47 A</span>
+        <span id="purchase_list_line_6" class="article" data-art-id="1000002" data-art-quantity="3" data-unit-price="1.49" data-tax-type="A" data-art-description="Test oat biscuits"> 3 x 1.49 </span>
+        <span id="purchase_list_line_7" class="article" data-art-id="1000003" data-art-quantity="0.612" data-unit-price="1.69" data-tax-type="A" data-art-description="Test bananas">Test bananas 1.03 A</span>
+        <span id="purchase_list_line_8" class="article" data-art-id="1000004" data-unit-price="2,50" data-tax-type="A" data-art-description="Test &amp; sons rye bread">Test &amp; sons rye bread 2,50 A</span>
+        <span id="purchase_list_line_9" class="article" data-art-id="1000005" data-unit-price="not a price" data-tax-type="A" data-art-description="Test unreadable">Test unreadable ? A</span>
+        </span><span class="purchase_summary"><span id="purchase_summary_1"> ------------</span> <span id="purchase_summary_2">total 9.00</span> </span><span class="return_code"><span id="return_code_1" data-return-code="0"></span></span><span class="footer"></span></pre></body></html>
         """;
+
+    internal static string ReceiptJson(string printed, string date = "2026-11-02T18:30:00+00:00", string total = "\"6,25\"") =>
+        System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, object?>
+        {
+            ["ticketType"] = "Purchase",
+            ["id"] = "R-2026-11-02-001",
+            ["date"] = date,
+            ["totalAmount"] = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(total),
+            ["store"] = new { id = "IE0000", name = "Test Store" },
+            ["couponsUsed"] = Array.Empty<object>(),
+            ["htmlPrintedReceipt"] = printed,
+            ["languageCode"] = "en",
+        });
+
+    private static readonly string Receipt = ReceiptJson(Printed);
 
     [Fact]
     public async Task It_asks_for_one_page_of_the_list_with_the_access_token_in_a_header_and_never_in_the_address()
@@ -58,7 +74,22 @@ public sealed class LidlPlusTicketsClientTests
         request.RequestUri!.ToString().Should().Be("https://tickets.lidl.test/api/v2/IE/tickets?pageNumber=3&onlyFavorite=false").And.NotContain(Access);
         request.Headers.Authorization!.Scheme.Should().Be("Bearer");
         request.Headers.Authorization.Parameter.Should().Be(Access);
-        request.Headers.GetValues("Accept-Language").Should().Equal("en-IE");
+        request.Headers.GetValues("Accept-Language").Should().Equal("en");
+        request.Headers.GetValues("App-Version").Should().Equal("16.40.2");
+    }
+
+    [Fact]
+    public async Task The_app_version_and_the_language_come_from_the_options_and_the_language_is_cut_to_two_letters()
+    {
+        var handler = new Recorded(_ => Json(HttpStatusCode.OK, """{"tickets":[]}"""));
+        var http = new HttpClient(handler) { BaseAddress = new Uri("https://tickets.lidl.test/") };
+        var client = new LidlPlusTicketsClient(http, Options.Create(new LidlPlusOptions { AppVersion = "17.1.0", Language = "en-IE" }));
+
+        await client.ListAsync(Access, 1, CancellationToken.None);
+        await client.GetAsync(Access, "R", CancellationToken.None);
+
+        handler.Seen.Should().HaveCount(2).And.OnlyContain(r =>
+            r.Headers.GetValues("App-Version").Single() == "17.1.0" && r.Headers.GetValues("Accept-Language").Single() == "en");
     }
 
     [Fact]
@@ -73,17 +104,17 @@ public sealed class LidlPlusTicketsClientTests
     }
 
     [Fact]
-    public async Task It_opens_one_receipt_by_its_id_escaped_in_the_path()
+    public async Task It_opens_one_receipt_on_the_v3_service_by_its_id_escaped_in_the_path()
     {
         var (client, handler) = Client(_ => Json(HttpStatusCode.OK, Receipt));
 
         await client.GetAsync(Access, "R/1 2", CancellationToken.None);
 
-        handler.Seen.Single().RequestUri!.AbsoluteUri.Should().Be("https://tickets.lidl.test/api/v2/IE/tickets/R%2F1%202");
+        handler.Seen.Single().RequestUri!.AbsoluteUri.Should().Be("https://tickets.lidl.test/api/v3/IE/tickets/R%2F1%202");
     }
 
     [Fact]
-    public async Task A_receipt_is_read_with_decimal_commas_numbers_and_the_lines_that_have_no_name_left_out()
+    public async Task A_receipt_is_read_from_its_printed_lines_with_discounts_quantities_and_unreadable_lines_left_out()
     {
         var (client, _) = Client(_ => Json(HttpStatusCode.OK, Receipt));
 
@@ -93,11 +124,12 @@ public sealed class LidlPlusTicketsClientTests
         var receipt = result.Receipt!;
         receipt.Id.Should().Be("R-2026-11-02-001");
         receipt.Date.Should().Be(new DateTimeOffset(2026, 11, 2, 18, 30, 0, TimeSpan.Zero));
-        receipt.Total.Should().Be(5.16m);
-        receipt.Lines.Select(l => l.Description).Should().Equal("Whole milk 2L", "Bananas", "Cola 1.5L");
-        receipt.Lines[0].Should().Be(new LidlReceiptLine("Whole milk 2L", 1m, false, 1.29m, 1.29m));
-        receipt.Lines[1].Should().Be(new LidlReceiptLine("Bananas", 0.612m, true, 1.69m, 1.03m));
-        receipt.Lines[2].Should().Be(new LidlReceiptLine("Cola 1.5L", 2m, false, 1.2m, 2.4m));
+        receipt.Total.Should().Be(6.25m);
+        receipt.Lines.Should().Equal(
+            new LidlReceiptLine("Test whole milk 2L", 1m, false, 1.29m, 0.99m),
+            new LidlReceiptLine("Test oat biscuits", 3m, false, 1.49m, 4.47m),
+            new LidlReceiptLine("Test bananas", 0.612m, true, 1.69m, 1.03m),
+            new LidlReceiptLine("Test & sons rye bread", 1m, false, 2.50m, 2.50m));
     }
 
     [Theory]
@@ -106,21 +138,32 @@ public sealed class LidlPlusTicketsClientTests
     [InlineData("0.99", 0.99)]
     public async Task Amounts_in_either_notation_are_read(string text, double expected)
     {
-        var (client, _) = Client(_ => Json(HttpStatusCode.OK, $$"""{"date":"2026-11-02T10:00:00Z","totalAmount":"{{text}}","itemsLine":[]}"""));
+        var (client, _) = Client(_ => Json(HttpStatusCode.OK, ReceiptJson(Printed, total: $"\"{text}\"")));
 
         var result = await client.GetAsync(Access, "R", CancellationToken.None);
 
         result.Receipt!.Total.Should().Be((decimal)expected);
     }
 
+    [Fact]
+    public async Task A_total_sent_as_a_number_is_read()
+    {
+        var (client, _) = Client(_ => Json(HttpStatusCode.OK, ReceiptJson(Printed, total: "6.25")));
+
+        (await client.GetAsync(Access, "R", CancellationToken.None)).Receipt!.Total.Should().Be(6.25m);
+    }
+
     [Theory]
-    [InlineData("""{"itemsLine":[]}""")]
-    [InlineData("""{"date":"not a date","itemsLine":[]}""")]
+    [InlineData("""{"htmlPrintedReceipt":"<span class=\"article\" data-art-id=\"1\" data-unit-price=\"1.00\" data-art-description=\"Test\">x</span>"}""")]
+    [InlineData("""{"date":"not a date","htmlPrintedReceipt":"<span class=\"article\" data-art-id=\"1\" data-unit-price=\"1.00\" data-art-description=\"Test\">x</span>"}""")]
     [InlineData("""{"date":"2026-11-02T10:00:00Z"}""")]
-    [InlineData("""{"date":"2026-11-02T10:00:00Z","itemsLine":"none"}""")]
+    [InlineData("""{"date":"2026-11-02T10:00:00Z","htmlPrintedReceipt":null}""")]
+    [InlineData("""{"date":"2026-11-02T10:00:00Z","htmlPrintedReceipt":""}""")]
+    [InlineData("""{"date":"2026-11-02T10:00:00Z","htmlPrintedReceipt":"<pre>no lines in here</pre>"}""")]
+    [InlineData("""{"date":"2026-11-02T10:00:00Z","itemsLine":[{"description":"Old shape","quantity":1,"extendedAmount":1.0}]}""")]
     [InlineData("""["a"]""")]
     [InlineData("<html>maintenance</html>")]
-    public async Task A_receipt_in_a_shape_basket_cannot_read_is_unreadable_not_unavailable(string body)
+    public async Task A_receipt_in_a_shape_basket_cannot_read_is_unreadable_not_unavailable_so_it_is_not_filed_empty(string body)
     {
         var (client, _) = Client(_ => Json(HttpStatusCode.OK, body));
 
