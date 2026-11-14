@@ -262,4 +262,108 @@ describe('ListStore', () => {
     expect(store.items()).toEqual([]);
     expect(toast.error).toHaveBeenCalledTimes(1);
   });
+
+  describe('setProductStore (the compare sheet choosing a shop)', () => {
+    const waiting = (id: string, shop: ListItem['store']) =>
+      item(id, {text: 'Whole milk 2L', productId: 'milk', store: shop});
+
+    it('moves the single line a product has to the chosen shop, adding first and removing after', async () => {
+      const calls: string[] = [];
+      const api = {
+        items: vi.fn().mockResolvedValue([waiting('old', null)]),
+        addProduct: vi.fn().mockImplementation(() => {
+          calls.push('add');
+          return Promise.resolve(waiting('new', 'aldi'));
+        }),
+        remove: vi.fn().mockImplementation(() => {
+          calls.push('remove');
+          return Promise.resolve();
+        }),
+      };
+      const {store} = setup(api);
+      await store.load();
+
+      expect(await store.setProductStore('milk', 'aldi')).toBe(true);
+
+      expect(api.addProduct).toHaveBeenCalledWith('milk', 'aldi');
+      expect(api.remove).toHaveBeenCalledWith('old');
+      expect(calls).toEqual(['add', 'remove']);
+      expect(store.toBuy().map(i => [i.id, i.store])).toEqual([['new', 'aldi']]);
+    });
+
+    it('leaves the shop unset by moving a line at a shop to no shop', async () => {
+      const api = {
+        items: vi.fn().mockResolvedValue([waiting('old', 'lidl')]),
+        addProduct: vi.fn().mockResolvedValue(waiting('new', null)),
+        remove: vi.fn().mockResolvedValue(undefined),
+      };
+      const {store} = setup(api);
+      await store.load();
+
+      expect(await store.setProductStore('milk', null)).toBe(true);
+
+      expect(api.addProduct).toHaveBeenCalledWith('milk', null);
+      expect(store.toBuy().map(i => i.store)).toEqual([null]);
+    });
+
+    it('does nothing when the product already waits at that shop', async () => {
+      const api = {
+        items: vi.fn().mockResolvedValue([waiting('old', 'aldi')]),
+        addProduct: vi.fn(),
+        remove: vi.fn(),
+      };
+      const {store} = setup(api);
+      await store.load();
+
+      expect(await store.setProductStore('milk', 'aldi')).toBe(true);
+
+      expect(api.addProduct).not.toHaveBeenCalled();
+      expect(api.remove).not.toHaveBeenCalled();
+    });
+
+    it('keeps the old line when the new one is refused', async () => {
+      const api = {
+        items: vi.fn().mockResolvedValue([waiting('old', null)]),
+        addProduct: vi.fn().mockRejectedValue(new Error('offline')),
+        remove: vi.fn(),
+      };
+      const {store} = setup(api);
+      await store.load();
+
+      expect(await store.setProductStore('milk', 'aldi')).toBe(false);
+
+      expect(api.remove).not.toHaveBeenCalled();
+      expect(store.toBuy().map(i => i.id)).toEqual(['old']);
+    });
+
+    it('adds a line without removing one when the product waits at several shops', async () => {
+      const api = {
+        items: vi.fn().mockResolvedValue([waiting('a', 'lidl'), waiting('b', 'tesco')]),
+        addProduct: vi.fn().mockResolvedValue(waiting('c', 'aldi')),
+        remove: vi.fn(),
+      };
+      const {store} = setup(api);
+      await store.load();
+
+      expect(await store.setProductStore('milk', 'aldi')).toBe(true);
+
+      expect(api.remove).not.toHaveBeenCalled();
+      expect(store.toBuy()).toHaveLength(3);
+    });
+
+    it('ignores a ticked line: it is history, not a line waiting somewhere', async () => {
+      const api = {
+        items: vi.fn().mockResolvedValue([{...waiting('done', 'aldi'), checked: true}]),
+        addProduct: vi.fn().mockResolvedValue(waiting('new', 'aldi')),
+        remove: vi.fn(),
+      };
+      const {store} = setup(api);
+      await store.load();
+
+      expect(await store.setProductStore('milk', 'aldi')).toBe(true);
+
+      expect(api.addProduct).toHaveBeenCalledWith('milk', 'aldi');
+      expect(api.remove).not.toHaveBeenCalled();
+    });
+  });
 });

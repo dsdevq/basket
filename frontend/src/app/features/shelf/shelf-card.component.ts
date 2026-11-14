@@ -1,19 +1,19 @@
 import {NgOptimizedImage} from '@angular/common';
 import {ChangeDetectionStrategy, Component, computed, input, output, signal} from '@angular/core';
-import {SelectableCardComponent, TagComponent} from '@lifekit-hq/ui';
+import {ButtonComponent, SelectableCardComponent, TagComponent} from '@lifekit-hq/ui';
 
 import {type CardPrice, cardPrice, type ShelfFilter, type ShelfTile} from './shelf-format';
 
 /**
  * One product on the Shelf, drawn as a card: photo, name and what the shop's latest reading says (price, old price struck
  * through, promo, card price, how long it lasts, when it was read, out of stock). Pressing it puts the product on the list;
- * the card stays pressed while it is there. With no photo, or one that does not load, the initial letter stands in.
+ * the card stays pressed while it is there. The scale button in the corner opens the compare sheet. With no photo, or one that does not load, the initial letter stands in.
  */
 @Component({
   selector: 'bk-shelf-card',
-  imports: [NgOptimizedImage, SelectableCardComponent, TagComponent],
+  imports: [ButtonComponent, NgOptimizedImage, SelectableCardComponent, TagComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: {class: 'block h-full min-w-0'},
+  host: {class: 'relative block h-full min-w-0'},
   template: `
     <cmn-selectable-card
       [selected]="onList()"
@@ -73,6 +73,13 @@ import {type CardPrice, cardPrice, type ShelfFilter, type ShelfTile} from './she
         <cmn-tag variant="info">On the list</cmn-tag>
       }
     </cmn-selectable-card>
+    <cmn-button
+      [aria-label]="'Compare ' + tile().product.name + ' across the shops'"
+      (clicked)="compare.emit()"
+      class="absolute top-cmn-1 right-cmn-1"
+      variant="ghost"
+      icon="Scale"
+    />
   `,
 })
 export class ShelfCardComponent {
@@ -81,6 +88,8 @@ export class ShelfCardComponent {
   public readonly onList = input(false);
   public readonly busy = input(false);
   public readonly picked = output();
+  /** The scale button beside the tile: show the product at all four shops. */
+  public readonly compare = output();
 
   /** The address that failed to load, so a changed address is tried again. */
   protected readonly failed = signal<string | null>(null);

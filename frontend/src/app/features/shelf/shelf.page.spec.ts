@@ -1,5 +1,5 @@
 import {type ComponentFixture, TestBed} from '@angular/core/testing';
-import {ToastService} from '@lifekit-hq/ui';
+import {CmnDrawerService, ToastService} from '@lifekit-hq/ui';
 
 import {SessionStore} from '../../core/auth/session.store';
 import {HabitsApi} from '../habits/habits.api';
@@ -138,7 +138,11 @@ async function render(
       await settle(fixture);
     },
     tap: async (index: number) => {
-      (host.querySelectorAll('bk-shelf-card button')[index] as HTMLButtonElement).click();
+      (
+        host.querySelectorAll('bk-shelf-card cmn-selectable-card button')[
+          index
+        ] as HTMLButtonElement
+      ).click();
       await settle(fixture);
     },
   };
@@ -264,6 +268,36 @@ describe('ShelfPage', () => {
 
     expect(listApi.addProduct).toHaveBeenCalledWith('milk', null);
     expect(host.querySelectorAll('bk-shelf-card')[1]?.textContent).toContain('On the list');
+  });
+
+  it('shows a product waiting at any shop as on the list on All, and a tap there adds nothing', async () => {
+    const {listApi, tap, host} = await render([line('x', 'milk', 'aldi')]);
+
+    await tap(0);
+
+    expect(host.querySelectorAll('bk-shelf-card')[0]?.textContent).toContain('On the list');
+    expect(listApi.addProduct).not.toHaveBeenCalled();
+  });
+
+  it('opens the compare sheet for the product from the button on its tile, without putting it on the list', async () => {
+    const {listApi, host, fixture} = await render();
+    const drawer = TestBed.inject(CmnDrawerService);
+    const open = vi.spyOn(drawer, 'open').mockReturnValue({} as never);
+
+    const buttons = host.querySelectorAll<HTMLButtonElement>(
+      'bk-shelf-card button[aria-label^="Compare"]'
+    );
+    buttons[1]?.click();
+    await settle(fixture);
+
+    expect(buttons).toHaveLength(4);
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(open.mock.calls[0]?.[1]).toMatchObject({
+      title: 'Sliced pan',
+      data: {product: {id: 'bread'}},
+      mode: 'sheet',
+    });
+    expect(listApi.addProduct).not.toHaveBeenCalled();
   });
 
   it('treats a line from another shop as a different pick', async () => {
