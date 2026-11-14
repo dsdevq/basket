@@ -1708,7 +1708,8 @@ door; no sweep, search, linking or screen is here (issues 129 to 140).
   be 14 million rows a year for almost no information.
 - **A thinner reading never erases.** A later reading without a barcode, photo, brand or category keeps the stored one; a barcode that
   is not a valid GTIN or a photo that is not a plain https address is dropped, and the product is kept. A barcode is evidence that two
-  products are the same, so a malformed one is never stored.
+  products are the same, so a malformed one is never stored. A size that cannot be read, or whose amount is too large for the column, is likewise dropped
+  rather than rejecting the product or the batch.
 - **Server-dated.** `last_seen_at` is the server's clock, never the poster's.
 - **Closing a sweep.** `/complete` takes `{store, seen, startedAt}`. Products last seen before `startedAt` are marked
   `discontinued_at` only if the sweep covered at least 90 percent of the live products known before it. Both numbers must clear the
