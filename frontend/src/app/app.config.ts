@@ -13,6 +13,7 @@ import {APP_ROUTES} from './app.routes';
 import {sessionInterceptor} from './core/auth/session.interceptor';
 import {CrashErrorHandler, provideMountMarker} from './core/diagnostics/crash-screen';
 import {APP_ICONS} from './core/icons';
+import {provideAppPreferences} from './core/preferences/preferences.provider';
 import {provideAppServiceWorker} from './core/pwa/service-worker.provider';
 import {BasketTitleStrategy} from './core/title.strategy';
 import {APP_VERSION} from './core/version';
@@ -23,6 +24,7 @@ export const appConfig: ApplicationConfig = {
     provideHttpClient(withInterceptors([sessionInterceptor])),
     provideLucideIcons(APP_ICONS),
     provideAppMark('bk'),
+    provideAppPreferences(),
     provideToastPreferenceErrors(),
     provideDesignPresets({id: 'lifekit', label: 'Lifekit'}),
     provideWhatsNew({version: APP_VERSION, storageKey: 'basket.whatsNew.lastSeen'}),

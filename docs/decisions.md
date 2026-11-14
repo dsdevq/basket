@@ -1623,3 +1623,50 @@ so a person relinking still wins) and not yet read (Tesco stays paused on the ow
 **How they were found.** Ordinary web search only; tesco.ie was never opened with the reader or any automated browser (a plain fetch
 of a Tesco page answered 403 anyway), so titles and prices come from search results and the pages were not looked at. Each address has
 the `/products/<id>` shape that `Stores.TryNormalizeProductUrl` accepts for Tesco; basket's own check accepted both.
+
+## Appearance saved per account (2026-11-14, family-align step B3)
+
+Owner's words (2026-11-12): "Basket should be just in our ecosystem, reflecting 90% of stuff, including login, settings and so
+on. Design and stuff like that. The only difference is domain basket application is about. Everything else - it should be the same
+as our apps. Like its one family bro, family of products. Same UI, same UX, same library, everything is the same. Only difference
+is basket use cases and business logic." and, on the plan, "I agree on everything bro for basket". Theme mode and the seed colour
+now follow the person to every device they sign in on, as in finance-sentry, instead of living in one browser.
+
+- **Borrowed pattern, named:** the account preferences resource of the lifekit app-shell standard (`docs/APP-SHELL-STANDARD.md`
+  sections 2 and 3 in lifekit-common) in the shape of finance-sentry's `PreferencesController`: one resource, `GET` and `PATCH
+  /api/me/preferences`, body `{appearance: {theme, seed?, intensity?}}`. Basket serves the same JSON, so the library's
+  `accountPreferencesStore` and `AppearanceService` work on it unchanged.
+- **Contract.** `GET` always answers the whole object (`theme` is `system` for a person who has saved nothing). `PATCH` takes the
+  fields to change; a present `appearance` replaces the stored one wholesale (an omitted `seed` or `intensity` clears it), an omitted
+  field is untouched, and the answer is the whole object after the change. `theme` is `system`, `light` or `dark`, `seed` is
+  `#rrggbb` (stored lower case), `intensity` is 0-1; anything else answers `400` with an `error` code (`theme_invalid`,
+  `seed_invalid`, `intensity_invalid`) and stores nothing. Only the choices are stored, never the derived colours: each client
+  derives the palette with the tokens engine. Answers carry `Cache-Control: no-store`.
+- **One migration, approved by the owner's words above (the plan names it): `UserPreferences`.** One small per-user table,
+  `user_preferences` (`user_id` primary key and foreign key to `users` with cascade, `theme`, `theme_seed`, `theme_intensity`,
+  `updated_at`). It is additive: nothing existing is altered, `Down` drops only this table, and a person with no row reads as the
+  defaults, so the row appears with the first save and no data has to be moved. The table is a row per person, not columns on
+  `users`, so the Identity schema stays untouched and the next account preference is a column here, not another change to Identity.
+- **Two first saves meeting.** The save is one `UPDATE`; when it finds no row it inserts, and if the other request inserted first
+  the primary key refuses and the loser updates the row the winner made. No lock, no 500.
+- **The signed-in person's own copy.** The route is behind the cookie scheme like the rest of `/api`, so the fleet identity (which
+  has its own scope-checked doors) cannot read or write it, and her colour never reaches the owner's screen.
+- **Frontend.** `AppPreferencesStore = accountPreferencesStore('/api/me/preferences')` and `provideAppPreferences()` in
+  `core/preferences`: `provideAppearanceSync(AppPreferencesStore)` plus an effect on the session. Someone signed in (a passkey,
+  the lifekit sign-in, or a page load with a live cookie) makes it `load()`, and the server's copy wins over the device cache.
+  The session ending, by Sign out or by a 401 that dropped it, makes it `clear()`, so the next person starts clean. The device
+  cache (`cmn-theme`, `cmn-theme-seed`) is left, because the sign-in page paints from it. `provideToastPreferenceErrors()` was
+  already in `app.config.ts`, so a refused save rolls back and says so.
+- **The design preset stays per device**, as the library keeps it (`cmn-preset`; see "Design selection in Settings"). The line there
+  about "no backend change and no migration" was true for the preset and still is; this change is about the colour and the mode,
+  not the preset.
+- **Screens.** The control under Settings > Appearance now captions itself "Synced to your account" instead of "On this device",
+  so the two desktop `settings` Linux baselines (1280, light and dark) change (496 and 497 px differing, all of it the new
+  caption); the phone ones (390) do not move. Baselines are written only by the "Update screen baselines" workflow on this
+  branch, never rendered locally; an earlier locally rendered pair was a slip and the workflow's CI-rendered images replace it.
+  The e2e mock for the signed-in screens answers `/api/me/preferences` with `system`, so no other screen moves.
+- **Tests.** Backend: `PreferencesTests` (defaults, a save returning the whole object, wholesale replacement, an omitted field left
+  alone, one copy per person, each invalid value refused with nothing stored, concurrent first saves leaving one row, deleting a
+  person deleting their row) and the two verbs in the anonymous-401 list. Frontend: `preferences.provider.spec.ts` (nothing asked
+  while signed out, load after sign-in, clear on sign-out, a fresh read for the next person) and `e2e/appearance-sync.spec.ts` (the
+  account's theme wins after sign-in and is what Settings shows; choosing a mode in Settings is `PATCH`ed).

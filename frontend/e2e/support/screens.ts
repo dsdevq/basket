@@ -957,6 +957,10 @@ export async function signedIn(page: Page): Promise<void> {
   await page.route('**/api/passkeys', r => r.fulfill({json: PASSKEYS}));
   await page.route('**/api/ingest-tokens', r => r.fulfill({json: INGEST_TOKENS}));
   await page.route('**/api/lidl-plus/connection', r => r.fulfill({json: LIDL_PLUS}));
+  // The account's appearance: nothing saved yet, so every screen follows the system.
+  await page.route('**/api/me/preferences', r =>
+    r.fulfill({json: {appearance: {theme: 'system'}}})
+  );
 }
 
 export async function guest(page: Page): Promise<void> {
