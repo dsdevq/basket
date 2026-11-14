@@ -1,0 +1,10 @@
+[Unit]
+Description=Read Aldi and Dunnes prices into basket (once a day, see pc-reader/README.md)
+
+[Service]
+Type=oneshot
+WorkingDirectory=@READER_DIR@
+ExecStart=@NODE@ src/daily.ts
+Nice=10
+# A run is 5 s between pages and a handful of pages; this only catches a hung browser.
+TimeoutStartSec=2h

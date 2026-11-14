@@ -74,6 +74,25 @@ test('check: an unreachable issuer fails at discovery with the reason', async ()
   const steps = await checkIdentity(config(), { fetchImpl });
   assert.equal(steps.at(-1)?.ok, false);
   assert.match(steps.at(-1)?.detail ?? '', /could not reach .*fetch failed/);
+  assert.equal(steps.at(-1)?.unreachable, true);
+});
+
+test('check: no answer from the token endpoint or from basket counts as unreachable, a refusal does not', async () => {
+  const down = (match: string): typeof fetch => {
+    const up = world().fetchImpl;
+    return (async (url: string | URL, init?: RequestInit) => {
+      if (String(url).includes(match)) {
+        throw new TypeError('fetch failed');
+      }
+      return up(url, init);
+    }) as typeof fetch;
+  };
+  const tokenDown = await checkIdentity(config(), { fetchImpl: down('/token') });
+  assert.deepEqual([tokenDown.at(-1)?.name, tokenDown.at(-1)?.unreachable], ['token', true]);
+  const basketDown = await checkIdentity(config(), { fetchImpl: down('/api/products') });
+  assert.deepEqual([basketDown.at(-1)?.name, basketDown.at(-1)?.unreachable], ['basket', true]);
+  const refused = await checkIdentity(config(), { fetchImpl: world({ basket: 401 }).fetchImpl });
+  assert.equal(refused.at(-1)?.unreachable, undefined);
 });
 
 test('check: a token whose iss, audience or scope is wrong fails at the token step', async () => {

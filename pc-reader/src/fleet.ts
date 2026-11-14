@@ -6,6 +6,9 @@ export const FLEET_SCOPES = ['basket:price-ingest', 'basket:catalog-read'] as co
 /** A token is renewed this long before it expires, so a request never goes out with one about to lapse. */
 export const REFRESH_MARGIN_MS = 60_000;
 
+/** The identity service could not be reached at all (no answer), as opposed to answering with a refusal. */
+export class IdentityUnreachableError extends Error {}
+
 /** Gives the bearer token for the next request to basket. */
 export type BearerSource = () => Promise<string>;
 
@@ -39,7 +42,7 @@ export function bearerSource(auth: Auth, deps: FleetDeps = {}): BearerSource {
         body: new URLSearchParams({ grant_type: 'client_credentials', resource: fleet.resource, scope: FLEET_SCOPES.join(' ') }).toString(),
       });
     } catch (error) {
-      throw new Error(`Could not reach the identity service at ${fleet.issuer}: ${error instanceof Error ? error.message : String(error)}`);
+      throw new IdentityUnreachableError(`Could not reach the identity service at ${fleet.issuer}: ${error instanceof Error ? error.message : String(error)}`);
     }
     const body: unknown = await response.json().catch(() => undefined);
     const fields = typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : {};
