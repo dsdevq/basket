@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Basket.Api.Data;
 using Basket.Api.Prices;
 
@@ -13,8 +14,11 @@ public static class SeededSectionOrder
     /// <summary>The section a product with no category, or one no section claims, falls in: after every named section.</summary>
     public const string Other = "Other";
 
-    /// <summary>Checked in this order, so "ice cream" is frozen before "cream" is dairy.</summary>
-    private static readonly (string Section, string[] Words)[] Keywords =
+    /// <summary>
+    /// Checked in this order, so "ice cream" is frozen before "cream" is dairy. A word counts only as a whole word of the
+    /// breadcrumb, with an optional plural, so "tea" is not found in "steak" nor "egg" in "eggplant".
+    /// </summary>
+    private static readonly (string Section, Regex Words)[] Keywords = Array.ConvertAll<(string Section, string[] Words), (string Section, Regex Words)>(
     [
         ("Frozen", ["frozen", "ice cream"]),
         ("Fruit & veg", ["fruit", "veg", "salad", "potato", "herb"]),
@@ -26,12 +30,12 @@ public static class SeededSectionOrder
         ("Household", ["household", "cleaning", "laundry", "paper", "kitchen"]),
         ("Health & beauty", ["health", "beauty", "toiletries", "baby", "pharmacy", "personal care"]),
         ("Pet", ["pet"]),
-    ];
+    ],
+        k => (k.Section, new Regex($@"(?<![\p{{L}}\p{{N}}])(?:{string.Join('|', k.Words.Select(Regex.Escape))})(?:e?s)?(?![\p{{L}}\p{{N}}])", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)));
 
     private static readonly IReadOnlyDictionary<Store, string[]> Orders = new Dictionary<Store, string[]>
     {
-        // Lidl: the owner's own account, fruit first and then meat; the bakery sits at the entrance, the freezers and the middle
-        // aisles come last.
+        // Lidl: the owner's own account, fruit first and then meat.
         [Store.Lidl] = ["Fruit & veg", "Bakery", "Meat & fish", "Dairy & eggs", "Frozen", "Cupboard", "Drinks", "Household", "Health & beauty", "Pet"],
         [Store.Aldi] = ["Fruit & veg", "Bakery", "Meat & fish", "Dairy & eggs", "Frozen", "Cupboard", "Drinks", "Household", "Health & beauty", "Pet"],
         [Store.Tesco] = ["Fruit & veg", "Bakery", "Meat & fish", "Dairy & eggs", "Cupboard", "Drinks", "Frozen", "Household", "Health & beauty", "Pet"],
@@ -58,7 +62,7 @@ public static class SeededSectionOrder
         {
             foreach (var (section, words) in Keywords)
             {
-                if (words.Any(w => parts[i].Contains(w, StringComparison.OrdinalIgnoreCase)))
+                if (words.IsMatch(parts[i]))
                 {
                     return section;
                 }
