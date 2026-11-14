@@ -1550,3 +1550,22 @@ finds out what those two stores will give a browser on this PC.
   shell has no display, and the browser and profile are the ones already refused. For Tesco the open call remains the owner's one-off
   manual `npm run profile` warm-up; no one did it on his behalf. Issues 135 and 136 therefore have no endpoint facts yet; they wait on
   a profile either store will serve, then one `npm run probe` run.
+
+## Tesco pages linked for Golden kiwi and Salt (2026-11-14)
+
+The first Tesco read attempt found two catalog entries with no Tesco page: Golden kiwi and Salt. Both were linked in the production
+catalog with the fleet identity (`PUT /api/products/{id}/stores/tesco`, scope `basket:catalog-add`; no code change, the route and
+its address check already exist). Read back with `GET /api/products`, each shows the address below, unconfirmed (a machine linked it,
+so a person relinking still wins) and not yet read (Tesco stays paused on the owner's profile warm-up).
+
+- **Golden kiwi:** `https://www.tesco.ie/groceries/en-IE/products/322156865`, "Keelings Golden Kiwi 4pk", about €3.29. Tesco's own
+  "Super Sweet Gold Kiwi 3 Pack" (`300734807`) was passed over because it showed out of stock and is a 3 pack; "Donnelly Fresh Gold
+  Kiwi 4 Pack" (`317545095`) is the other 4 pack. Keelings is the plainest 4 pack whose name is "Golden Kiwi", matching Dunnes's 4pk
+  on the same product. **Moderate confidence**: Tesco sells no unbranded golden kiwi that was found, so this is a judgement call.
+- **Salt:** `https://www.tesco.ie/groceries/en-IE/products/251975227`, "Saxa Salt 750G", fine table salt, about €2.55. No Tesco
+  own-brand plain table salt turned up (the own-brand finds were low-sodium salt), so the plainest regular item is Saxa. **Good
+  confidence.**
+
+**How they were found.** Ordinary web search only; tesco.ie was never opened with the reader or any automated browser (a plain fetch
+of a Tesco page answered 403 anyway), so titles and prices come from search results and the pages were not looked at. Each address has
+the `/products/<id>` shape that `Stores.TryNormalizeProductUrl` accepts for Tesco; basket's own check accepted both.
