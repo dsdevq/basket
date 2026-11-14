@@ -27,6 +27,7 @@ public sealed class SeededSectionOrderTests
 
     [Theory]
     [InlineData("Fresh Food > Fruit & Vegetables", "Fruit & veg")]
+    [InlineData("Fresh Food > Vegetables", "Fruit & veg")]
     [InlineData("Fresh Food > Milk", "Dairy & eggs")]
     [InlineData("Chilled Food > Cheese", "Dairy & eggs")]
     [InlineData("Meat, Poultry & Fish > Chicken", "Meat & fish")]

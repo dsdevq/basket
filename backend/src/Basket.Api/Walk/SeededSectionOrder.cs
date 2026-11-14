@@ -21,7 +21,7 @@ public static class SeededSectionOrder
     private static readonly (string Section, Regex Words)[] Keywords = Array.ConvertAll<(string Section, string[] Words), (string Section, Regex Words)>(
     [
         ("Frozen", ["frozen", "ice cream"]),
-        ("Fruit & veg", ["fruit", "veg", "salad", "potato", "herb"]),
+        ("Fruit & veg", ["fruit", "veg", "vegetable", "salad", "potato", "herb"]),
         ("Bakery", ["bakery", "bread", "baker", "cake", "roll"]),
         ("Meat & fish", ["meat", "fish", "poultry", "chicken", "beef", "pork", "seafood", "bacon", "sausage"]),
         ("Dairy & eggs", ["dairy", "milk", "cheese", "yogurt", "yoghurt", "butter", "egg", "cream", "chilled"]),
