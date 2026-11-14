@@ -1888,8 +1888,9 @@ migration**.
   bought the product there, the server's own rule (`not_sold_there` otherwise), so a shop with neither is not offered. The sheet marks
   "On the list" on the shop the product already waits at (or on the first row when it waits with no shop).
 - **A line is one product at one shop, so choosing moves it.** When the product already has exactly one open line at another shop (or
-  none), the new line is added first and the old one deleted only after the server took the new one; a failure leaves the list as it
-  was. When it waits at several shops, which of them is meant is not known: the new line is added and none is removed. A ticked line is
+  none), the new line is added first and the old one deleted only after the server took the new one; a failed move leaves the list as it
+  was when the add fails, and when the add succeeds but removing the old line fails the product waits at both shops and a delete
+  toast shows. When it waits at several shops, which of them is meant is not known: the new line is added and none is removed. A ticked line is
   history and is ignored. Moving changes who added the line to the person who chose. This is the existing `POST /api/list/items` and
   `DELETE /api/list/items/{id}`; there is no endpoint to change a line's shop, and none is added here.
 - **On All, "On the list" means on the list anywhere.** The Shelf's "All" tile used to look only for a line with no shop; with a shop
