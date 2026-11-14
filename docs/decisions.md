@@ -747,12 +747,12 @@ a planned store or the shelf. Patterns borrowed: AnyList and OurGroceries ("clea
 - **A closed trip is a date, the ticked items and who ticked them, nothing more.** Two new tables, `trip` (`id`, `closed_at`) and
   `trip_item` (`id`, `trip_id`, `text`, `checked_at`, `checked_by_user_id`; `product_id` and `store` were added later, see the
   2026-11-10 follow-up below). No prices or planned store: marking a planned
-  store on a trip (issue 36) stays out. `trip_item` rows go with their trip; a deleted account leaves `checked_by_user_id` empty
+  store on a trip (issue 36) stayed out of this change and came in with the open trip, see the 2026-11-14 section on issue #36. `trip_item` rows go with their trip; a deleted account leaves `checked_by_user_id` empty
   and the history then shows the item without a name.
 - **The close is an explicit action.** "Done shopping" sits on the Ticked section of the List tab and asks for a confirm that says
   what happens. It is not triggered when the last item is ticked (the default taken in issue 37; a ticked row can still be
-  unticked by a mis-tap). `POST /api/list/close` copies the ticked items into a new trip and deletes them from `list_item` in one
-  transaction. It refuses with 409 `nothing_ticked` when nothing is ticked, and with 409 `list_changed` (nothing filed) when the
+  unticked by a mis-tap). `POST /api/list/close` files the ticked items as a trip and deletes them from `list_item` in one
+  transaction (since issue #36 it closes the open trip instead of copying, see below). It refuses with 409 `nothing_ticked` when nothing is ticked, and with 409 `list_changed` (nothing filed) when the
   delete does not touch every row that was copied, which is what a second device closing at the same moment, or someone
   unticking an item, looks like. Two taps at once therefore file one trip.
 - **What is not ticked stays on the list.** "Empties the list" is read the way AnyList reads it: the ticked items leave, the rest
@@ -2298,3 +2298,51 @@ shop's sweep is alive. The owner approved one migration for it on 2026-11-15.
   `LidlCatalogSweepTests`, `AldiCatalogSourceTests` for the Aldi sweep row in the complete, partial, blocked and part-way cases), and the
   frontend `catalog-health-format`, `price-format` and `PricesPage` specs. Every shop, count and date is invented; no real data or token is
   in this public repository.
+
+## Check-off records the item, the shop and the time in the open trip (2026-11-14, issue #36, epic #23)
+
+Owner's words: "I want have buy lists. And the history of lists." Checking an item off marks it bought at the store the plan
+suggested, unless the user changes the store. This introduces the trip record the later items of the epic use.
+
+- **Borrowed pattern, named:** AnyList's check-off to history: the tick is the record, and "clear crossed-off items" files them.
+  No new gesture is invented: the tick is the checkbox and swipe the list already has; changing the shop is a list of the four
+  shops in the item's "more" sheet, the compare sheet's Choose-a-shop rows.
+- **The open trip is the trip with no `closed_at`.** `trip.closed_at` becomes nullable; at most one trip is open (a unique index
+  over the null, `ux_trip_open`, with nulls counted as one value). The first tick after a close starts it, "Done shopping" closes it.
+  Everything that reads trips as history (the History page, "reload", the habits, the scorecard) reads closed trips only, so the open
+  trip is never shown as a past trip and counts for no habit until it is closed.
+- **A tick writes a `trip_item` in the same transaction.** `PATCH /api/list/items/{id}` with `checked: true` records, in the open
+  trip, the item (text, product, the shop it was picked from), who and when (`checked_by_user_id`, `checked_at`) and where it was
+  bought (`bought_store`). Un-ticking and deleting a ticked line take the record out again: an un-ticked line was not bought. Ticking a
+  line that is already recorded (a second phone) updates the time and who, and keeps the shop already there, so a change of shop is
+  never undone by a repeat tick. `trip_item.list_item_id` links the record to its line while the trip is open (unique, set null once
+  the line leaves the list, which is what closing does), so a closed trip's items point at nothing.
+- **The planned shop is the shop the line was picked from, else the plan's best shop for it, else none.** A line picked at a shop
+  on the compare sheet or the Shelf already says where the owner means to buy it, so that wins; the plan's `bestStore` (lowest unit
+  price among fresh, in-stock prices) is used for a line picked from All. A free-text line, or one the plan names no best shop for
+  (no fresh price, prices that cannot be compared), is recorded with no shop and the person can still set one. The plan is built for
+  the one line at the moment of the tick (`PlanEndpoints.PlannedStoreAsync`); a line's best shop does not depend on the others. This
+  is the call to veto if "the store the plan suggested" should win over a shop picked by hand.
+- **Changing the shop: `PATCH /api/list/items/{id}/bought-at` with `{store}`.** Any of the four shops, on a ticked line only (409
+  `not_ticked` otherwise, 400 `store_unknown`, 404 for an unknown line). The list response gains `boughtStore` (null while the line
+  is not ticked or no shop was known). The ticked row carries the shop as its chip (the open rows keep the shop they were picked from)
+  and the item's "more" sheet gets a "Bought at" section, the current shop marked "Bought here"; tapping another saves and closes.
+- **`bought_store` is not `store`.** `trip_item.store` stays "the shop the line was picked from", which reload restores onto the new
+  line; `bought_store` is where it was bought. A line picked from All and bought at Lidl reloads picked from All, not pinned to Lidl.
+  Receipt trips and trips closed before this change have no `bought_store`; they are not backfilled.
+- **Done shopping closes the open trip.** `POST /api/list/close` sets the trip's `closed_at`, deletes the ticked lines from the list
+  and answers with the trip, in one transaction, the same refusals as before (409 `nothing_ticked`, 409 `list_changed`). It first
+  makes the trip say exactly what is ticked: a record whose line is gone is dropped and a ticked line with no record is added bought at
+  the shop it was picked from, so a line ticked before this change can never be lost. The History page and its response are unchanged;
+  the shops of a closed trip are in the data for the next items and are not shown yet.
+- **One lock for the ticked lines.** Tick, un-tick, delete and close take one transaction-scoped Postgres advisory lock first, so the
+  list's ticked lines and the open trip's records move together and two phones ticking at once cannot start two open trips. The household
+  makes a few ticks a minute at most, so waiting for the lock costs nothing.
+- **Migration: additive but it changes a column, so it needs the owner's go before merge (`20261114225403_OpenTrip`).** Two nullable
+  columns on `trip_item` (`bought_store`, `list_item_id` with a set-null foreign key to `list_item` and a partial unique index), the
+  `trip.closed_at` column made nullable, and the unique index `ux_trip_open`. It also files the lines already ticked when it runs as the
+  open trip, bought at the shop they were picked from (`OpenTrip.BackfillSql`, idempotent), so the deploy loses nothing mid-shop. No
+  existing row is rewritten. `Down` removes the open trip first (the old column cannot hold a null), drops the columns and the indexes.
+- **Screens.** No route is added or removed. The List mock has a ticked item bought at Lidl, so the four `list` baselines change (a
+  shop chip on the ticked row); the Linux images are re-rendered by the Update screen baselines workflow on this branch, never committed
+  from a local run. `e2e/bought-at-flow.spec.ts` covers the sheet on a phone.

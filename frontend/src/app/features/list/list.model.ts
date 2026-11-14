@@ -19,4 +19,9 @@ export interface ListItem {
   readonly store: StoreId | null;
   /** The product's photo address from its shop page; null for a free-text line or a product with no photo. */
   readonly imageUrl: string | null;
+  /**
+   * Where a ticked line was bought, as recorded in the open trip: the shop it was picked from, else the one the plan suggested,
+   * until the person changes it. Null while the line is not ticked, or when no shop was known.
+   */
+  readonly boughtStore: StoreId | null;
 }

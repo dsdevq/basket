@@ -54,6 +54,7 @@ function line(id: string, store: StoreId | null): ListItem {
     productId: 'milk',
     store,
     imageUrl: null,
+    boughtStore: null,
   };
 }
 

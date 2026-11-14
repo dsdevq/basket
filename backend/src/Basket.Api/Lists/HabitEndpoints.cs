@@ -30,11 +30,11 @@ public static class HabitEndpoints
         var rows = await (
             from i in db.TripItems.AsNoTracking()
             where i.ProductId != null
-            join t in db.Trips.AsNoTracking() on i.TripId equals t.Id
+            join t in db.Trips.AsNoTracking().Closed() on i.TripId equals t.Id
             join p in db.Products.AsNoTracking() on i.ProductId equals p.Id
             select new { i.TripId, ProductId = p.Id, p.Name, t.ClosedAt }).ToListAsync(ct);
 
-        var recent = (await db.Trips.AsNoTracking().OrderByDescending(t => t.ClosedAt).ThenByDescending(t => t.Id)
+        var recent = (await db.Trips.AsNoTracking().Closed().OrderByDescending(t => t.ClosedAt).ThenByDescending(t => t.Id)
             .Select(t => t.Id).Take(RecentTrips).ToListAsync(ct)).ToHashSet();
 
         var habits = rows.GroupBy(r => r.ProductId)
@@ -42,7 +42,7 @@ public static class HabitEndpoints
                 g.Key,
                 g.First().Name,
                 g.Select(r => r.TripId).Distinct().Count(),
-                g.Max(r => r.ClosedAt),
+                g.Max(r => r.ClosedAt)!.Value,
                 g.Where(r => recent.Contains(r.TripId)).Select(r => r.TripId).Distinct().Count() >= UsualAfter))
             .OrderByDescending(h => h.BoughtIn).ThenByDescending(h => h.LastBoughtAt).ThenBy(h => h.Name, StringComparer.Ordinal)
             .ToList();

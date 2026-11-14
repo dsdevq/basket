@@ -18,13 +18,13 @@ public static class ScorecardEndpoints
         var from = ScorecardBuilder.WindowStart(today);
         var dublin = TimeZoneInfo.FindSystemTimeZoneById("Europe/Dublin");
         var cutoff = new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(from.ToDateTime(TimeOnly.MinValue), dublin), TimeSpan.Zero);
-        var rows = await db.Trips.AsNoTracking().Where(t => t.ClosedAt >= cutoff).ToListAsync(ct);
+        var rows = await db.Trips.AsNoTracking().Closed().Where(t => t.ClosedAt >= cutoff).ToListAsync(ct);
         var tripIds = rows.Select(t => t.Id).ToList();
         var items = (await db.TripItems.AsNoTracking().Where(i => tripIds.Contains(i.TripId)).Select(i => new { i.TripId, i.ProductId }).ToListAsync(ct))
             .ToLookup(i => i.TripId);
         var trips = rows
             .Select(t => new ScorecardTrip(
-                PriceRecorder.DublinDay(t.ClosedAt),
+                PriceRecorder.DublinDay(t.ClosedAt!.Value),
                 items[t.Id].Count(),
                 items[t.Id].Where(i => i.ProductId != null).Select(i => i.ProductId!.Value).ToList()))
             .ToList();

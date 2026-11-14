@@ -17,10 +17,28 @@ public static class PlanEndpoints
             Results.Ok(ByShopBuilder.Build(await Load(db, clock, ct))));
     }
 
-    private static async Task<PlanResponse> Load(AppDbContext db, TimeProvider clock, CancellationToken ct)
+    private static async Task<PlanResponse> Load(AppDbContext db, TimeProvider clock, CancellationToken ct) =>
+        await Load(db, clock, await db.ListItems.AsNoTracking().Where(i => !i.IsChecked).OrderBy(i => i.AddedAt).ToListAsync(ct), ct);
+
+    /// <summary>
+    /// The shop a line is bought at unless the person says otherwise: the shop it was picked from, else the one the plan names
+    /// best for it. Null when neither does (free text, no fresh price, prices that cannot be compared). The plan is built for
+    /// this line alone; a line's best shop does not depend on the others.
+    /// </summary>
+    internal static async Task<Store?> PlannedStoreAsync(AppDbContext db, TimeProvider clock, ListItem line, CancellationToken ct)
+    {
+        if (line.Store is { } picked)
+        {
+            return picked;
+        }
+
+        var plan = await Load(db, clock, [line], ct);
+        return plan.Items.Single().BestStore is { } best && Stores.TryParse(best, out var store) ? store : null;
+    }
+
+    private static async Task<PlanResponse> Load(AppDbContext db, TimeProvider clock, IReadOnlyList<ListItem> lines, CancellationToken ct)
     {
         var today = PriceRecorder.DublinDay(clock.GetUtcNow());
-        var lines = await db.ListItems.AsNoTracking().Where(i => !i.IsChecked).OrderBy(i => i.AddedAt).ToListAsync(ct);
         var productIds = lines.Where(i => i.ProductId != null).Select(i => i.ProductId!.Value).Distinct().ToList();
         var products = await db.Products.AsNoTracking().Where(p => productIds.Contains(p.Id)).ToDictionaryAsync(p => p.Id, ct);
         var listingRows = await db.StoreListings.AsNoTracking().Where(l => productIds.Contains(l.ProductId)).ToListAsync(ct);

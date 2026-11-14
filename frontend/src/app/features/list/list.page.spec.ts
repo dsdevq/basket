@@ -32,6 +32,7 @@ function item(id: string, text: string, over: Partial<ListItem> = {}): ListItem 
     productId: null,
     store: null,
     imageUrl: null,
+    boughtStore: null,
     ...over,
   };
 }
@@ -159,6 +160,32 @@ describe('ListPage', () => {
     const rows = Array.from(host.querySelectorAll('cmn-list-item-row'));
     expect(rows[0]?.textContent).toContain('Tesco');
     expect(rows[1]?.textContent).not.toMatch(/Tesco|Lidl|Aldi|Dunnes/);
+  });
+
+  it('marks a ticked line with the shop it was bought at, and leaves one with no shop bare', async () => {
+    const {host} = await render([
+      item('1', 'Whole milk 2L', {checked: true, productId: 'p1', boughtStore: 'aldi'}),
+      item('2', 'Candles', {checked: true}),
+    ]);
+
+    const rows = Array.from(host.querySelectorAll('cmn-list-item-row'));
+    expect(rows[0]?.textContent).toContain('Aldi');
+    expect(rows[1]?.textContent).not.toMatch(/Tesco|Lidl|Aldi|Dunnes/);
+  });
+
+  it('shows the shop it was bought at on a ticked line, not the one it was picked from', async () => {
+    const {host} = await render([
+      item('1', 'Whole milk 2L', {
+        checked: true,
+        productId: 'p1',
+        store: 'tesco',
+        boughtStore: 'dunnes',
+      }),
+    ]);
+
+    const text = host.querySelector('cmn-list-item-row')?.textContent ?? '';
+    expect(text).toContain('Dunnes');
+    expect(text).not.toContain('Tesco');
   });
 
   it('shows the product photo on a row, and the first letter when there is none or it fails to load', async () => {
