@@ -1327,3 +1327,32 @@ you know ?" Typing stays for a one-off that is not on the shelf; after a trip th
 - **No migration.** No column or table changes; the response field reads the existing `trip_item.product_id`.
 - **Screens.** No new route. The History mock gains `productId`, so the History baselines change (a button per typed item); Linux
   baselines are drawn on CI only, by the "Update screen baselines" workflow dispatched on the branch.
+
+## Store scorecard from our own baskets, opened on demand (2026-11-14, issue #49, epic #24)
+
+Owner's words: "I am as a customer should understand what needs to be bought. I want to know where certain position is better. I want
+to know what promotions are in the store and which promotion is better." The owner's 2026-10-29 call of no weekly best-store digest
+still stands: this is a view he opens, never pushed, scheduled or mailed.
+
+- **Borrowed pattern, named:** the savings summary of price-comparison and receipt apps (Trolley's savings, Basket Savings): a
+  headline of what you saved, who wins, and a month by month list. No new interaction is invented; the page is the same verdict
+  header and card lists as By shop.
+- **Where it lives.** `GET /api/scorecard` and the page `/scorecard` ("Scorecard", under More, signed-in people only). Phone first
+  at 390 px, then 1280 px, on the `cmn-page kind="list"` template.
+- **Data: only what is already collected.** Closed trips (`trip`, `trip_item.product_id`) and the daily price readings
+  (`price_observation`). No new collection and **no migration**: no table or column changes.
+- **What is compared.** Every Shelf line (a trip item with a product) of a trip closed in the last 6 months, the current month
+  included. Each is priced across the shops that list the product with the same rule as Plan and Promotions
+  (`PromotionBuilder.Compare`), run as of the trip's Dublin day on the newest reading on or before that day. So a price is the same
+  number here as on the other screens, a reading older than 3 days at the trip is stale and left out, as is an out-of-stock or
+  unit-less one. A typed line, a deleted product, or a line with fewer than two comparable prices is **not compared**: counted and
+  shown, never given a winner or a saving.
+- **Wins.** The shop with the lowest unit price (per kg, l or piece) wins the line; equal prices go to the first shop in the fixed
+  order (Lidl, Aldi, Tesco, Dunnes), as in the plan. The page lists every shop with its wins and share of compared lines.
+- **Saved versus the dearest store.** Per compared line: the winner's pack price times (dearest unit price / winner unit price - 1),
+  i.e. what the same quantity would have cost more at the dearest comparable shop. Summed, rounded to cents per line. It is a
+  like-for-like quantity saving, not what was actually paid (trips keep no prices, except Lidl receipts, which are not used here).
+- **Trend.** One row per month of the window (oldest first in the API, newest first on the page): trips, lines compared and saved.
+  The headline sentence sets the latest month with compared lines against the one before it.
+- **Screens.** New route, so new baselines (`scorecard` and `scorecard-empty`, 390 / 1280, light and dark). They are drawn on CI by
+  the "Update screen baselines" workflow dispatched on the branch, not committed from a local run.
