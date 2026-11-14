@@ -1802,7 +1802,7 @@ So this sweep reads the range; the paid price keeps coming from the Lidl Plus re
   The products it did read are still stored. Only a sweep that walked every category to its end is closed and may delist.
 - **Barcodes.** Tiles carry no GTIN; the product page's JSON-LD does (`gtin13`, a list with one entry per variant). After the sweep,
   the product pages of products with no stored barcode are opened, at most `Prices:LidlBarcodePagesPerNight` (200) a night, and the first
-  valid GTIN is stored (as GTIN-14, through `CatalogRecorder`, which never lets a thinner reading erase one). A first sweep therefore takes about three nights to fill the food range; afterwards only products new to the catalog are opened.
+  valid GTIN is stored (as GTIN-14, through `CatalogRecorder`, which never lets a thinner reading erase one). A first sweep therefore takes about four nights to fill the food range (about 690 products); afterwards only products new to the catalog are opened.
   The candidates are in product-number order but start at a place that moves on by the cap each UTC day (wrapping round), so products
   whose page is gone, down or without a valid GTIN are skipped and tried again on a later night without ever holding the whole cap (no
   column records the attempt, because there is no migration). A malformed barcode is never stored.
