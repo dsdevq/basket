@@ -45,6 +45,7 @@ interface Harness {
     close: ReturnType<typeof vi.fn>;
     addProduct: ReturnType<typeof vi.fn>;
   };
+  readonly habitsApi: {all: ReturnType<typeof vi.fn>};
   readonly dialog: {confirm: ReturnType<typeof vi.fn>};
   readonly drawer: {open: ReturnType<typeof vi.fn>};
   readonly host: HTMLElement;
@@ -67,12 +68,13 @@ async function render(items: ListItem[], habits: Habit[] = []): Promise<Harness>
         Promise.resolve(item(`new-${productId}`, productId, {productId}))
       ),
   };
+  const habitsApi = {all: vi.fn().mockResolvedValue(habits)};
   const drawer = {open: vi.fn()};
   const dialog = {confirm: vi.fn().mockReturnValue(of(true))};
   TestBed.configureTestingModule({
     providers: [
       {provide: ListApi, useValue: api},
-      {provide: HabitsApi, useValue: {all: vi.fn().mockResolvedValue(habits)}},
+      {provide: HabitsApi, useValue: habitsApi},
       {provide: CmnDrawerService, useValue: drawer},
       {provide: CmnDialogService, useValue: dialog},
       {provide: ToastService, useValue: {error: vi.fn(), success: vi.fn()}},
@@ -85,7 +87,7 @@ async function render(items: ListItem[], habits: Habit[] = []): Promise<Harness>
   const fixture = TestBed.createComponent(ListPage);
   fixture.detectChanges();
   await settle(fixture);
-  return {fixture, api, dialog, drawer, host: fixture.nativeElement as HTMLElement};
+  return {fixture, api, habitsApi, dialog, drawer, host: fixture.nativeElement as HTMLElement};
 }
 
 function swipeButton(host: HTMLElement, name: string): HTMLButtonElement {
@@ -291,6 +293,17 @@ describe('ListPage', () => {
       expect(api.close).toHaveBeenCalledTimes(1);
       expect(host.textContent).toContain('Nothing on the list');
       expect(host.textContent).not.toContain('Spinach');
+    });
+
+    it('reloads the habits so the trip just closed counts', async () => {
+      const {fixture, habitsApi, host} = await render([item('1', 'Butter', {checked: true})]);
+      expect(habitsApi.all).toHaveBeenCalledTimes(1);
+
+      button(host)?.click();
+      await settle(fixture);
+      await settle(fixture);
+
+      expect(habitsApi.all).toHaveBeenCalledTimes(2);
     });
 
     it('says what stays on the list when some items are not ticked', async () => {

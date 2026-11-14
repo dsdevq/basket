@@ -205,7 +205,9 @@ export class ListPage implements OnInit {
   protected readonly form = new FormGroup({text: this.text});
 
   /** Pull to refresh on this tab root: the shell's pull gesture calls it and waits for the promise. */
-  protected readonly reload = (): Promise<void> => this.store.load();
+  protected readonly reload = async (): Promise<void> => {
+    await Promise.all([this.store.load(), this.habits.load()]);
+  };
 
   public ngOnInit(): void {
     void this.store.load();
@@ -215,6 +217,7 @@ export class ListPage implements OnInit {
       .subscribe(() => {
         if (this.document.visibilityState === 'visible') {
           void this.store.load(true);
+          void this.habits.load();
         }
       });
     fromEvent(this.document, 'visibilitychange')
@@ -222,6 +225,7 @@ export class ListPage implements OnInit {
       .subscribe(() => {
         if (this.document.visibilityState === 'visible') {
           void this.store.load(true);
+          void this.habits.load();
         }
       });
   }
@@ -268,7 +272,9 @@ export class ListPage implements OnInit {
       {defaultValue: false}
     );
     if (confirmed) {
-      await this.store.closeTrip();
+      if (await this.store.closeTrip()) {
+        void this.habits.load();
+      }
     }
   }
 

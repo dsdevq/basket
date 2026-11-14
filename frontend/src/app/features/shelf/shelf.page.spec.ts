@@ -184,6 +184,16 @@ describe('ShelfPage', () => {
     expect(host.textContent).toContain('Nothing usual yet');
   });
 
+  it('names the shop when nothing is usual for it', async () => {
+    const {host, choose} = await render([], PRODUCTS, true, [habit('milk', 3, true)]);
+
+    await choose('Usually bought');
+    await choose('Aldi');
+
+    expect(host.textContent).not.toContain('Nothing usual yet');
+    expect(host.textContent).toContain('Nothing at Aldi yet');
+  });
+
   it('opens on All with every product as a card', async () => {
     const {names} = await render();
 

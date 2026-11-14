@@ -136,7 +136,7 @@ export class ShelfPage implements OnInit {
   );
   protected readonly empty = computed(() => {
     const filter = this.filter();
-    if (this.view() === 'usual') {
+    if (this.view() === 'usual' && filter === 'all') {
       return {
         message: 'Nothing usual yet',
         detail:
