@@ -1481,7 +1481,7 @@ work for either person (`ListTests`).
   **AnyList** "added by" line on a shared row (the name under the item, unchanged). No new interaction is invented.
 - **The photo is read, not copied.** `GET /api/list` and the add and tick answers return `imageUrl` on each line, taken at read
   time from the product's shop page (`store_listing.image_url`): the shop the line was picked from, or, for a pick from "All", the
-  first shop in `Store` order that has a photo. A free-text line, a product with no photo and a line whose product was deleted
+  first shop alphabetically (Aldi, Dunnes, Lidl, Tesco) that has a photo. A free-text line, a product with no photo and a line whose product was deleted
   return `null`. The Shelf's "All" tile prefers the cheapest shop's photo instead; the list row has no price to follow, so it uses a
   fixed, repeatable order. Reading it each time keeps one source of truth: a photo the nightly read fixes later reaches the lines
   already on the list, and no column is added to `list_item`.

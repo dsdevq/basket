@@ -74,7 +74,7 @@ public static class ListEndpoints
             i.ProductId,
             i.Store,
             // The photo is read from the product's shop page, not copied onto the line: the picked shop's when there is one,
-            // else the first shop (in Store order) that has one. A free-text line has none.
+            // else the first shop alphabetically (Aldi, Dunnes, Lidl, Tesco) that has one. A free-text line has none.
             db.StoreListings
                 .Where(l => l.ProductId == i.ProductId && l.ImageUrl != null && (i.Store == null || l.Store == i.Store))
                 .OrderBy(l => l.Store)

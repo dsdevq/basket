@@ -156,13 +156,13 @@ public sealed class ListProductTests : IClassFixture<BasketFactory>
     }
 
     [Fact]
-    public async Task A_picked_line_shows_the_photo_of_its_shop_and_a_pick_from_All_the_first_shop_that_has_one()
+    public async Task A_picked_line_shows_the_photo_of_its_shop_and_a_pick_from_All_the_first_shop_alphabetically_that_has_one()
     {
         var (owner, milk, bread) = await SeedAsync();
         await _factory.WithDb(async db =>
         {
-            await db.StoreListings.Where(l => l.ProductId == milk && l.Store == Store.Tesco)
-                .ExecuteUpdateAsync(s => s.SetProperty(l => l.ImageUrl, "https://img.tesco.ie/milk.jpg"));
+            db.StoreListings.Add(new StoreListing { Id = Guid.NewGuid(), ProductId = milk, Store = Store.Lidl, Url = "https://www.lidl.ie/p/milk/p11000002", ImageUrl = "https://img.lidl.ie/milk.jpg", AddedAt = DateTimeOffset.UtcNow });
+            await db.SaveChangesAsync();
             await db.StoreListings.Where(l => l.ProductId == milk && l.Store == Store.Aldi)
                 .ExecuteUpdateAsync(s => s.SetProperty(l => l.ImageUrl, "https://img.aldi.ie/milk.jpg"));
             return 0;
