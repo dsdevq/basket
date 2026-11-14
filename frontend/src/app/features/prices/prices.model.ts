@@ -52,8 +52,11 @@ export interface ProductStore {
   readonly candidates?: number;
 }
 
-/** Why the matcher suggested a page: the same barcode, the same name and size, or a close name with no size to check. */
-export type MatchBasis = 'barcode' | 'name_size' | 'name';
+/**
+ * Why the matcher suggested a page: the same barcode, the same name and size, the same kind of product and size once each shop's own
+ * label is left out, or a close name with no size to check.
+ */
+export type MatchBasis = 'barcode' | 'name_size' | 'generic' | 'name';
 
 /** A page in a shop that may be the product's equivalent there, waiting for a person's yes or no. */
 export interface Candidate {
