@@ -22,6 +22,7 @@ import {detailLines, headline, storeProblem, suggestionLine} from './price-forma
 import type {Product, ProductStore} from './prices.model';
 import {PricesStore} from './prices.store';
 import {type ProductAction, ProductActionsSheetComponent} from './product-actions.sheet';
+import {ProductSearchSheetComponent} from './product-search.sheet';
 import {StoreLinkSheetComponent} from './store-link.sheet';
 
 /** Prices change once a night, so the page re-reads only when it comes back into view. */
@@ -64,7 +65,7 @@ import {StoreLinkSheetComponent} from './store-link.sheet';
             <cmn-empty-state
               icon="Tag"
               message="No products yet"
-              subMessage="Add what you buy, then link its page in each shop. basket reads the prices every night."
+              subMessage="Search a shop by name and tap the right one, or type a name and link its page in each shop. basket reads the prices every night."
             />
           }
           @for (product of store.products(); track product.id) {
@@ -103,6 +104,12 @@ import {StoreLinkSheetComponent} from './store-link.sheet';
             placeholder="Add a product, e.g. Whole milk 2L"
             enterkeyhint="done"
             autocomplete="off"
+          />
+          <cmn-button
+            (clicked)="search()"
+            aria-label="Search the shops"
+            variant="secondary"
+            icon="Search"
           />
           <cmn-button [loading]="store.adding()" type="submit" variant="primary" icon="Plus"
             >Add</cmn-button
@@ -189,6 +196,20 @@ export class PricesPage implements OnInit {
     if ((await firstValueFrom(ref.afterClosed(), {defaultValue: undefined})) === 'paste') {
       this.link(product, entry);
     }
+  }
+
+  /** Search a shop by name, with photos; what is typed so far is the first search. A tapped result is added. */
+  protected search(): void {
+    const ref = this.drawer.open<boolean, {query: string}>(ProductSearchSheetComponent, {
+      title: 'Search the shops',
+      data: {query: this.name.value.trim()},
+      mode: 'sheet',
+    });
+    void firstValueFrom(ref.afterClosed(), {defaultValue: undefined}).then(added => {
+      if (added) {
+        this.name.reset('');
+      }
+    });
   }
 
   protected link(product: Product, entry: ProductStore): void {

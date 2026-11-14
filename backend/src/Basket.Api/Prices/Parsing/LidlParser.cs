@@ -27,6 +27,31 @@ public static class LidlParser
         return quotes;
     }
 
+    /// <summary>
+    /// What a Lidl search page lists: a tile per product with its name, its address and its photo, in the order Lidl ranks them.
+    /// A tile without a usable address or name is skipped. No price is read here; the nightly job prices a product once it is linked.
+    /// </summary>
+    public static IReadOnlyList<ShopSearchResult> ParseSearchTiles(string html)
+    {
+        var results = new List<ShopSearchResult>();
+        foreach (var tile in PageData.GridTiles(html))
+        {
+            var path = PageData.String(tile, "canonicalUrl") ?? PageData.String(tile, "canonicalPath");
+            var title = PageData.Clean(PageData.String(tile, "fullTitle") ?? PageData.String(tile, "title"));
+            if (title is null
+                || path is null
+                || !path.StartsWith('/')
+                || !Stores.TryNormalizeProductUrl(Store.Lidl, "https://" + Store.Lidl.Host() + path, out var url))
+            {
+                continue;
+            }
+
+            results.Add(new ShopSearchResult(Store.Lidl.Slug(), url.ToString(), title, TileImage(tile)));
+        }
+
+        return results;
+    }
+
     private static PriceQuote? TileQuote(JsonElement tile)
     {
         var price = PageData.Money(tile, "price", "price");

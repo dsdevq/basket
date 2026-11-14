@@ -91,3 +91,24 @@ export interface PricesResponse {
   readonly products: readonly Product[];
   readonly stores: readonly StoreStatus[];
 }
+
+/** One product a shop's search listed, with the shop's own photo of it. */
+export interface SearchResult {
+  readonly store: StoreId;
+  readonly url: string;
+  readonly title: string;
+  readonly imageUrl: string | null;
+}
+
+/** How a shop took part in a search; `searched: false` carries the reason in `note`. */
+export interface SearchStore {
+  readonly store: StoreId;
+  readonly name: string;
+  readonly searched: boolean;
+  readonly note: string | null;
+}
+
+export interface SearchResponse {
+  readonly results: readonly SearchResult[];
+  readonly stores: readonly SearchStore[];
+}

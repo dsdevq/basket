@@ -66,6 +66,8 @@ public static class ProductEndpoints
         // add and the store-page link); the rest of the group, like every other endpoint, takes a signed-in person only.
         products.MapGet("/", GetProducts).RequireAuthorization(Policies.CatalogRead);
         products.MapPost("/", AddProduct).RequireAuthorization(Policies.CatalogAdd);
+        // Search a shop by name (a person only): the pictures a person taps to add a product (search-add).
+        products.MapGet("/search", SearchShops);
         products.MapDelete("/{id:guid}", DeleteProduct);
         products.MapPut("/{id:guid}/stores/{store}", LinkStore).RequireAuthorization(Policies.CatalogAdd);
         products.MapDelete("/{id:guid}/stores/{store}", UnlinkStore);
@@ -122,6 +124,11 @@ public static class ProductEndpoints
 
         return Results.Ok(new { products = response, stores });
     }
+
+    private static async Task<IResult> SearchShops(string? q, Fetching.IPageFetcher fetcher, CancellationToken ct) =>
+        ShopSearch.TryCleanQuery(q, out var query)
+            ? Results.Ok(await ShopSearch.RunAsync(fetcher, query, ct))
+            : Results.Json(new { error = "query_too_short", message = "Type at least two letters to search." }, statusCode: 400);
 
     private static async Task<IResult> AddProduct(
         AddProductRequest request,
