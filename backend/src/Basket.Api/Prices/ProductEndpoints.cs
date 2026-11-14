@@ -7,7 +7,11 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Basket.Api.Prices;
 
-public sealed record AddProductRequest(string? Name, string? Barcode = null);
+/// <summary>
+/// <see cref="CatalogId"/>: add the product from that catalog row (<c>GET /api/catalog/search</c>): its name (unless <see cref="Name"/> says
+/// otherwise), its barcode, and the row's page and photo linked as the product's page in that shop.
+/// </summary>
+public sealed record AddProductRequest(string? Name = null, string? Barcode = null, Guid? CatalogId = null);
 
 public sealed record LinkStoreRequest(string? Url, string? ImageUrl = null);
 
@@ -136,10 +140,26 @@ public static class ProductEndpoints
         HttpContext http,
         AppDbContext db,
         ServerCandidates candidates,
+        PriceRecorder prices,
         TimeProvider clock,
         CancellationToken ct)
     {
-        var name = UserNames.Clean(request.Name, Product.MaxNameLength);
+        StoreProduct? row = null;
+        if (request.CatalogId is { } catalogId)
+        {
+            row = await db.StoreProducts.AsNoTracking().SingleOrDefaultAsync(p => p.Id == catalogId, ct);
+            if (row is null)
+            {
+                return Results.Json(new { error = "catalog_not_found", message = "That product is not in the catalog." }, statusCode: 404);
+            }
+
+            if (row.DiscontinuedAt is not null)
+            {
+                return Results.Json(new { error = "catalog_discontinued", message = "The shop no longer lists that product." }, statusCode: 409);
+            }
+        }
+
+        var name = UserNames.Clean(request.Name ?? (row is null ? null : CatalogNames.ShelfName(row)), Product.MaxNameLength);
         if (name is null)
         {
             return Results.Json(new { error = "name_required", message = "Type the product's name." }, statusCode: 400);
@@ -155,6 +175,22 @@ public static class ProductEndpoints
             return Results.Json(new { error = "product_exists", message = "That product is already tracked." }, statusCode: 409);
         }
 
+        Uri? pageUrl = null;
+        if (row is not null)
+        {
+            if (!Stores.TryNormalizeProductUrl(row.Store, row.Url, out pageUrl))
+            {
+                return Results.Json(new { error = "catalog_page_invalid", message = "That product's page cannot be linked." }, statusCode: 409);
+            }
+
+            // The same shop page already on the shelf under another name is the same product: one tap must not make a second copy.
+            var page = pageUrl.ToString();
+            if (await db.StoreListings.AnyAsync(l => l.StoreProductId == row.Id || (l.Store == row.Store && l.Url == page), ct))
+            {
+                return Results.Json(new { error = "product_exists", message = "That product is already tracked." }, statusCode: 409);
+            }
+        }
+
         string? barcode = null;
         if (!string.IsNullOrWhiteSpace(request.Barcode))
         {
@@ -162,11 +198,16 @@ public static class ProductEndpoints
             {
                 return Results.Json(new { error = "barcode_invalid", message = "That is not a valid barcode (8, 12, 13 or 14 digits with a correct check digit)." }, statusCode: 400);
             }
+        }
+        else if (row?.Barcode is { } catalogBarcode)
+        {
+            // The shop's own barcode; one that does not check out is no barcode at all, never a refusal of the add.
+            Gtin.TryNormalize(catalogBarcode, out barcode);
+        }
 
-            if (await db.Products.AnyAsync(p => p.Barcode == barcode, ct))
-            {
-                return MatchEndpoints.BarcodeExists();
-            }
+        if (barcode is not null && await db.Products.AnyAsync(p => p.Barcode == barcode, ct))
+        {
+            return MatchEndpoints.BarcodeExists();
         }
 
         var addedBy = await AddedByAsync(http, db, ct);
@@ -175,15 +216,22 @@ public static class ProductEndpoints
             return Results.Json(new { error = "no_owner", message = "There is no owner to record the product against yet." }, statusCode: 409);
         }
 
+        var now = clock.GetUtcNow();
         var product = new Product
         {
             Id = Guid.NewGuid(),
             Name = name,
-            AddedAt = clock.GetUtcNow(),
+            AddedAt = now,
             AddedByUserId = addedBy.Value,
             Barcode = barcode,
         };
         db.Products.Add(product);
+        StoreListing? listing = null;
+        if (row is not null && pageUrl is not null)
+        {
+            listing = await ListingFromCatalogAsync(db, prices, product.Id, row, pageUrl, !FleetAgent.HasBearer(http.Request), now, ct);
+        }
+
         try
         {
             await db.SaveChangesAsync(ct);
@@ -200,9 +248,46 @@ public static class ProductEndpoints
         var created = new ProductResponse(
             product.Id,
             product.Name,
-            Stores.All.Select(s => new ProductStoreResponse(s.Slug(), s.DisplayName(), s.ReadBy(), null, null, LastPaid(s, null, connected))).ToList(),
+            Stores.All.Select(s => new ProductStoreResponse(
+                s.Slug(),
+                s.DisplayName(),
+                s.ReadBy(),
+                listing is not null && listing.Store == s ? new ListingResponse(listing.Url, listing.Title, listing.LastCheckedAt, listing.LastError, listing.Category, listing.ImageUrl, listing.ConfirmedAt is not null) : null,
+                null,
+                LastPaid(s, null, connected))).ToList(),
             product.Barcode);
         return Results.Created($"/api/products/{product.Id}", created);
+    }
+
+    /// <summary>
+    /// The product's page in the catalog row's shop, taken from the row: the address (linked to the row), the shop's name for it, its
+    /// photo and category, and the row's latest price as a first reading (dated by the sweep that last listed the product), so the
+    /// product is priced at once instead of at the next sweep. A person tapping the row has chosen the page, so it is confirmed, as a
+    /// pasted link is; the fleet's is not. Applies to the context; the caller saves.
+    /// </summary>
+    private static async Task<StoreListing> ListingFromCatalogAsync(AppDbContext db, PriceRecorder prices, Guid productId, StoreProduct row, Uri page, bool byPerson, DateTimeOffset now, CancellationToken ct)
+    {
+        var listing = await PointListingAsync(db, null, productId, row.Store, page.ToString(), now, ct);
+        // The row the person tapped, whatever the address's own id says.
+        listing.StoreProductId = row.Id;
+        listing.Title = PriceRecorder.Truncate(row.Name, 300);
+        listing.ImageUrl = ImageUrls.TryNormalize(row.ImageUrl, out var image) ? image : null;
+        listing.Category = PriceRecorder.Truncate(row.Category, StoreListing.MaxCategoryLength);
+        listing.ConfirmedAt = byPerson ? now : null;
+
+        var price = await db.StoreProductPrices.AsNoTracking()
+            .Where(p => p.StoreProductId == row.Id)
+            .OrderByDescending(p => p.ObservedOn)
+            .FirstOrDefaultAsync(ct);
+        // A reading with no price that is in stock says nothing a page can use (CatalogRecorder mirrors by the same rule).
+        if (price is not null && (price.Price is not null || price.LoyaltyPrice is not null || !price.InStock))
+        {
+            var quote = new PriceQuote(
+                row.Name, price.Price, price.WasPrice, price.LoyaltyPrice, price.LoyaltyScheme, price.PromoText, price.ValidFrom, price.ValidUntil, price.InStock, row.ImageUrl, row.Category);
+            await prices.RecordAsync(listing, quote, row.LastSeenAt, ct);
+        }
+
+        return listing;
     }
 
     /// <summary>

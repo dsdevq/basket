@@ -2,14 +2,7 @@ import {HttpClient} from '@angular/common/http';
 import {inject, Injectable} from '@angular/core';
 import {firstValueFrom} from 'rxjs';
 
-import type {
-  Candidate,
-  Listing,
-  PricesResponse,
-  Product,
-  SearchResponse,
-  StoreId,
-} from './prices.model';
+import type {Candidate, Listing, PricesResponse, Product, StoreId} from './prices.model';
 
 @Injectable({providedIn: 'root'})
 export class PricesApi {
@@ -23,6 +16,11 @@ export class PricesApi {
     return firstValueFrom(this.http.post<Product>('/api/products', {name}));
   }
 
+  /** Adds the product the catalog row is: named, barcoded and linked to the row's page in its shop by the server. */
+  public addFromCatalog(catalogId: string): Promise<Product> {
+    return firstValueFrom(this.http.post<Product>('/api/products', {catalogId}));
+  }
+
   public remove(id: string): Promise<void> {
     return firstValueFrom(this.http.delete<void>(`/api/products/${id}`));
   }
@@ -30,12 +28,6 @@ export class PricesApi {
   public link(id: string, store: StoreId, url: string, imageUrl?: string): Promise<Listing> {
     return firstValueFrom(
       this.http.put<Listing>(`/api/products/${id}/stores/${store}`, {url, imageUrl})
-    );
-  }
-
-  public search(query: string): Promise<SearchResponse> {
-    return firstValueFrom(
-      this.http.get<SearchResponse>('/api/products/search', {params: {q: query}})
     );
   }
 
