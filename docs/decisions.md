@@ -1680,8 +1680,7 @@ now follow the person to every device they sign in on, as in finance-sentry, ins
 - **Request.** `AppVersion` is now a `LidlPlusOptions` setting with a realistic default (`16.40.2`), not a literal: Lidl accepts a real
   release and turns a made-up one away, so it is raised in configuration when Lidl starts refusing again. A receipt is read from
   `api/v3/...`; the list stays on `api/v2/...`. v3 refuses a language longer than two characters (its 400 said `LanguageCode must be 2
-  characters or fewer`), so the default `Language` is `en` and `Accept-Language` is always cut to its first two letters (`en-IE`
-  is sent as `en`). The language is sent in the header only: that is the one place basket sends one, but whether v3 reads
+  characters or fewer`), so the default `Language` is `en` and is sent as `Accept-Language` as configured (a longer tag would be refused by Lidl). The language is sent in the header only: that is the one place basket sends one, but whether v3 reads
   the header or wants it elsewhere is inferred from the error, not seen.
 - **Lines.** The v3 detail carries the day, `totalAmount` and the shop, but the purchased lines are only inside `htmlPrintedReceipt`, an
   HTML string (a `<pre>` of spans). `LidlPrintedReceipt` reads it with a tolerant reader (regex over the span tags, no HTML library):

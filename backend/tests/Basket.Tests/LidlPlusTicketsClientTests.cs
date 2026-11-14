@@ -79,17 +79,17 @@ public sealed class LidlPlusTicketsClientTests
     }
 
     [Fact]
-    public async Task The_app_version_and_the_language_come_from_the_options_and_the_language_is_cut_to_two_letters()
+    public async Task The_app_version_and_the_language_come_from_the_options()
     {
         var handler = new Recorded(_ => Json(HttpStatusCode.OK, """{"tickets":[]}"""));
         var http = new HttpClient(handler) { BaseAddress = new Uri("https://tickets.lidl.test/") };
-        var client = new LidlPlusTicketsClient(http, Options.Create(new LidlPlusOptions { AppVersion = "17.1.0", Language = "en-IE" }));
+        var client = new LidlPlusTicketsClient(http, Options.Create(new LidlPlusOptions { AppVersion = "17.1.0", Language = "de" }));
 
         await client.ListAsync(Access, 1, CancellationToken.None);
         await client.GetAsync(Access, "R", CancellationToken.None);
 
         handler.Seen.Should().HaveCount(2).And.OnlyContain(r =>
-            r.Headers.GetValues("App-Version").Single() == "17.1.0" && r.Headers.GetValues("Accept-Language").Single() == "en");
+            r.Headers.GetValues("App-Version").Single() == "17.1.0" && r.Headers.GetValues("Accept-Language").Single() == "de");
     }
 
     [Fact]

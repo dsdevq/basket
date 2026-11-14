@@ -133,7 +133,7 @@ public sealed class LidlPlusTicketsClient(HttpClient http, IOptions<LidlPlusOpti
         var settings = options.Value;
         using var request = new HttpRequestMessage(HttpMethod.Get, path);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-        request.Headers.TryAddWithoutValidation("Accept-Language", LanguageCode(settings.Language));
+        request.Headers.TryAddWithoutValidation("Accept-Language", settings.Language);
         request.Headers.TryAddWithoutValidation("App", "com.lidl.eapp");
         request.Headers.TryAddWithoutValidation("Operating-System", "iOS");
         request.Headers.TryAddWithoutValidation("App-Version", settings.AppVersion);
@@ -152,13 +152,6 @@ public sealed class LidlPlusTicketsClient(HttpClient http, IOptions<LidlPlusOpti
         {
             return (null, true);
         }
-    }
-
-    /// <summary>The two-letter language Lidl's receipts service accepts: <c>en-IE</c> is sent as <c>en</c>.</summary>
-    private static string LanguageCode(string language)
-    {
-        var code = language.Split('-', '_')[0].Trim().ToLowerInvariant();
-        return code.Length == 0 ? "en" : code[..Math.Min(code.Length, 2)];
     }
 
     private static string? Text(JsonElement root, string name) =>

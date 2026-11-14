@@ -21,7 +21,7 @@ public sealed class LidlPlusOptions
     /// <summary>The country the Lidl Plus account belongs to; Lidl keeps receipts per country.</summary>
     public string Country { get; set; } = "IE";
 
-    /// <summary>The language the receipts are asked for. Lidl accepts two letters at most; a longer tag such as <c>en-IE</c> is cut to <c>en</c>.</summary>
+    /// <summary>The language the receipts are asked for. Two letters, as Lidl refuses a longer tag such as <c>en-IE</c>.</summary>
     public string Language { get; set; } = "en";
 
     /// <summary>
