@@ -44,6 +44,7 @@ public sealed partial class AldiCatalogSource(
         var wanted = listings.Select(l => SkuOf(l.Url)).Where(s => s is not null).Select(s => s!).ToHashSet(StringComparer.Ordinal);
         var quotes = new Dictionary<string, PriceQuote>(StringComparer.Ordinal);
         var discontinued = new HashSet<string>(StringComparer.Ordinal);
+        var unpriced = new HashSet<string>(StringComparer.Ordinal);
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var requests = 0;
         var anyPriced = false;
@@ -129,7 +130,14 @@ public sealed partial class AldiCatalogSource(
                 readings.Add(reading);
                 if (wanted.Contains(reading.ExternalId))
                 {
-                    quotes[reading.ExternalId] = QuoteOf(reading);
+                    if (reading.Price.Price is null)
+                    {
+                        unpriced.Add(reading.ExternalId);
+                    }
+                    else
+                    {
+                        quotes[reading.ExternalId] = QuoteOf(reading);
+                    }
                 }
             }
 
@@ -176,6 +184,10 @@ public sealed partial class AldiCatalogSource(
             else if (sku is not null && discontinued.Contains(sku))
             {
                 results[listing.ListingId] = ListingPull.Failed("Aldi has discontinued this product. Link another one.");
+            }
+            else if (sku is not null && unpriced.Contains(sku))
+            {
+                results[listing.ListingId] = ListingPull.Failed("Aldi lists this product without a price today. The last price is kept.");
             }
             else if (complete)
             {

@@ -325,6 +325,22 @@ public sealed class AldiCatalogSourceTests : IClassFixture<BasketFactory>
     }
 
     [Fact]
+    public async Task A_linked_product_listed_without_a_price_fails_and_keeps_its_last_price()
+    {
+        await CleanAsync();
+        var torch = new ListingToCheck(Guid.NewGuid(), new Uri("https://www.aldi.ie/product/special-buy-torch-000000000000900104"));
+        var priced = Fixtures.Read("aldi-product-search.json");
+        var unpricedTorch = priced.Replace("\"price\": { \"amount\": 999 }", "\"price\": {}", StringComparison.Ordinal);
+        unpricedTorch.Should().NotBe(priced, "the fixture's torch must lose its price for this test");
+        var fetcher = new FakeFetcher().Serve(TreeUrl, Fixtures.Read("aldi-category-tree.json")).Serve(SearchUrl(0), unpricedTorch);
+
+        var pull = await PullAsync(fetcher, torch);
+
+        pull.Listings[torch.ListingId].Quote.Should().BeNull("a missing price is not a price of nothing");
+        pull.Listings[torch.ListingId].Error.Should().Contain("without a price");
+    }
+
+    [Fact]
     public async Task A_listing_whose_address_carries_no_number_is_not_priced()
     {
         await CleanAsync();
