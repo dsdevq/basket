@@ -18,6 +18,7 @@ import {
 } from '@lifekit-hq/ui';
 import {fromEvent} from 'rxjs';
 
+import {HabitsStore} from '../habits/habits.store';
 import {ListStore} from '../list/list.store';
 import {STORE_NAMES} from '../prices/price-format';
 import {PricesStore} from '../prices/prices.store';
@@ -25,9 +26,11 @@ import {ShelfCardComponent} from './shelf-card.component';
 import {
   pickStore,
   SHELF_OPTIONS,
+  SHELF_VIEWS,
   type ShelfFilter,
   type ShelfTile,
   shelfTiles,
+  type ShelfView,
 } from './shelf-format';
 
 const key = (productId: string, store: string | null): string => `${productId}|${store ?? ''}`;
@@ -35,7 +38,8 @@ const key = (productId: string, store: string | null): string => `${productId}|$
 /**
  * Pick a shop, tap the products you need, and they are on the shared list: no typing. The product grid is the pattern of
  * Bring! (a tile per product, tap to add) and the shop filter and the "on your list" state are the favourites list of the
- * Tesco app.
+ * Tesco app. "Most bought" and "Usually bought" are the frequent-items view of AnyList and OurGroceries, here as a sort and a
+ * filter over the same grid, worked out from closed trips.
  */
 @Component({
   selector: 'bk-shelf-page',
@@ -55,6 +59,14 @@ const key = (productId: string, store: string | null): string => `${productId}|$
           [value]="filter()"
           (valueChange)="select($event)"
           label="Shop"
+        />
+      </div>
+      <div class="mb-cmn-4 md:max-w-md">
+        <cmn-segmented
+          [options]="viewOptions"
+          [value]="view()"
+          (valueChange)="selectView($event)"
+          label="Show"
         />
       </div>
       @switch (prices.status()) {
@@ -105,11 +117,16 @@ export class ShelfPage implements OnInit {
   private readonly list = inject(ListStore);
 
   protected readonly prices = inject(PricesStore);
+  protected readonly habits = inject(HabitsStore);
   protected readonly options: SegmentedOption[] = [...SHELF_OPTIONS];
+  protected readonly viewOptions: SegmentedOption[] = [...SHELF_VIEWS];
   protected readonly filter = signal<ShelfFilter>('all');
+  protected readonly view = signal<ShelfView>('all');
   protected readonly pending = signal<ReadonlySet<string>>(new Set());
 
-  protected readonly tiles = computed(() => shelfTiles(this.prices.products(), this.filter()));
+  protected readonly tiles = computed(() =>
+    shelfTiles(this.prices.products(), this.filter(), this.view(), this.habits.byProduct())
+  );
   /** The products already open on the list, per shop, so a tile shows it and a second tap does nothing. */
   protected readonly onList = computed(
     () =>
@@ -119,6 +136,14 @@ export class ShelfPage implements OnInit {
   );
   protected readonly empty = computed(() => {
     const filter = this.filter();
+    if (this.view() === 'usual') {
+      return {
+        message:
+          filter === 'all' ? 'Nothing usual yet' : `Nothing usual at ${STORE_NAMES[filter]} yet`,
+        detail:
+          'Products you buy on two or more trips show up here. Tap Done shopping on the list to count a trip.',
+      };
+    }
     if (filter === 'all') {
       return {
         message: 'The shelf is empty',
@@ -147,7 +172,12 @@ export class ShelfPage implements OnInit {
     this.filter.set(SHELF_OPTIONS.find(option => option.value === value)?.value ?? 'all');
   }
 
+  protected selectView(value: string): void {
+    this.view.set(SHELF_VIEWS.find(option => option.value === value)?.value ?? 'all');
+  }
+
   protected reload(quiet = false): void {
+    void this.habits.load();
     void this.prices.load(quiet);
     void this.list.load(quiet);
   }
