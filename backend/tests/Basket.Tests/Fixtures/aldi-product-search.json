@@ -10,9 +10,8 @@
       "sellingSize": "250 g",
       "discontinued": false,
       "notForSale": true,
-      "price": { "amount": 149, "comparison": 596, "comparisonDisplay": "€5.96/1 kg" },
-      "wasPriceDisplay": null,
-      "categories": [ { "id": "1000000000", "name": "Products" }, { "id": "1110000000", "name": "Cheese" } ],
+      "price": { "amount": 149, "comparison": 596, "comparisonDisplay": "€5.96/1 KG", "wasPriceDisplay": null },
+      "categories": [ { "id": "1100000000", "name": "Chilled Food" }, { "id": "1110000000", "name": "Cheese" } ],
       "assets": [
         { "url": "https://images.example.test/product/jpg/scaleWidth/{width}/mozzarella-0001", "type": "FR01" },
         { "url": "https://images.example.test/product/jpg/scaleWidth/{width}/mozzarella-0002", "type": "FR02" }
@@ -25,9 +24,8 @@
       "brandName": "DAIRY FARM",
       "sellingSize": "2 l",
       "discontinued": false,
-      "price": { "amount": 245, "comparison": 123, "comparisonDisplay": "€1.23/1 l" },
-      "wasPriceDisplay": "Was €2.69",
-      "categories": [ { "id": "1120000000", "name": "Milk" } ],
+      "price": { "amount": 245, "comparison": 123, "comparisonDisplay": "€1.23/1 L", "wasPriceDisplay": "€2.69" },
+      "categories": [ { "id": "1100000000", "name": "Chilled Food" }, { "id": "1120000000", "name": "Milk" } ],
       "assets": []
     },
     {
@@ -37,7 +35,7 @@
       "brandName": "OAKRIDGE",
       "sellingSize": "6 x 330 ml",
       "discontinued": true,
-      "price": { "amount": 199, "comparison": 100, "comparisonDisplay": "€1.00/1 l" },
+      "price": { "amount": 199, "comparison": 100, "comparisonDisplay": "€1.00/1 L", "wasPriceDisplay": null },
       "categories": [ { "id": "1210000000", "name": "Water" } ],
       "assets": []
     },
@@ -47,8 +45,7 @@
       "brandName": "WORKZONE",
       "sellingSize": "1 each",
       "discontinued": false,
-      "price": { "amount": 999 },
-      "wasPriceDisplay": "€9.99",
+      "price": { "amount": 999, "wasPriceDisplay": "€9.99" },
       "categories": [ { "id": "9990000000", "name": "Special Buys" } ],
       "assets": [ { "url": "https://images.example.test/special-buy-torch/{width}/torch" } ]
     }

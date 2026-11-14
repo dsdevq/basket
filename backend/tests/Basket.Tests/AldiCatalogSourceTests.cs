@@ -13,15 +13,15 @@ namespace Basket.Tests;
 /// <summary>The Aldi sweep against invented API pages served by a fake fetcher (no network) and a real database.</summary>
 public sealed class AldiCatalogSourceTests : IClassFixture<BasketFactory>
 {
-    private const string Api = "https://asl.api.aldi.ie/v3";
-    private const string TreeUrl = Api + "/product-category-tree?currency=EUR";
+    private const string Api = "https://asl.api.aldi.ie/commerce";
+    private const string TreeUrl = Api + "/v2/product-category-tree?serviceType=walk-in&servicePoint=D105";
     private const string MozzarellaUrl = "https://www.aldi.ie/product/greenfield-grated-mozzarella-000000000000900101";
 
     private readonly BasketFactory _factory;
 
     public AldiCatalogSourceTests(BasketFactory factory) => _factory = factory;
 
-    private static string SearchUrl(int offset) => $"{Api}/product-search?currency=EUR&limit=60&offset={offset}";
+    private static string SearchUrl(int offset) => $"{Api}/v3/product-search?currency=EUR&serviceType=walk-in&limit=60&offset={offset}&sort=relevance&servicePoint=D105";
 
     private static FakeFetcher Range() => new FakeFetcher()
         .Serve(TreeUrl, Fixtures.Read("aldi-category-tree.json"))
@@ -105,13 +105,13 @@ public sealed class AldiCatalogSourceTests : IClassFixture<BasketFactory>
         mozzarella.Brand.Should().Be("GREENFIELD");
         mozzarella.SizeText.Should().Be("250 g");
         (mozzarella.SizeAmount, mozzarella.SizeUnit).Should().Be((250m, "g"));
-        (mozzarella.UnitPrice, mozzarella.UnitPriceBasis).Should().Be((5.96m, "1 kg"));
+        (mozzarella.UnitPrice, mozzarella.UnitPriceBasis).Should().Be((5.96m, "1 KG"));
         mozzarella.ImageUrl.Should().Be("https://images.example.test/product/jpg/scaleWidth/300/mozzarella-0001", "the first picture, at 300 wide");
-        mozzarella.Category.Should().Be("Chilled Food > Cheese", "the tree's path, without the catalogue root");
+        mozzarella.Category.Should().Be("Chilled Food > Cheese", "the tree's path of the deepest category");
         mozzarella.DiscontinuedAt.Should().BeNull();
 
         products[1].Category.Should().Be("Chilled Food > Milk");
-        products[2].Category.Should().Be("Special Buys", "a category the tree does not know is filed under the name the product carries");
+        products[2].Category.Should().BeNull("a category the tree does not know is not guessed from the product");
         products[2].ImageUrl.Should().Be("https://images.example.test/special-buy-torch/300/torch");
         products[2].Url.Should().Be("https://www.aldi.ie/product/special-buy-torch-000000000000900104", "no slug from Aldi, so one is made from the name");
     }
@@ -217,7 +217,7 @@ public sealed class AldiCatalogSourceTests : IClassFixture<BasketFactory>
 
         pull.Outcome.Should().Be(PullOutcome.Ok);
         pull.Message.Should().Contain("category tree was not read");
-        (await ProductsAsync()).Select(p => p.Category).Should().Equal("Cheese", "Milk", "Special Buys");
+        (await ProductsAsync()).Select(p => p.Category).Should().OnlyContain(c => c == null);
     }
 
     [Fact]
@@ -297,9 +297,39 @@ public sealed class AldiCatalogSourceTests : IClassFixture<BasketFactory>
 
         var pull = await PullAsync(fetcher);
 
-        fetcher.Requested.Should().HaveCount(60).And.StartWith(new[] { TreeUrl, SearchUrl(0), SearchUrl(60) });
+        fetcher.Requested.Should().HaveCount(61, "one tree request and 60 pages").And.StartWith(new[] { TreeUrl, SearchUrl(0), SearchUrl(60) });
         pull.Outcome.Should().Be(PullOutcome.Partial);
         pull.Message.Should().Contain("request limit");
+    }
+
+    [Fact]
+    public async Task The_whole_range_of_about_3554_products_is_sixty_pages_and_closes_within_the_limit()
+    {
+        await CleanAsync();
+        var fetcher = new FakeFetcher().Serve(TreeUrl, Fixtures.Read("aldi-category-tree.json"));
+        for (var page = 0; page < 60; page++)
+        {
+            fetcher.Serve(SearchUrl(page * 60), Page((page * 60) + 1, Math.Min(60, 3554 - (page * 60)), 3554));
+        }
+
+        var pull = await PullAsync(fetcher);
+
+        fetcher.Requested.Should().HaveCount(61);
+        pull.Outcome.Should().Be(PullOutcome.Ok);
+        (await ProductsAsync()).Should().HaveCount(3554);
+    }
+
+    [Fact]
+    public async Task A_category_tree_in_any_other_shape_gives_no_categories_and_the_sweep_goes_on()
+    {
+        await CleanAsync();
+        var bare = """[{"key":"1110000000","name":"Cheese","children":[]}]""";
+        var fetcher = new FakeFetcher().Serve(TreeUrl, bare).Serve(SearchUrl(0), Fixtures.Read("aldi-product-search.json"));
+
+        var pull = await PullAsync(fetcher);
+
+        pull.Outcome.Should().Be(PullOutcome.Ok);
+        (await ProductsAsync()).Should().OnlyContain(p => p.Category == null);
     }
 
     [Fact]
@@ -330,7 +360,7 @@ public sealed class AldiCatalogSourceTests : IClassFixture<BasketFactory>
         await CleanAsync();
         var torch = new ListingToCheck(Guid.NewGuid(), new Uri("https://www.aldi.ie/product/special-buy-torch-000000000000900104"));
         var priced = Fixtures.Read("aldi-product-search.json");
-        var unpricedTorch = priced.Replace("\"price\": { \"amount\": 999 }", "\"price\": {}", StringComparison.Ordinal);
+        var unpricedTorch = priced.Replace("\"price\": { \"amount\": 999, \"wasPriceDisplay\": \"€9.99\" }", "\"price\": {}", StringComparison.Ordinal);
         unpricedTorch.Should().NotBe(priced, "the fixture's torch must lose its price for this test");
         var fetcher = new FakeFetcher().Serve(TreeUrl, Fixtures.Read("aldi-category-tree.json")).Serve(SearchUrl(0), unpricedTorch);
 

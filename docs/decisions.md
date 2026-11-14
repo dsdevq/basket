@@ -1971,24 +1971,28 @@ Owner direction, 2026-11-14: per-store catalog readers feed one combined catalog
   separate public host that serves anyone. Product addresses stay the `www.aldi.ie/product/<slug>-<sku>` pages (what a listing
   links to and the shelf shows); they are built, never fetched.
 - **Terms note.** Aldi's terms are not an invitation to automated reading; the owner accepted that risk on the footing of 60 polite
-  requests a day for a two-person household (issue 129, "accept Aldi terms risk"). The budget is about 60 requests a day: one category tree plus the range in pages of 60
-  (a fixed cap of 60 requests a sweep, tree included, not a setting), 5 s apart (`MinRequestIntervalSeconds`, per host), honest user agent
+  requests a day for a two-person household (issue 129, "accept Aldi terms risk"). The budget is about 60 requests a day: the range in
+  pages of 60 (about 3,554 products), a fixed cap of 60 product-search pages a sweep, plus the one category tree request, which the cap does not count
+  (a constant, not a setting), 5 s apart (`MinRequestIntervalSeconds`, per host), honest user agent
   (`basket-price-check/1.0 (a household app ...)`), one sweep a night, no retry. A sweep stops, it never goes round: a 403 or 429
   (`FetchStatus.Blocked`) ends it at once, keeps what the earlier pages recorded, delists nothing and shows on the Prices page as
   blocked. If the owner or Aldi withdraws the acceptance, the fix is to set the source off, not to change how it asks.
-- **What is read.** `GET https://asl.api.aldi.ie/v3/product-category-tree` once (category id to its path, outermost first, joined with " > ";
-  the catalogue root "Products" is dropped as everywhere else), then `GET https://asl.api.aldi.ie/v3/product-search?limit=60&offset=0..` until
-  `totalCount`, with `currency=EUR`. The host and version are constants in `AldiCatalogSource`, as the cap is. **Not verified live:** no request was made to Aldi for this change (the brief
-  forbids it); the paths, the `v3` and the response shape come from the scout's notes (`api.aldi.ie/v3/product-search`) and the
-  fixtures are invented in that shape. The first nightly run is the check: a page in another shape stops the sweep as `Failed`
+- **What is read.** `GET https://asl.api.aldi.ie/commerce/v2/product-category-tree?serviceType=walk-in&servicePoint=D105` once, then
+  `GET https://asl.api.aldi.ie/commerce/v3/product-search?currency=EUR&serviceType=walk-in&limit=60&offset=0..&sort=relevance&servicePoint=D105`
+  until `meta.pagination.totalCount` (v2 for the tree, v3 for the search, both under `/commerce/`). The host, paths and the cap are constants in
+  `AldiCatalogSource`. **Verified:** the addresses and the response shapes are the ones the catalog scout recorded (2026-11-14) and
+  two live requests from the VPS confirmed; the repository's fixtures are invented values in that exact shape. The tree is
+  `{data:[{key,order,name,urlSlugText,children:[...]}]}`; a category's path is its names from the outermost, joined with " > ", keyed by `key`.
+  A tree that cannot be read for a reason other than a block does not stop the sweep: products are stored with no category. A page in another shape stops the sweep as `Failed`
   with "not in the shape basket reads", writes and delists nothing. That includes a page with no `meta.pagination.totalCount` (a
   missing total is never a finished sweep) and a sweep whose products so far all lack a readable price (a renamed `price.amount` would
   otherwise write an empty price over every known one); once any product has been priced, a single unpriced product is still just unpriced.
 - **Field mapping.** `sku` is `external_id` (the zero-padded number, also the end of the page address); `brandName`; `sellingSize`
-  is `size_text`; `price.amount` / 100 is the price (Aldi sends whole cents); `price.comparison` / 100 is the unit price, labelled with the text after the "/" of
-  `comparisonDisplay` ("1 kg"); `wasPriceDisplay` ("Was €2.69", "€9.99") is parsed and kept only when it is higher
-  than the price; the first `assets` entry with `{width}` replaced by `300` is the photo; the product's deepest category the tree knows
-  is the category, else the names it carries; `discontinued` products are not recorded. `notForSale` (Aldi has no online shop) is ignored: a
+  is `size_text`; inside the `price` object, `amount` / 100 is the price (Aldi sends whole cents), `comparison` / 100 is the unit price,
+  labelled with the text after the "/" of `comparisonDisplay` ("€5.96/1 KG" gives "1 KG"), and `wasPriceDisplay` ("€1.35", null when there is
+  no was price) is parsed and kept only when it is higher than the price; the first `assets` entry with `{width}` replaced by `300` is the
+  photo; the category is the tree's path for the product's deepest `categories` entry (`{id,name}`, `id` matching a tree `key`), null when
+  the tree knows none; `discontinued` products are not recorded. `notForSale` (true on every record; Aldi has no online shop) is ignored: a
   listed product is in stock. Aldi has no loyalty price. The barcode is not in the API, so none is stored.
 - **One door, one matcher.** The sweep writes through the same `CatalogRecorder` as `POST /api/ingest/catalog` (write-on-change
   prices, thinner readings never erase), on the same tables, so the fleet identity, the ingest token scopes and the matcher built

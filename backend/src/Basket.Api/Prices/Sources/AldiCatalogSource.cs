@@ -26,13 +26,15 @@ public sealed partial class AldiCatalogSource(
     public const int PageSize = 60;
 
     /// <summary>Aldi's product API. asl.api.aldi.ie answers the server while www.aldi.ie does not (docs/decisions.md).</summary>
-    private const string ApiBase = "https://asl.api.aldi.ie/v3";
+    private const string ApiBase = "https://asl.api.aldi.ie/commerce";
+
+    private const string TreeUrl = ApiBase + "/v2/product-category-tree?serviceType=walk-in&servicePoint=D105";
 
     /// <summary>
-    /// The most requests one sweep makes, the category tree included: the 60 polite requests a day the owner accepted for Aldi's
-    /// terms.
+    /// The most product-search pages one sweep reads, the single category tree request not counted: the 60 polite requests a day
+    /// the owner accepted for Aldi's terms, which is the whole range (about 3,554 products) in pages of 60.
     /// </summary>
-    private const int MaxRequests = 60;
+    private const int MaxPages = 60;
 
     public Store Store => Store.Aldi;
 
@@ -46,11 +48,10 @@ public sealed partial class AldiCatalogSource(
         var discontinued = new HashSet<string>(StringComparer.Ordinal);
         var unpriced = new HashSet<string>(StringComparer.Ordinal);
         var seen = new HashSet<string>(StringComparer.Ordinal);
-        var requests = 0;
+        var pages = 0;
         var anyPriced = false;
 
-        var tree = await fetcher.GetAsync(new Uri($"{ApiBase}/product-category-tree?currency=EUR"), ct);
-        requests++;
+        var tree = await fetcher.GetAsync(new Uri(TreeUrl), ct);
         if (tree.Status == FetchStatus.Blocked)
         {
             return StorePulls.Blocked(listings, tree.Detail!);
@@ -59,20 +60,22 @@ public sealed partial class AldiCatalogSource(
         var paths = tree.Status == FetchStatus.Ok ? ReadCategoryPaths(tree.Body!) : new Dictionary<string, string>();
         string? note = tree.Status == FetchStatus.Ok
             ? null
-            : $"Aldi's category tree was not read ({tree.Detail ?? "no detail"}), so products are filed under the category names they carry.";
+            : $"Aldi's category tree was not read ({tree.Detail ?? "no detail"}), so products are filed without a category.";
 
         var complete = false;
         string? stopped = null;
         for (var offset = 0; ; offset += PageSize)
         {
-            if (requests >= MaxRequests)
+            if (pages >= MaxPages)
             {
-                stopped = $"The sweep stopped at the request limit ({MaxRequests}) before the end of Aldi's range.";
+                stopped = $"The sweep stopped at the request limit ({MaxPages} pages) before the end of Aldi's range.";
                 break;
             }
 
-            var page = await fetcher.GetAsync(new Uri($"{ApiBase}/product-search?currency=EUR&limit={PageSize}&offset={offset}"), ct);
-            requests++;
+            var page = await fetcher.GetAsync(
+                new Uri($"{ApiBase}/v3/product-search?currency=EUR&serviceType=walk-in&limit={PageSize}&offset={offset}&sort=relevance&servicePoint=D105"),
+                ct);
+            pages++;
             if (page.Status == FetchStatus.Blocked)
             {
                 // What the earlier pages recorded stays; nothing is delisted and nothing is retried.
@@ -206,7 +209,7 @@ public sealed partial class AldiCatalogSource(
             message ??= results.Values.Select(r => r.Error).FirstOrDefault(e => e is not null);
         }
 
-        log.LogInformation("Aldi: {Seen} products listed in {Requests} requests, {Read} of {Listings} linked products priced", seen.Count, requests, read, listings.Count);
+        log.LogInformation("Aldi: {Seen} products listed in {Pages} pages, {Read} of {Listings} linked products priced", seen.Count, pages, read, listings.Count);
         return new StorePull(outcome, message, results);
     }
 
@@ -228,8 +231,8 @@ public sealed partial class AldiCatalogSource(
     private sealed record AldiPage(IReadOnlyList<AldiProduct> Products, int TotalCount);
 
     /// <summary>
-    /// Category id to its path from the tree ("Fresh Food &gt; Dairy &gt; Milk"), outermost first. The catalogue root ("Products") is
-    /// not part of a path, as on every other category in basket.
+    /// Category key to its path from the tree (<c>{data:[{key,name,children:[...]}]}</c>, as "Chilled Food &gt; Cheese"), outermost
+    /// first.
     /// </summary>
     internal static Dictionary<string, string> ReadCategoryPaths(string json)
     {
@@ -238,8 +241,10 @@ public sealed partial class AldiCatalogSource(
         {
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
-            var nodes = root.ValueKind == JsonValueKind.Object && root.TryGetProperty("data", out var data) ? data : root;
-            Walk(nodes, [], paths, 0);
+            if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("data", out var data))
+            {
+                Walk(data, [], paths, 0);
+            }
         }
         catch (JsonException)
         {
@@ -264,17 +269,15 @@ public sealed partial class AldiCatalogSource(
             }
 
             var name = Text(node, "name")?.Trim();
-            var id = Text(node, "key") ?? Text(node, "id");
-            var isRoot = depth == 0 && string.Equals(name, "Products", StringComparison.OrdinalIgnoreCase);
-            var next = new List<string>(trail);
-            if (!string.IsNullOrEmpty(name) && !isRoot)
+            if (string.IsNullOrEmpty(name))
             {
-                next.Add(name);
+                continue;
             }
 
-            if (id is not null && next.Count > 0)
+            var next = new List<string>(trail) { name };
+            if (Text(node, "key") is { } key)
             {
-                paths[id] = string.Join(StoreListing.CategorySeparator, next);
+                paths[key] = string.Join(StoreListing.CategorySeparator, next);
             }
 
             if (node.TryGetProperty("children", out var children))
@@ -322,17 +325,18 @@ public sealed partial class AldiCatalogSource(
 
         decimal? price = null;
         decimal? unit = null;
+        decimal? was = null;
         string? basis = null;
         if (e.TryGetProperty("price", out var p) && p.ValueKind == JsonValueKind.Object)
         {
             price = Cents(p, "amount");
             unit = Cents(p, "comparison");
+            was = ParseMoney(Text(p, "wasPriceDisplay"));
             var display = Text(p, "comparisonDisplay");
             var slash = display?.IndexOf('/') ?? -1;
             basis = slash >= 0 ? display![(slash + 1)..].Trim() : null;
         }
 
-        var was = ParseMoney(Text(e, "wasPriceDisplay"));
         if (was is not null && price is not null && was <= price)
         {
             was = null;
@@ -354,7 +358,7 @@ public sealed partial class AldiCatalogSource(
         return new AldiProduct(sku, e.TryGetProperty("discontinued", out var d) && d.ValueKind == JsonValueKind.True, item);
     }
 
-    /// <summary>The deepest path of the product's categories the tree knows, else the names the product itself carries.</summary>
+    /// <summary>The tree's path of the product's deepest category (by id), null when the tree does not know any of them.</summary>
     private static string? CategoryOf(JsonElement e, Dictionary<string, string> paths)
     {
         if (!e.TryGetProperty("categories", out var categories) || categories.ValueKind != JsonValueKind.Array)
@@ -363,27 +367,16 @@ public sealed partial class AldiCatalogSource(
         }
 
         string? best = null;
-        var names = new List<string>();
         foreach (var category in categories.EnumerateArray())
         {
-            if (category.ValueKind != JsonValueKind.Object)
-            {
-                continue;
-            }
-
-            if (Text(category, "name") is { Length: > 0 } name && !string.Equals(name, "Products", StringComparison.OrdinalIgnoreCase))
-            {
-                names.Add(name);
-            }
-
-            if ((Text(category, "id") ?? Text(category, "key")) is { } id && paths.TryGetValue(id, out var path)
+            if (category.ValueKind == JsonValueKind.Object && Text(category, "id") is { } id && paths.TryGetValue(id, out var path)
                 && (best is null || path.Length > best.Length))
             {
                 best = path;
             }
         }
 
-        return best ?? (names.Count > 0 ? string.Join(StoreListing.CategorySeparator, names) : null);
+        return best;
     }
 
     /// <summary>The first picture, at 300 pixels wide: its address is a template with <c>{width}</c> in it.</summary>
