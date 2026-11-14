@@ -1327,3 +1327,34 @@ you know ?" Typing stays for a one-off that is not on the shelf; after a trip th
 - **No migration.** No column or table changes; the response field reads the existing `trip_item.product_id`.
 - **Screens.** No new route. The History mock gains `productId`, so the History baselines change (a button per typed item); Linux
   baselines are drawn on CI only, by the "Update screen baselines" workflow dispatched on the branch.
+
+## Most bought and usually bought, worked out from closed trips (2026-11-14, issue #39, epic #23)
+
+Owner's words: "It should work like big data with ability to show the most popular products we buy." Derived from trips, so it holds
+for Tesco, Dunnes and Aldi, which give no receipts.
+
+- **Borrowed pattern, named:** the frequent / recent items of AnyList and OurGroceries. On the Shelf it is a sort and a filter over
+  the same product grid (the Bring! tile grid is unchanged); on the basket it is a short "Usually bought" list of one-tap adds. No
+  new interaction is invented: the tap is the Shelf's own tap-to-add.
+- **Counted from closed trips only.** `GET /api/trips/habits` reads `trip_item` rows that carry a Shelf product. A typed
+  (free-text) line has no product to rank and is left out; so is a product that was deleted. Receipt-made trips (Lidl Plus) count
+  the same as trips closed on the list.
+- **Most bought** = the number of closed trips that bought the product (twice in one trip counts once), then the most recent
+  trip, then the name; that is the order of the `habits` response. A product never bought is not in the response. The Shelf's
+  "Most bought" sort uses only the trip count and leaves ties in the Shelf's own order.
+- **Usually bought** = bought in at least 2 of the latest 10 closed trips (`UsualAfter`, `RecentTrips`). The window lets a habit
+  that stopped fall out; the floor of 2 keeps a one-off from counting as a habit. Both are constants in `HabitEndpoints`, easy to
+  move if the household finds them too strict or too loose.
+- **Shelf.** A second segmented control, "Show": All products (the Shelf's own order), Most bought (sorted, never-bought products
+  last in their own order) and Usually bought (only the usual ones, most bought first). It combines with the shop filter; with
+  Usually bought and a shop, an empty result reads "Nothing usual at <shop> yet". A tile
+  says "Bought on N trips" once a trip bought it.
+- **Basket.** Under "To buy", a "Usually bought" section lists up to 5 usual products not already waiting on the list, most
+  bought first; the plus button adds the product the way a Shelf pick on "All" does. It disappears while no usual product is
+  missing from the list. The basket re-reads the habits with the list (poll, return to the tab, pull to refresh) and after
+  Done shopping, so a trip just closed counts at once.
+- **No migration.** Nothing is stored: the ranking is counted on each read from the existing `trip` and `trip_item` tables, so there
+  is no table to keep in step with the trips. The household's volume (a trip a week) makes the count cheap.
+- **Screens.** The Shelf and List mocks gain habits, so the `shelf` and `list` Linux baselines change (a count line on a tile, and a
+  Usually bought section). They are re-rendered by the "Update screen baselines" workflow on this branch, not committed from a local
+  run.

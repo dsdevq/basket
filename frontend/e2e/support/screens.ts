@@ -49,6 +49,19 @@ const TRIPS = {
   })),
   hasMore: false,
 };
+const HABITS = {
+  products: [
+    ['p1', 'Whole milk 2L', 4, true],
+    ['p2', 'Brennans sliced pan 800g', 3, true],
+    ['p3', 'Kerrygold butter 227g', 1, false],
+  ].map(([productId, name, boughtIn, usual]) => ({
+    productId,
+    name,
+    boughtIn,
+    lastBoughtAt: '2026-11-05T12:00:00Z',
+    usual,
+  })),
+};
 /** A flat tinted square as a product photo, so the baselines never wait on a shop's image server. */
 const PHOTO = (colour: string): string =>
   `data:image/svg+xml;utf8,${encodeURIComponent(
@@ -894,6 +907,7 @@ export async function signedIn(page: Page): Promise<void> {
   await page.route('**/api/session', r => r.fulfill({json: OWNER}));
   await page.route('**/api/list', r => r.fulfill({json: {items: ITEMS}}));
   await page.route('**/api/trips', r => r.fulfill({json: TRIPS}));
+  await page.route('**/api/trips/habits', r => r.fulfill({json: HABITS}));
   await page.route('**/api/products', r => r.fulfill({json: PRODUCTS}));
   await page.route('**/api/promotions', r => r.fulfill({json: PROMOTIONS}));
   await page.route('**/api/plan', r => r.fulfill({json: PLAN}));

@@ -1,5 +1,6 @@
+import type {Habit} from '../habits/habits.model';
 import type {Price, Product, ProductStore, StoreId} from '../prices/prices.model';
-import {cardPrice, pickStore, SHELF_OPTIONS, shelfTiles} from './shelf-format';
+import {cardPrice, pickStore, SHELF_OPTIONS, SHELF_VIEWS, shelfTiles} from './shelf-format';
 
 function price(over: Partial<Price> = {}): Price {
   return {
@@ -126,6 +127,46 @@ describe('shelf tiles', () => {
   it('records the selected shop on a pick, and none on All', () => {
     expect(pickStore('tesco')).toBe('tesco');
     expect(pickStore('all')).toBeNull();
+  });
+
+  describe('by what trips bought', () => {
+    const habit = (productId: string, boughtIn: number, usual: boolean): Habit => ({
+      productId,
+      name: productId,
+      boughtIn,
+      lastBoughtAt: '2026-11-05T12:00:00Z',
+      usual,
+    });
+    const habits = new Map([
+      ['bread', habit('bread', 3, true)],
+      ['eggs', habit('eggs', 3, true)],
+      ['milk', habit('milk', 1, false)],
+    ]);
+
+    it('offers the plain Shelf, the most bought and the usually bought, in that order', () => {
+      expect(SHELF_VIEWS.map(view => view.value)).toEqual(['all', 'most', 'usual']);
+    });
+
+    it('leaves the Shelf order alone, with the count on each tile, when nothing is sorted', () => {
+      const tiles = shelfTiles(all, 'all', 'all', habits);
+
+      expect(tiles.map(tile => tile.product.id)).toEqual(['milk', 'bread', 'eggs', 'nothing']);
+      expect(tiles.map(tile => tile.boughtIn)).toEqual([1, 3, 3, 0]);
+    });
+
+    it('sorts the most bought first, ties and never-bought keeping the Shelf order', () => {
+      const tiles = shelfTiles(all, 'all', 'most', habits);
+
+      expect(tiles.map(tile => tile.product.id)).toEqual(['bread', 'eggs', 'milk', 'nothing']);
+    });
+
+    it('keeps only the usually bought', () => {
+      expect(shelfTiles(all, 'all', 'usual', habits).map(tile => tile.product.id)).toEqual([
+        'bread',
+        'eggs',
+      ]);
+      expect(shelfTiles(all, 'all', 'usual').map(tile => tile.product.id)).toEqual([]);
+    });
   });
 });
 
