@@ -1963,7 +1963,7 @@ migration**.
 
 ## Catalog 3/14: the Aldi sweep (issue 129, epic 126)
 
-Owner direction, 2026-11-14: per-store catalog readers feed one combined catalog API. Aldi is the first reader that runs on the VPS.
+Owner direction, 2026-11-14: per-store catalog readers feed one combined catalog API. Aldi is read from the VPS, like Lidl.
 
 - **`asl.api.aldi.ie` is open to the server while `www.aldi.ie` is not.** The site answers the VPS with Akamai's "Access Denied"
   (2026-11-05, above); its product API, on the host the site's own pages call, answers a plain request with an honest user agent.
