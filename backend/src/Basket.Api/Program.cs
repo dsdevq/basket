@@ -188,6 +188,7 @@ api.MapAuthEndpoints();
 api.MapPasskeyEndpoints();
 api.MapListEndpoints();
 api.MapTripEndpoints();
+api.MapHabitEndpoints();
 api.MapProductEndpoints();
 api.MapMatchEndpoints();
 api.MapPromotionEndpoints();

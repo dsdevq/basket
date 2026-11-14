@@ -1,3 +1,4 @@
+import type {Habit} from '../habits/habits.model';
 import {euro, headline, shortDate, STORE_NAMES} from '../prices/price-format';
 import type {Product, ProductStore, StoreId} from '../prices/prices.model';
 
@@ -9,11 +10,25 @@ export const SHELF_OPTIONS: readonly {readonly value: ShelfFilter; readonly labe
   ...(Object.entries(STORE_NAMES) as [StoreId, string][]).map(([value, label]) => ({value, label})),
 ];
 
+/**
+ * How the Shelf is ordered and narrowed by what closed trips say: every product as listed, the ones bought most first, or
+ * only the ones usually bought.
+ */
+export type ShelfView = 'all' | 'most' | 'usual';
+
+export const SHELF_VIEWS: readonly {readonly value: ShelfView; readonly label: string}[] = [
+  {value: 'all', label: 'All products'},
+  {value: 'most', label: 'Most bought'},
+  {value: 'usual', label: 'Usually bought'},
+];
+
 /** One card: a product, the shop's entry whose reading it shows, and the photo to draw. */
 export interface ShelfTile {
   readonly product: Product;
   readonly entry: ProductStore | null;
   readonly imageUrl: string | null;
+  /** How many closed trips bought it; 0 when none did. */
+  readonly boughtIn: number;
 }
 
 /** The shop a pick is recorded against: the selected one, or none on "All". */
@@ -41,11 +56,10 @@ function cheapest(product: Product): ProductStore | null {
   );
 }
 
-/**
- * The cards for a filter. A shop's filter keeps the products that shop has a page for, or that a receipt shows were bought there
- * (the Lidl Plus receipts seed the Lidl shelf), and shows that shop's reading and photo. "All" keeps every product and shows the shop with the lowest current price, or the first with any reading.
- */
-export function shelfTiles(products: readonly Product[], filter: ShelfFilter): ShelfTile[] {
+function shopTiles(
+  products: readonly Product[],
+  filter: ShelfFilter
+): Omit<ShelfTile, 'boughtIn'>[] {
   if (filter === 'all') {
     return products.map(product => {
       const entry = cheapest(product);
@@ -62,6 +76,28 @@ export function shelfTiles(products: readonly Product[], filter: ShelfFilter): S
     );
     return entry ? [{product, entry, imageUrl: entry.listing?.imageUrl ?? null}] : [];
   });
+}
+
+/**
+ * The cards for a filter. A shop's filter keeps the products that shop has a page for, or that a receipt shows were bought there
+ * (the Lidl Plus receipts seed the Lidl shelf), and shows that shop's reading and photo. "All" keeps every product and shows the shop with the lowest current price, or the first with any reading.
+ */
+export function shelfTiles(
+  products: readonly Product[],
+  filter: ShelfFilter,
+  view: ShelfView = 'all',
+  habits: ReadonlyMap<string, Habit> = new Map()
+): ShelfTile[] {
+  const tiles = shopTiles(products, filter).map(tile => ({
+    ...tile,
+    boughtIn: habits.get(tile.product.id)?.boughtIn ?? 0,
+  }));
+  if (view === 'all') {
+    return tiles;
+  }
+  const kept = view === 'usual' ? tiles.filter(tile => habits.get(tile.product.id)?.usual) : tiles;
+  // A stable sort: products bought equally often (or never) keep the Shelf's own order.
+  return [...kept].sort((a, b) => b.boughtIn - a.boughtIn);
 }
 
 /** The price part of a card, every line already worded. Null fields are not drawn. */

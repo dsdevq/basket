@@ -4,6 +4,8 @@ import {CmnDialogService, CmnDrawerService, ToastService} from '@lifekit-hq/ui';
 import {of} from 'rxjs';
 
 import {SessionStore} from '../../core/auth/session.store';
+import {HabitsApi} from '../habits/habits.api';
+import type {Habit} from '../habits/habits.model';
 import {ListApi} from './list.api';
 import type {ListItem} from './list.model';
 import {ListPage} from './list.page';
@@ -41,25 +43,36 @@ interface Harness {
     setChecked: ReturnType<typeof vi.fn>;
     remove: ReturnType<typeof vi.fn>;
     close: ReturnType<typeof vi.fn>;
+    addProduct: ReturnType<typeof vi.fn>;
   };
   readonly dialog: {confirm: ReturnType<typeof vi.fn>};
   readonly drawer: {open: ReturnType<typeof vi.fn>};
   readonly host: HTMLElement;
 }
 
-async function render(items: ListItem[]): Promise<Harness> {
+function habit(productId: string, name: string, boughtIn: number, usual = true): Habit {
+  return {productId, name, boughtIn, lastBoughtAt: '2026-11-05T12:00:00Z', usual};
+}
+
+async function render(items: ListItem[], habits: Habit[] = []): Promise<Harness> {
   const api = {
     items: vi.fn().mockResolvedValue(items),
     add: vi.fn(),
     setChecked: vi.fn(),
     remove: vi.fn().mockResolvedValue(undefined),
     close: vi.fn().mockResolvedValue({}),
+    addProduct: vi
+      .fn()
+      .mockImplementation((productId: string) =>
+        Promise.resolve(item(`new-${productId}`, productId, {productId}))
+      ),
   };
   const drawer = {open: vi.fn()};
   const dialog = {confirm: vi.fn().mockReturnValue(of(true))};
   TestBed.configureTestingModule({
     providers: [
       {provide: ListApi, useValue: api},
+      {provide: HabitsApi, useValue: {all: vi.fn().mockResolvedValue(habits)}},
       {provide: CmnDrawerService, useValue: drawer},
       {provide: CmnDialogService, useValue: dialog},
       {provide: ToastService, useValue: {error: vi.fn(), success: vi.fn()}},
@@ -86,6 +99,35 @@ function swipeButton(host: HTMLElement, name: string): HTMLButtonElement {
 describe('ListPage', () => {
   afterEach(() => {
     TestBed.resetTestingModule();
+  });
+
+  it('offers what is usually bought, and not what is already waiting, as one-tap adds', async () => {
+    const {host, api, fixture} = await render(
+      [item('1', 'Whole milk 2L', {productId: 'milk', store: 'tesco'})],
+      [
+        habit('milk', 'Whole milk 2L', 6),
+        habit('eggs', 'Eggs', 4),
+        habit('butter', 'Butter', 1, false),
+      ]
+    );
+
+    const text = host.textContent ?? '';
+    expect(text).toContain('Usually bought');
+    expect(text).toContain('Bought on 4 trips');
+    expect(text).not.toContain('Butter');
+    expect(host.querySelector('button[aria-label="Add Whole milk 2L to the list"]')).toBeNull();
+
+    host.querySelector<HTMLButtonElement>('button[aria-label="Add Eggs to the list"]')?.click();
+    await settle(fixture);
+
+    expect(api.addProduct).toHaveBeenCalledWith('eggs', null);
+    expect(host.querySelector('button[aria-label="Add Eggs to the list"]')).toBeNull();
+  });
+
+  it('shows no usually bought section before any trip has made one', async () => {
+    const {host} = await render([item('1', 'Spinach')]);
+
+    expect(host.textContent).not.toContain('Usually bought');
   });
 
   it('shows an empty state with a prompt to add the first item', async () => {

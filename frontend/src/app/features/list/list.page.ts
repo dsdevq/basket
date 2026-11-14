@@ -1,5 +1,12 @@
 import {DOCUMENT, NgTemplateOutlet} from '@angular/common';
-import {ChangeDetectionStrategy, Component, DestroyRef, inject, type OnInit} from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  DestroyRef,
+  inject,
+  type OnInit,
+} from '@angular/core';
 import {takeUntilDestroyed} from '@angular/core/rxjs-interop';
 import {FormControl, FormGroup, ReactiveFormsModule} from '@angular/forms';
 import {
@@ -18,6 +25,7 @@ import {
 import {firstValueFrom, fromEvent, interval} from 'rxjs';
 
 import {ComposerBarComponent} from '../../core/shell/composer-bar.component';
+import {HabitsStore} from '../habits/habits.store';
 import {STORE_NAMES} from '../prices/price-format';
 import type {StoreId} from '../prices/prices.model';
 import {type ItemAction, ItemActionsSheetComponent} from './item-actions.sheet';
@@ -26,6 +34,9 @@ import {ListStore} from './list.store';
 
 /** How often the list re-reads while the page is open and visible, so the other person's changes show. */
 const REFRESH_MS = 15_000;
+
+/** How many "usually bought" suggestions the basket shows at once. */
+const USUAL_SHOWN = 5;
 
 @Component({
   selector: 'bk-list-page',
@@ -74,6 +85,24 @@ const REFRESH_MS = 15_000;
                   [ngTemplateOutlet]="row"
                   [ngTemplateOutletContext]="{$implicit: item}"
                 />
+              }
+            </cmn-list-section>
+          }
+          @if (usually().length) {
+            <cmn-list-section heading="Usually bought" card>
+              @for (habit of usually(); track habit.productId) {
+                <cmn-list-item-row
+                  [label]="habit.name"
+                  [sublabel]="'Bought on ' + habit.boughtIn + ' trips'"
+                >
+                  <cmn-button
+                    [aria-label]="'Add ' + habit.name + ' to the list'"
+                    (clicked)="addUsual(habit.productId)"
+                    actions
+                    variant="ghost"
+                    icon="Plus"
+                  />
+                </cmn-list-item-row>
               }
             </cmn-list-section>
           }
@@ -154,8 +183,23 @@ export class ListPage implements OnInit {
   private readonly dialog = inject(CmnDialogService);
   private readonly document = inject(DOCUMENT);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly habits = inject(HabitsStore);
 
   protected readonly store = inject(ListStore);
+
+  /**
+   * What is usually bought and not already waiting on the list, as one-tap adds: the recent-items suggestions of AnyList and
+   * OurGroceries. A handful, the most bought first, so the list stays the page's subject.
+   */
+  protected readonly usually = computed(() => {
+    const waiting = new Set(
+      this.store.toBuy().flatMap(item => (item.productId ? [item.productId] : []))
+    );
+    return this.habits
+      .usual()
+      .filter(habit => !waiting.has(habit.productId))
+      .slice(0, USUAL_SHOWN);
+  });
 
   protected readonly text = new FormControl('', {nonNullable: true});
   protected readonly form = new FormGroup({text: this.text});
@@ -165,6 +209,7 @@ export class ListPage implements OnInit {
 
   public ngOnInit(): void {
     void this.store.load();
+    void this.habits.load();
     interval(REFRESH_MS)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => {
@@ -189,6 +234,10 @@ export class ListPage implements OnInit {
     if (await this.store.add(value)) {
       this.text.reset('');
     }
+  }
+
+  protected addUsual(productId: string): void {
+    void this.store.addProduct(productId, null);
   }
 
   protected storeName(store: StoreId): string {

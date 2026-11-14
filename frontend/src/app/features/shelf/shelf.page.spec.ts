@@ -2,6 +2,8 @@ import {type ComponentFixture, TestBed} from '@angular/core/testing';
 import {ToastService} from '@lifekit-hq/ui';
 
 import {SessionStore} from '../../core/auth/session.store';
+import {HabitsApi} from '../habits/habits.api';
+import type {Habit} from '../habits/habits.model';
 import {ListApi} from '../list/list.api';
 import type {ListItem} from '../list/list.model';
 import {PricesApi} from '../prices/prices.api';
@@ -73,7 +75,18 @@ async function settle(fixture: ComponentFixture<unknown>): Promise<void> {
   fixture.detectChanges();
 }
 
-async function render(items: ListItem[] = [], products: Product[] = PRODUCTS, loads = true) {
+function habit(productId: string, boughtIn: number, usual: boolean): Habit {
+  return {productId, name: productId, boughtIn, lastBoughtAt: '2026-11-05T12:00:00Z', usual};
+}
+
+const HABITS: Habit[] = [habit('eggs', 5, true), habit('milk', 2, true), habit('butter', 1, false)];
+
+async function render(
+  items: ListItem[] = [],
+  products: Product[] = PRODUCTS,
+  loads = true,
+  habits: Habit[] = HABITS
+) {
   const listApi = {
     items: vi.fn().mockResolvedValue(items),
     addProduct: vi
@@ -91,6 +104,7 @@ async function render(items: ListItem[] = [], products: Product[] = PRODUCTS, lo
     providers: [
       {provide: ListApi, useValue: listApi},
       {provide: PricesApi, useValue: pricesApi},
+      {provide: HabitsApi, useValue: {all: vi.fn().mockResolvedValue(habits)}},
       {provide: ToastService, useValue: {error: vi.fn(), success: vi.fn()}},
       {
         provide: SessionStore,
@@ -107,6 +121,10 @@ async function render(items: ListItem[] = [], products: Product[] = PRODUCTS, lo
     host,
     listApi,
     pricesApi,
+    products: () =>
+      Array.from(host.querySelectorAll('bk-shelf-card .line-clamp-2')).map(
+        el => el.textContent?.trim().split(' ')[0]
+      ),
     names: () =>
       Array.from(host.querySelectorAll('bk-shelf-card')).map(card =>
         (card.textContent ?? '').trim().replace(/\s+/g, ' ')
@@ -128,6 +146,42 @@ async function render(items: ListItem[] = [], products: Product[] = PRODUCTS, lo
 describe('ShelfPage', () => {
   afterEach(() => {
     TestBed.resetTestingModule();
+  });
+
+  it('puts the most bought products first and says how many trips bought each', async () => {
+    const {names, products, choose} = await render();
+
+    await choose('Most bought');
+
+    expect(products()).toEqual(['Eggs', 'Whole', 'Butter', 'Sliced']);
+    expect(names()[0]).toContain('Bought on 5 trips');
+    expect(names()[2]).toContain('Bought on 1 trip');
+    expect(names()[3]).not.toContain('Bought on');
+  });
+
+  it('keeps only the usually bought products, most bought first', async () => {
+    const {products, choose} = await render();
+
+    await choose('Usually bought');
+
+    expect(products()).toEqual(['Eggs', 'Whole']);
+  });
+
+  it('combines with a shop: the usual products that shop has a page for', async () => {
+    const {products, choose} = await render();
+
+    await choose('Usually bought');
+    await choose('Aldi');
+
+    expect(products()).toEqual(['Eggs']);
+  });
+
+  it('says so when nothing is usual yet', async () => {
+    const {host, choose} = await render([], PRODUCTS, true, []);
+
+    await choose('Usually bought');
+
+    expect(host.textContent).toContain('Nothing usual yet');
   });
 
   it('opens on All with every product as a card', async () => {

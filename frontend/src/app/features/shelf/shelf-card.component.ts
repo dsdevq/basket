@@ -66,6 +66,9 @@ import {type CardPrice, cardPrice, type ShelfFilter, type ShelfTile} from './she
           <cmn-tag variant="error">Out of stock</cmn-tag>
         }
       }
+      @if (tile().boughtIn; as times) {
+        <span class="text-cmn-xs text-text-secondary">{{ bought(times) }}</span>
+      }
       @if (onList()) {
         <cmn-tag variant="info">On the list</cmn-tag>
       }
@@ -93,4 +96,8 @@ export class ShelfCardComponent {
     const entry = this.tile().entry;
     return entry ? cardPrice(entry, this.filter()) : null;
   });
+
+  protected bought(times: number): string {
+    return times === 1 ? 'Bought on 1 trip' : `Bought on ${times} trips`;
+  }
 }
