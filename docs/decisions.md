@@ -1483,8 +1483,8 @@ work for either person (`ListTests`).
   time from the product's shop page (`store_listing.image_url`): the shop the line was picked from, or, for a pick from "All", the
   first shop alphabetically (Aldi, Dunnes, Lidl, Tesco) that has a photo. A free-text line, a product with no photo and a line whose
   product was deleted return `null`. The Shelf's "All" tile prefers the cheapest shop's photo instead; the list row has no price to
-  follow, so it uses a fixed, repeatable order. Reading it each time keeps one source of truth: a photo the nightly read fixes later reaches the lines
-  already on the list, and no column is added to `list_item`.
+  follow, so it uses a fixed, repeatable order. Reading it each time keeps one source of truth: a photo the nightly read fixes
+  later reaches the lines already on the list, and no column is added to `list_item`.
 - **No migration.** Nothing is stored for this change; it is one more projected field on the existing list query.
 - **The row.** A 40 px thumbnail beside the tick box (`bk-list-photo`), the Shelf tile's own fallback: the first letter on the
   surface colour when there is no photo or it fails to load. A free-text line gets the letter too, so every row keeps one leading
