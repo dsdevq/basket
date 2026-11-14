@@ -41,7 +41,7 @@ export interface TillData {
         />
       </div>
       <p
-        class="m-0 shrink-0 break-all text-center font-mono text-cmn-xl text-text-primary"
+        class="m-0 shrink-0 break-all text-center font-mono text-cmn-lg text-text-primary"
         data-testid="till-number"
       >
         {{ spoken }}
