@@ -67,7 +67,7 @@ describe('ProductSearchSheetComponent', () => {
 
   it('does not search until there is something to search for', async () => {
     const search = vi.fn();
-    const {host} = await render('', search);
+    await render('', search);
 
     expect(search).not.toHaveBeenCalled();
   });
