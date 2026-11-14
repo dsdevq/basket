@@ -1,13 +1,14 @@
 # pc-reader
 
-Reads Aldi and Dunnes product pages (and Tesco's, while it is not paused, see below) in an ordinary browser on **your own PC and home connection** and posts the
-prices to basket's write-only ingest endpoint (`POST /api/ingest/prices`). tesco.ie, aldi.ie and dunnesstoresgrocery.com
-refuse the VPS, so this is how those three shops get prices (see [docs/decisions.md](../docs/decisions.md), "M2 decisions",
+Reads Dunnes product pages (and Tesco's, while it is not paused, see below) in an ordinary browser on **your own PC and home connection** and posts the
+prices to basket's write-only ingest endpoint (`POST /api/ingest/prices`). tesco.ie and dunnesstoresgrocery.com
+refuse the VPS, so this is how those shops get prices. Aldi is no longer read here: the server's nightly job reads Aldi's product API
+("Catalog 3/14: the Aldi sweep" in the decisions), and the ingest endpoints answer `store_not_ingested` for it (see [docs/decisions.md](../docs/decisions.md), "M2 decisions",
 "Price ingest decisions" and "Dunnes: the server cannot read it, the PC reader does").
 A product whose shop has not been read yet shows "Waiting for the next PC read" in basket.
 
 **Tesco is paused for now.** The reader skips Tesco entries (from the catalog or the URL file) with one log line per run, not
-an error, and reads Aldi and Dunnes as usual. To read Tesco again, add `'tesco'` back to `ENABLED_STORES` in `src/types.ts`.
+an error, and reads Dunnes as usual. To read Tesco again, add `'tesco'` back to `ENABLED_STORES` in `src/types.ts`.
 The Tesco parser, fixtures and tests are kept.
 
 It is a small Node program: Chrome (installed on the PC, with a profile of its own) loads each page, a parser reads what
@@ -75,7 +76,7 @@ issuer). Exit code `0` when all four pass, `1` otherwise.
 ## Which pages: the catalog, then the URL file
 
 With the fleet identity the reader reads the list from basket itself (`GET /api/products`, scope `basket:catalog-read`): every
-product's linked page at a shop the PC reads (Aldi, Dunnes, Tesco). Each address goes through the same check as the URL file
+product's linked page at a shop the PC reads (Dunnes, Tesco). Each address goes through the same check as the URL file
 below; one that fails it is skipped and counted in the log. Link a product to a shop page in basket and the next run reads it.
 An empty catalog means nothing to read (the file is not consulted).
 
@@ -84,12 +85,11 @@ the catalog call fails (identity service or basket unreachable, a refusal); the 
 the run stops naming both reasons.
 
 The ingest endpoint deliberately never tells a `bsk_` token holder which pages are tracked, so for that path (or as a fallback)
-you keep the list yourself: a JSON array of `{ "store", "url" }`, `store` being `aldi`, `dunnes` or `tesco`, `url` the product page you linked to the product in basket
+you keep the list yourself: a JSON array of `{ "store", "url" }`, `store` being `dunnes` or `tesco`, `url` the product page you linked to the product in basket
 (the same address; a page that is not linked comes back `unknown_listing`).
 
 ```json
 [
-  { "store": "aldi", "url": "https://www.aldi.ie/product/clonbawn-protein-milk-000000000000422541" },
   { "store": "tesco", "url": "https://www.tesco.ie/groceries/en-IE/products/254317390" },
   { "store": "dunnes", "url": "https://www.dunnesstoresgrocery.com/product/dunnes-stores-swede-100317581" }
 ]
@@ -199,7 +199,7 @@ Settings (or use the fleet identity), and point `BASKET_API_ORIGIN` at `http://l
 ## Running it every day
 
 On this PC the reader runs once a day by itself, window-less, whenever the PC is on and Tailscale is up. Nobody has to be at the PC
-and no terminal has to be open. Aldi and Dunnes only come from the PC (Lidl has the server's 03:00 pull), so this is what keeps them
+and no terminal has to be open. Dunnes only comes from the PC (Lidl and Aldi have the server's nightly job), so this is what keeps it
 fresh. Tesco stays off (`ENABLED_STORES`).
 
 ```text
