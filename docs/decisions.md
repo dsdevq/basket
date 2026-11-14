@@ -2136,8 +2136,7 @@ live search page, so all four shops answer, with their photos, and a tap puts th
   `ngsw-bypass`.
 - **Reuse, nothing new at any door.** The catalog the sheet searches still arrives only through the existing ingest door
   (`POST /api/ingest/catalog`, the ingest token or the fleet identity) and the server's own sweeps; this change adds no route to it.
-  The add is the existing `POST /api/products`: it takes an optional `catalogId` beside `name` and `barcode`.
-- **One call, the existing door.** `POST /api/products` takes an optional `catalogId` beside `name` and `barcode`; it is the same route, policy
+- **One call, the existing door.** The add is `POST /api/products`, which takes an optional `catalogId` beside `name` and `barcode`; it is the same route, policy
   (`basket:catalog-add`, a person or the fleet identity) and handler as every add, so there is no new endpoint, scope, token or identity. The
   old two-call flow (add, then link) could leave a product without its page; this one saves the product and its page together.
 - **What the product is made from.** The name is the row's brand and name (the brand is put in front unless the name already says it:
