@@ -20,6 +20,7 @@ const ITEMS: {text: string; checked: boolean; productId?: string; store?: string
   ...item,
   productId: item.productId ?? null,
   store: item.store ?? null,
+  imageUrl: null,
   addedAt: '2026-11-03T09:00:00Z',
   addedBy: {id: 'u1', name: 'Anna'},
   checkedAt: null,

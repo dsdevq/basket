@@ -25,7 +25,8 @@ public sealed record ListItemResponse(
     DateTimeOffset? CheckedAt,
     Person? CheckedBy,
     Guid? ProductId,
-    string? Store);
+    string? Store,
+    string? ImageUrl);
 
 public static class ListEndpoints
 {
@@ -51,10 +52,11 @@ public static class ListEndpoints
         DateTimeOffset? CheckedAt,
         Person? CheckedBy,
         Guid? ProductId,
-        Store? Store);
+        Store? Store,
+        string? ImageUrl);
 
     private static ListItemResponse ToResponse(Row r) =>
-        new(r.Id, r.Text, r.Checked, r.AddedAt, r.AddedBy, r.CheckedAt, r.CheckedBy, r.ProductId, r.Store?.Slug());
+        new(r.Id, r.Text, r.Checked, r.AddedAt, r.AddedBy, r.CheckedAt, r.CheckedBy, r.ProductId, r.Store?.Slug(), r.ImageUrl);
 
     private static IQueryable<Row> Project(AppDbContext db, Guid? id = null) =>
         from i in db.ListItems.AsNoTracking().Where(i => id == null || i.Id == id)
@@ -70,7 +72,14 @@ public static class ListEndpoints
             i.CheckedAt,
             c == null ? null : new Person(c.Id, c.DisplayName),
             i.ProductId,
-            i.Store);
+            i.Store,
+            // The photo is read from the product's shop page, not copied onto the line: the picked shop's when there is one,
+            // else the first shop (in Store order) that has one. A free-text line has none.
+            db.StoreListings
+                .Where(l => l.ProductId == i.ProductId && l.ImageUrl != null && (i.Store == null || l.Store == i.Store))
+                .OrderBy(l => l.Store)
+                .Select(l => l.ImageUrl)
+                .FirstOrDefault());
 
     private static async Task<IResult> GetList(AppDbContext db, CancellationToken ct)
     {

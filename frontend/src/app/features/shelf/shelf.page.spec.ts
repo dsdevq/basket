@@ -65,6 +65,7 @@ function line(id: string, productId: string, store: StoreId | null): ListItem {
     checkedBy: null,
     productId,
     store,
+    imageUrl: null,
   };
 }
 
