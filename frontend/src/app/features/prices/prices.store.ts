@@ -21,6 +21,7 @@ const MESSAGES = {
   unlink: 'Could not remove that link.',
   candidates: 'Could not load the suggestions. Try again.',
   decide: 'Could not save that answer. Try again.',
+  answered: 'Someone already answered that suggestion. Check the list again.',
 } as const;
 
 /** The household's products with the latest price each shop showed for them. */
@@ -114,20 +115,27 @@ export const PricesStore = signalStore(
         }
       },
 
-      /** Yes: the page becomes the product's confirmed page in that shop. False when it could not be saved. */
+      /** Yes: the page becomes the product's confirmed page in that shop. False when it could not be saved, including when the suggestion was answered meanwhile. */
       async confirm(product: Product, candidate: Candidate): Promise<boolean> {
-        return this.decide(product, () => api.confirm(product.id, candidate.id));
-      },
-
-      /** No: the page is never suggested again. False when it could not be saved. */
-      async reject(product: Product, candidate: Candidate): Promise<boolean> {
-        return this.decide(product, () => api.reject(product.id, candidate.id));
-      },
-
-      // A 404 means the other person already answered it (or the page was linked meanwhile): the answer is persisted, so reload.
-      async decide(product: Product, call: () => Promise<unknown>): Promise<boolean> {
         try {
-          await call();
+          await api.confirm(product.id, candidate.id);
+        } catch (error) {
+          if (statusOf(error) === HttpStatus.notFound) {
+            toast.error(MESSAGES.answered);
+            await this.load(true);
+          } else {
+            toast.error(MESSAGES.decide);
+          }
+          return false;
+        }
+        await this.load(true);
+        return true;
+      },
+
+      /** No: the page is never suggested again. False when it could not be saved. A 404 means the other person already answered it, so it counts as done. */
+      async reject(product: Product, candidate: Candidate): Promise<boolean> {
+        try {
+          await api.reject(product.id, candidate.id);
         } catch (error) {
           if (statusOf(error) !== HttpStatus.notFound) {
             toast.error(MESSAGES.decide);

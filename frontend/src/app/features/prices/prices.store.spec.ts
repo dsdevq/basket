@@ -190,6 +190,18 @@ describe('PricesStore', () => {
       expect(api.all).toHaveBeenCalledTimes(1);
     });
 
+    it('does not report a yes as saved when the suggestion was answered meanwhile', async () => {
+      const api = {
+        confirm: vi.fn().mockRejectedValue(new HttpErrorResponse({status: 404})),
+        all: vi.fn().mockResolvedValue({products: [PRODUCT], stores: []}),
+      };
+      const {store, toast} = setup(api);
+
+      expect(await store.confirm(PRODUCT, CANDIDATE)).toBe(false);
+      expect(toast.error).toHaveBeenCalledTimes(1);
+      expect(api.all).toHaveBeenCalledTimes(1);
+    });
+
     it('reports a failed answer so the sheet keeps the suggestion', async () => {
       const api = {confirm: vi.fn().mockRejectedValue(new HttpErrorResponse({status: 500}))};
       const {store, toast} = setup(api);

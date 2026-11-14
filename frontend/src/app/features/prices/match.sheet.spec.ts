@@ -118,6 +118,18 @@ describe('MatchSheetComponent', () => {
     expect(host.textContent).toContain('Milbona fresh whole milk 2 litres');
   });
 
+  it('keeps the sheet open and re-reads the suggestions when a yes could not be saved', async () => {
+    const confirm = vi.fn().mockResolvedValue(false);
+    const candidates = vi.fn().mockResolvedValueOnce([FIRST]).mockResolvedValueOnce([]);
+    const {ref, host, press} = await render({candidates, confirm});
+
+    await press('Yes, same product');
+
+    expect(ref.close).not.toHaveBeenCalled();
+    expect(candidates).toHaveBeenCalledTimes(2);
+    expect(host.textContent).toContain('Nothing left to check');
+  });
+
   it('offers to paste the address instead', async () => {
     const {ref, press} = await render({candidates: vi.fn().mockResolvedValue([FIRST])});
 

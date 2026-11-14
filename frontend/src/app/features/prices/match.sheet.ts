@@ -158,6 +158,9 @@ export class MatchSheetComponent implements OnInit {
       : await this.prices.reject(this.data.product, candidate);
     this.busy.set(false);
     if (!saved) {
+      if (yes) {
+        await this.load();
+      }
       return;
     }
     if (yes) {
