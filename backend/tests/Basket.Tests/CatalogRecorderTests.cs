@@ -35,7 +35,7 @@ public sealed class CatalogRecorderTests : IClassFixture<BasketFactory>
     private async Task<CatalogRecordResult> RecordAsync(DateTimeOffset at, params CatalogReading[] readings) =>
         await _factory.WithDb(async db =>
         {
-            var result = await new CatalogRecorder(db).RecordAsync(readings[0].Store, readings, at, CancellationToken.None);
+            var result = await new CatalogRecorder(db, new PriceRecorder(db)).RecordAsync(readings[0].Store, readings, at, CancellationToken.None);
             await db.SaveChangesAsync();
             return result;
         });

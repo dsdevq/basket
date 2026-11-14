@@ -89,12 +89,13 @@ export function lastPaidLine(paid: Paid | null): string {
 }
 
 function unreadLine(entry: ProductStore): string {
-  if (entry.readBy === 'pc') {
-    // Tesco, Aldi and Dunnes block the server; their prices arrive when the PC next reads them.
-    return 'Waiting for the next PC read';
-  }
+  // Nothing reads a shop for a product that has no page there, whoever reads that shop.
   if (!entry.listing) {
     return 'No page linked yet';
+  }
+  if (entry.readBy === 'pc') {
+    // Tesco, Aldi and Dunnes block the server; the price of a linked page arrives when the PC next reads the shop.
+    return 'Waiting for the next PC read';
   }
   return entry.listing.error
     ? `Not read yet · ${entry.listing.error}`
