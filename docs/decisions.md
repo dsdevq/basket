@@ -2171,3 +2171,43 @@ live search page, so all four shops answer, with their photos, and a tap puts th
 The server-side catalog sweeps for Tesco (issue 135) and Dunnes (issue 136) are closed as not doable. Tesco: Akamai answered HTTP 403 on
 `robots.txt` itself to an automation-driven browser, even on the owner-warmed profile and headless, on 2026-11-15. Dunnes: Cloudflare answers
 403 to the reader profile. Both shops stay unread: no further attempts, and no evasion is built.
+
+## Catalog 12/14: the equivalents API (2026-11-15, issue 138 of epic 126)
+
+`GET /api/catalog/{id}/equivalents`: for one catalog product, the best matches in each of the other three shops' catalogs, with a unit
+price beside the product's own. It is what the compare sheet (#35) and "what is the analogue of this jamon" browsing read. Read only,
+**no migration**, and no screen yet: the typed client and the wording helpers are in, the sheet keeps reading the shelf's product answer
+until it is pointed at this (it replaces the source of the rows, not the sheet).
+
+- **Reuse, nothing new at any door.** The catalog still arrives only through the existing ingest door (`POST /api/ingest/catalog`, the
+  ingest token or the fleet identity with `basket:price-ingest`) and the server's own sweeps. The route joins `/api/catalog/search` and
+  `/api/catalog/{id}` in the same group and takes the same policy, `catalog-read`: a signed-in person, or the fleet identity holding the
+  existing `basket:catalog-read` (no new scope, so no account step). The matcher is item 7's `CandidateMatcher`, unchanged. What was a
+  private method of `ServerCandidates` (narrowing a shop's catalog to the rows worth comparing, a row's title and size) moved to
+  `CatalogRows`, which both the candidate search and this endpoint call, so the two cannot disagree about which rows are compared.
+- **What is looked up.** The source row taken as a product (its brand and name, barcode, category, own size fields), against the live rows of
+  every other shop, with item 7's narrowing and its 300-rows-per-shop cap. The source's own shop is not in the answer: an equivalent in the
+  same shop is a different question. A discontinued source is still answered (as the detail is); discontinued rows are never offered.
+- **Top 3 per shop.** Ordered by matcher score (barcode 100, name and size 50-90, generic 25-49), then rows with a usable unit price before
+  those without, then the lower unit price, then name and id, so the answer is the same every time until a sweep changes the catalog. Every
+  other shop is present in the answer in the fixed order (Aldi, Tesco, Dunnes for a Lidl source), with an empty list when it has nothing.
+- **Unit price, ours not the shop's.** Each row has `comparison`: `unit` (`kg`, `l` or `each`), `pack` ("2 l"), `unitPrice` and `difference`.
+  The unit price is the row's best price today (card price included, as the shelf's `best`) over its parsed size with every pack of a
+  multipack counted (6 x 330 ml is 1.98 l), to the cent, with `UnitPricing` and `PackSize` from the promotions (the shops' own printed
+  unit prices stay on the item and are not mixed in, because their bases differ: "1 KG", "100g"). `difference` is the row's unit price
+  minus the source's, negative being cheaper, and is set only when both are comparable.
+- **Comparable, flagged not guessed.** A row carries `flags`: `no_size` (no parsed size, e.g. matched by barcode alone), `no_price` (no
+  current price: none read, not started, ended), `out_of_stock`, `stale` (the sweep last listed it more than 3 days ago, the Plan's and
+  Promotions' window, here against `last_seen_at` because a catalog price's own date is when its value first appeared), `other_unit`. A
+  stale or out-of-stock row keeps its figure but has no `difference` and ranks after the comparable ones of equal score.
+- **Nothing safe to look up.** A source with no valid barcode and no size (or no first generic word) cannot be narrowed in tens of
+  thousands of rows: the answer is 200 with `reason: "no_size_or_barcode"` and empty lists, which the screen must not word as "no
+  equivalent exists". Same limit as item 7.
+- **Read only, and not the shelf.** Nothing is proposed, linked or stored, and a person's confirmed or rejected matches are not consulted:
+  this browses the catalog, the match sheet still owns decisions about a shelf product. Unknown id: 404.
+- **Screens.** No route or page template changed, so no screen baseline changes (baselines are only ever rewritten by the Update screen
+  baselines workflow).
+- **Tests.** `CatalogEquivalentsTests` against Postgres (shape and order of shops, unit prices and differences, the cap of 3 and score order,
+  the own shop left out, size and pack never different, multipack per litre, barcode match and mismatch, stale / out of stock / no price
+  flags, discontinued rows and source, no-size source, nothing written, unknown id, who may read), `AuthGuardTests` (401 signed out), the
+  frontend `CatalogApi` and `catalog-format` specs. Every product is invented; no real data or token is in this public repository.
