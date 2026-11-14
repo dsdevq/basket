@@ -90,7 +90,7 @@ public sealed class ServerCandidatesTests : IClassFixture<BasketFactory>
         _factory.WithDb(db => Candidates(db).RunForStoreAsync(store, CancellationToken.None));
 
     private static ServerCandidates Candidates(AppDbContext db) =>
-        new(db, new PriceRecorder(db), TimeProvider.System, Microsoft.Extensions.Logging.Abstractions.NullLogger<ServerCandidates>.Instance);
+        new(db, TimeProvider.System, Microsoft.Extensions.Logging.Abstractions.NullLogger<ServerCandidates>.Instance);
 
     private Task<List<MatchCandidate>> ProposalsAsync(Guid product, Store? store = null) =>
         _factory.WithDb(db => db.MatchCandidates.AsNoTracking()
@@ -145,15 +145,15 @@ public sealed class ServerCandidatesTests : IClassFixture<BasketFactory>
         var owner = await CleanAsync();
         await RecordAsync(
             Reading(Store.Lidl, "10018800", "Whole Milk", "2 L", brand: "Milbona"),
-            Reading(Store.Lidl, "10018801", "Baked Beans", "400 g", brand: "Branston"),
-            Reading(Store.Lidl, "10018802", "Baked Beans", "400 g", brand: "Heinz"));
+            Reading(Store.Lidl, "10018801", "Branston Baked Beans", "400 g", brand: "Branston"),
+            Reading(Store.Lidl, "10018802", "Heinz Baked Beans", "400 g", brand: "Heinz"));
 
         var milk = await AddAsync(owner, "Tesco whole milk 2L");
         var beans = await AddAsync(owner, "Heinz baked beans 400g");
 
         (await ProposalsAsync(milk)).Should().ContainSingle().Which.Should().Match<MatchCandidate>(c =>
             c.Basis == MatchBasis.Generic && c.Title == "Milbona Whole Milk");
-        (await ProposalsAsync(beans)).Should().ContainSingle().Which.Title.Should().Be("Heinz Baked Beans", "the brand is part of the name the shop keeps in a field of its own");
+        (await ProposalsAsync(beans)).Should().ContainSingle().Which.Title.Should().Be("Heinz Baked Beans");
     }
 
     [Fact]
@@ -175,11 +175,12 @@ public sealed class ServerCandidatesTests : IClassFixture<BasketFactory>
             Reading(Store.Lidl, "10018810", "Whole Milk", "2 L", brand: "Milbona", category: "Chilled Food > Milk"),
             Reading(Store.Lidl, "10018811", "Whole Milk Soap", "2 L", brand: "Milbona", category: "Household > Cleaning"));
         var product = await AddAsync(owner, "Tesco whole milk 2L");
-        // The shelf product learns a category once a page of it is confirmed; both rows share the name and size.
+        // The shelf product learns a category once a page of it is confirmed (the proposals of the first run are cleared); both rows share the name and size.
         await RecordAsync(Reading(Store.Tesco, "254300041", "Whole Milk", "2 L", category: "Fresh Food > Dairy > Milk"));
         await _factory.WithDb(async db =>
         {
             db.StoreListings.Add(new StoreListing { Id = Guid.NewGuid(), ProductId = product, Store = Store.Tesco, Url = Url(Store.Tesco, "254300041"), AddedAt = DateTimeOffset.UtcNow, ConfirmedAt = DateTimeOffset.UtcNow, Category = "Fresh Food > Dairy > Milk" });
+            db.MatchCandidates.RemoveRange(db.MatchCandidates.Where(c => c.ProductId == product));
             await db.SaveChangesAsync();
             return 0;
         });
@@ -194,7 +195,7 @@ public sealed class ServerCandidatesTests : IClassFixture<BasketFactory>
     // ---- what is linked ----------------------------------------------------------------------------------------
 
     [Fact]
-    public async Task An_exact_barcode_links_the_page_unconfirmed_with_its_price_and_proposes_nothing_for_it()
+    public async Task An_exact_barcode_links_the_page_unconfirmed_and_proposes_nothing_for_it()
     {
         var owner = await CleanAsync();
         var code = Ean13("590000000011");
@@ -210,8 +211,6 @@ public sealed class ServerCandidatesTests : IClassFixture<BasketFactory>
         listing.ConfirmedAt.Should().BeNull("only a person confirms a match");
         listing.StoreProductId.Should().NotBeNull();
         listing.Category.Should().Be("Dairy > Milk");
-        var observation = (await _factory.WithDb(db => db.PriceObservations.Where(o => o.ListingId == listing.Id).ToListAsync())).Should().ContainSingle().Subject;
-        observation.Price.Should().Be(2.35m);
         // The barcode page is the shop's page now; the other row is a name proposal beside it.
         (await ProposalsAsync(product, Store.Aldi)).Select(c => c.Url).Should().Equal(Url(Store.Aldi, "000000000000900202"));
     }

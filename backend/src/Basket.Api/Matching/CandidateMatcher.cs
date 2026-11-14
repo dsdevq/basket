@@ -151,12 +151,8 @@ public static partial class CandidateMatcher
     private static HashSet<string> CategoryWords(string? path) =>
         path is null ? [] : WordList(path, dropOwnLabel: false).Where(w => !CategoryFiller.Contains(w)).ToHashSet(StringComparer.Ordinal);
 
-    /// <summary>The first and the last generic word of a name: the kind of thing it is, for narrowing a catalog before matching.</summary>
-    public static IReadOnlyList<string> KeyWords(string name)
-    {
-        var words = WordList(name, dropOwnLabel: true);
-        return words.Count == 0 ? [] : words.Count == 1 ? [words[0]] : [words[0], words[^1]];
-    }
+    /// <summary>The first generic word of a name: the kind of thing it is, for narrowing a catalog before matching; null when it has none.</summary>
+    public static string? KeyWord(string name) => WordList(name, dropOwnLabel: true).FirstOrDefault();
 
     /// <summary>True when every word of the shorter set is in the other; false when either set is empty.</summary>
     internal static bool Contains(IReadOnlySet<string> a, IReadOnlySet<string> b)
