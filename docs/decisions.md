@@ -1628,9 +1628,10 @@ now follow the person to every device they sign in on, as in finance-sentry, ins
   about "no backend change and no migration" was true for the preset and still is; this change is about the colour and the mode,
   not the preset.
 - **Screens.** The control under Settings > Appearance now captions itself "Synced to your account" instead of "On this device",
-  so the four `settings` Linux baselines (390 / 1280, light and dark) change. They are re-rendered by the "Update screen
-  baselines" workflow on this branch, not committed from a local run. The e2e mock for the signed-in screens answers
-  `/api/me/preferences` with `system`, so no other screen moves.
+  so the two desktop `settings` Linux baselines (1280, light and dark) change; the phone ones (390) do not move. Those two were
+  re-rendered locally and committed after the CI screen check failed on them (496 and 497 px differing, all of it the new caption),
+  rather than by the "Update screen baselines" workflow. The e2e mock for the signed-in screens answers `/api/me/preferences`
+  with `system`, so no other screen moves.
 - **Tests.** Backend: `PreferencesTests` (defaults, a save returning the whole object, wholesale replacement, an omitted field left
   alone, one copy per person, each invalid value refused with nothing stored, concurrent first saves leaving one row, deleting a
   person deleting their row) and the two verbs in the anonymous-401 list. Frontend: `preferences.provider.spec.ts` (nothing asked
