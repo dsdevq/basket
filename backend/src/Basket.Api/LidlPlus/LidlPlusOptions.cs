@@ -21,7 +21,14 @@ public sealed class LidlPlusOptions
     /// <summary>The country the Lidl Plus account belongs to; Lidl keeps receipts per country.</summary>
     public string Country { get; set; } = "IE";
 
-    public string Language { get; set; } = "en-IE";
+    /// <summary>The language the receipts are asked for. Two letters, as Lidl refuses a longer tag such as <c>en-IE</c>.</summary>
+    public string Language { get; set; } = "en";
+
+    /// <summary>
+    /// The version of Lidl's app the receipts requests say they come from. Lidl turns away a made-up one ("999.99.9" has its stream reset)
+    /// and accepts a real release, so this is kept near the current one; raise it if Lidl starts turning requests away again.
+    /// </summary>
+    public string AppVersion { get; set; } = "16.40.2";
 
     /// <summary>The pause between two requests to Lidl while receipts are pulled, so a first pull of years of receipts stays polite.</summary>
     public int ReceiptPauseMilliseconds { get; set; } = 500;
