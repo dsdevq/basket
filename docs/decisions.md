@@ -1767,3 +1767,43 @@ door; no sweep, search, linking or screen is here (issues 129 to 140).
   the 90 percent guard and the run row), recorder tests against Postgres (`CatalogRecorderTests`, including the generated `tsvector`), and
   pure tests for the validation (`CatalogReadingTests`). Fixtures are invented products shaped like the scout's Aldi and Lidl records;
   no real catalog data and no tokens are in this public repository.
+
+## Catalog 5/14: catalog search and detail (2026-11-14, issue 131 of epic 126)
+
+The read side of the combined catalog that issue 128 put in the database: `GET /api/catalog/search` and `GET /api/catalog/{id}`. No
+screen yet (a later issue builds it on these two answers) and no migration: the generated `tsvector` and its GIN index came with
+issue 128 and are used as they are.
+
+- **Reused, not rebuilt.** The door in is still issue 128's: `POST /api/ingest/catalog` behind the owner-minted token or the fleet
+  identity with `basket:price-ingest`, writing through `CatalogRecorder`. The door out takes the policy the shelf's product list
+  already has, `catalog-read`: a signed-in person (owner or member), or the fleet identity holding the existing scope
+  `basket:catalog-read` (no new Logto scope, so no account step). A request with a bearer header is judged on the fleet token alone,
+  as everywhere else; a token with another scope is 403, no credential 401. Nothing in the matcher (`CandidateMatcher`, `ProductSize`,
+  `Gtin`) or the fleet identity changed: size and barcode were already normalised when the row was written, so reading is plain.
+- **Search.** `q` is split into words (letters and digits only, lower-cased, at most 8 of the first 80 characters) and each word is a
+  prefix of the `english` full-text configuration the index was built with: `choc milk` is `choc:* & milk:*`, so a half-typed word
+  still finds things and every word must match, in the name or the brand. The words are the only thing that reaches
+  `to_tsquery`, so query syntax typed by a person is never query syntax. A query with fewer than two letters is 400
+  `query_too_short`. Results are ordered by `ts_rank`, then name, then id, so equal ranks (the usual case) come back in the same
+  order every time. At most 50 come back; `limit` may lower that (1 to 50), never raise it. There is no paging: a person who
+  needs the 51st result types more of the name.
+- **Store filter.** `store` takes a slug in any case (`lidl`, `aldi`, `tesco`, `dunnes`); another value is 400 `unknown_store`
+  rather than an empty list, so a typo is not read as "nothing there". Absent means every shop.
+- **Discontinued products.** Search leaves out a product whose `discontinued_at` is set (a complete sweep no longer listed it): a
+  tile for something nobody sells misleads. The detail still answers it, with `discontinuedAt`, because a link kept from earlier
+  must not turn into a 404 that looks like a bug.
+- **What a result carries.** Id, shop (slug and display name), name, brand, size as the shop writes it, the shop's own unit price and
+  its basis, the https photo address, the product page, the latest price and `lastSeenAt`. The price is the shelf's own `PriceResponse`
+  (state `current`, `upcoming`, `ended` or `unavailable` through the same `PriceStates` rule, price, was price, loyalty price and
+  scheme, promo text, dates, `best`, in stock), built from the product's newest `store_product_price` row, so the screen formats a
+  catalog price exactly like a shelf price. Its `observedOn` is the Dublin day that value first appeared (history is write-on-change),
+  not the day it was last confirmed; `lastSeenAt` says how fresh the product is. A product with no price yet has `price: null`.
+  The detail adds the parsed size (`sizeAmount`, `sizeUnit`, `sizePacks`), barcode, category, `firstSeenAt` and `discontinuedAt`.
+- **Read only.** No route here writes, and nothing is created by searching. No history endpoint, shelf link or equivalents list:
+  those are their own issues (linking is 132, equivalents 138).
+- **Tests.** `CatalogEndpointsTests` runs against Postgres so the generated vector, the ranking and the prefix match are what the
+  tests exercise: shape of a result and of the detail, brand and stem matching, every-word prefix matching, ranking and the name
+  tie-break, the store filter and its refusal, the 50 cap and `limit`, discontinued handling, too-short and syntax-shaped queries,
+  price states and the latest of several readings, and who may read (owner, member, fleet scopes, no credential).
+  `AuthGuardTests` lists both routes as 401 when signed out. The frontend gets the typed client (`CatalogApi`, `catalog.model.ts`) and
+  its spec; there is no page or route, so no screen baseline changes. Every product in the fixtures is invented.
