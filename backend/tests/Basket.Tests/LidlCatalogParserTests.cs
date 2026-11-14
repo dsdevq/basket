@@ -36,11 +36,12 @@ public sealed class LidlCatalogParserTests
     }
 
     [Fact]
-    public void A_tile_without_a_product_number_is_skipped_and_the_rest_of_the_page_is_kept()
+    public void A_tile_without_a_product_number_is_returned_unusable_so_the_caller_can_count_it()
     {
         var items = LidlParser.ParseCatalogTiles(Fixtures.Read("lidl-catalog-page-2.html"));
 
-        items.Select(i => i.ExternalId).Should().Equal("90000003", "90000004");
+        items.Select(i => i.ExternalId).Should().Equal("90000003", "90000004", null);
+        items[2].Url.Should().Be("https://www.lidl.ie/p/none/p1");
         items[1].Brand.Should().BeNull();
         items[1].Price.Should().Be(1.09m);
     }
@@ -64,23 +65,12 @@ public sealed class LidlCatalogParserTests
     [Fact]
     public void Food_category_pages_are_picked_from_the_page_sitemap_by_name()
     {
-        string[] words = ["food", "fruit", "meat", "fish", "chilled"];
-
-        var pages = LidlParser.FoodCategoryPages(Fixtures.Read("lidl-pages-sitemap.xml"), words);
+        var pages = LidlParser.FoodCategoryPages(Fixtures.Read("lidl-pages-sitemap.xml"));
 
         pages.Select(p => p.AbsoluteUri).Should().Equal(
             "https://www.lidl.ie/c/food-drink/s90000100",
             "https://www.lidl.ie/c/fresh-fruit-and-vegetables/s90000101",
             "https://www.lidl.ie/c/chilled-meat-and-fish/s90000105");
-    }
-
-    [Fact]
-    public void A_word_is_matched_whole_so_a_garden_page_is_not_food()
-    {
-        var pages = LidlParser.FoodCategoryPages(Fixtures.Read("lidl-pages-sitemap.xml"), ["garden"]);
-
-        pages.Select(p => p.AbsolutePath).Should().Equal("/c/garden-furniture/s90000102");
-        LidlParser.FoodCategoryPages(Fixtures.Read("lidl-pages-sitemap.xml"), ["furn"]).Should().BeEmpty();
     }
 
     [Fact]

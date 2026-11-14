@@ -20,17 +20,6 @@ public sealed class PricesOptions
         "https://www.lidl.ie/c/food-drink/s10068374",
     ];
 
-    /// <summary>The sitemap index of lidl.ie (robots.txt names it); the sweep reads the page sitemap it lists to find the food category pages.</summary>
-    public string LidlSitemapIndex { get; set; } = "https://www.lidl.ie/static/sitemap.xml";
-
-    /// <summary>A sitemap category page is walked when its hyphenated name holds one of these words.</summary>
-    public string[] LidlFoodWords { get; set; } =
-    [
-        "food", "drink", "drinks", "fruit", "vegetables", "meat", "poultry", "fish", "seafood", "dairy", "cheese", "eggs", "bakery",
-        "bread", "chilled", "frozen", "snacks", "sweets", "chocolate", "biscuits", "cereal", "pasta", "rice", "sauces", "tea",
-        "coffee", "juice", "water", "wine", "beer", "cider", "spirits", "grocery", "pantry", "deli",
-    ];
-
     /// <summary>Product pages one night may open to read a barcode. About 700 food products take a few nights, then only new products.</summary>
     public int LidlBarcodePagesPerNight { get; set; } = 200;
 }

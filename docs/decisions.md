@@ -1784,15 +1784,15 @@ So this sweep reads the range; the paid price keeps coming from the Lidl Plus re
 - **What it reads.** `LidlParser.ParseCatalogTiles` reads the product tiles of a category listing page with the tile reader the offer pages
   already use (`erpNumber`, title, brand, price, Lidl Plus price, dates, photo), plus the pack text (`price.packaging.text`, the size) and
   `keyfacts.wonCategoryPrimary` as the category path, without its shared root "Worlds of need". A tile with no price is a product stored
-  without one; it is not an error and writes no price row. A tile with no product number or no address is skipped.
+  without one; it is not an error and writes no price row. A tile with no product number or no address is still returned, unusable, so the sweep counts it.
 - **Which pages.** Listing pages are walked by `?offset=` in steps of 12 (offset 0 is the plain address) until a page brings no product not
-  already seen, with a hard cap of 120 pages a category (a fixed ceiling, not a setting). The categories are the food pages of the page
+  already seen (a page that only repeats products, or is empty after the first), with a hard cap of 120 pages a category (a fixed ceiling, not a setting). The categories are the food pages of the page
   sitemap only: `/static/sitemap.xml` (the index robots.txt names) lists the sitemaps, the one whose file name starts with `pages` lists
-  the `/c/<slug>/s<id>` category pages, and a page is food when its hyphenated slug contains one of `Prices:LidlFoodWords` as a whole word
+  the `/c/<slug>/s<id>` category pages, and a page is food when its hyphenated slug contains a word of a fixed list in `LidlParser` as a whole word
   ("fresh-fruit-and-vegetables", not "garden-furniture"). A product is stored once however many categories list it. A `.xml.gz` sitemap is
   a file, not a transfer encoding, so `PoliteFetcher` unpacks an address that ends in `.gz` (bounded at 20 MB unpacked).
 - **A sweep that missed something delists nothing.** A listing page or sitemap that is down, a first page of a category that shows no
-  product (a changed layout reads the same as a failed page), or a category still listing new products at the 120-page ceiling makes the
+  product, or a page whose tiles are all unusable and none a repeat (a changed layout reads the same as a failed page), or a category still listing new products at the 120-page ceiling makes the
   sweep incomplete. It is not closed through `CatalogIngest.CompleteAsync`: its `price_pull_run` row is `Partial` (`Failed` when it read
   nothing) with the reason, and no product is marked discontinued, however small the gap (the 90 percent guard only catches large ones).
   The products it did read are still stored. Only a sweep that walked every category to its end is closed and may delist.

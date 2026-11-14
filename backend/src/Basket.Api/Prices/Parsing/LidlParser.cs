@@ -71,15 +71,10 @@ public static partial class LidlParser
             var id = PageData.String(tile, "erpNumber")
                 ?? (tile.TryGetProperty("productId", out var number) && number.ValueKind == JsonValueKind.Number ? number.GetRawText() : null);
             var path = PageData.String(tile, "canonicalUrl") ?? PageData.String(tile, "canonicalPath");
-            if (id is null || path is null || !path.StartsWith('/'))
-            {
-                continue;
-            }
-
             var quote = TileQuote(tile);
             items.Add(new CatalogItem(
                 id,
-                "https://" + Store.Lidl.Host() + path,
+                path is not null && path.StartsWith('/') ? "https://" + Store.Lidl.Host() + path : null,
                 PageData.Clean(PageData.String(tile, "fullTitle") ?? PageData.String(tile, "title")),
                 Brand: PageData.Clean(PageData.String(tile, "brand", "name")),
                 SizeText: PageData.Clean(PageData.String(tile, "price", "packaging", "text")),
@@ -132,11 +127,18 @@ public static partial class LidlParser
         return found;
     }
 
+    private static readonly string[] FoodWords =
+    [
+        "food", "drink", "drinks", "fruit", "vegetables", "meat", "poultry", "fish", "seafood", "dairy", "cheese", "eggs", "bakery",
+        "bread", "chilled", "frozen", "snacks", "sweets", "chocolate", "biscuits", "cereal", "pasta", "rice", "sauces", "tea",
+        "coffee", "juice", "water", "wine", "beer", "cider", "spirits", "grocery", "pantry", "deli",
+    ];
+
     /// <summary>
     /// The listing pages (<c>/c/&lt;slug&gt;/s&lt;id&gt;</c>) of a pages sitemap whose slug names food or drink, i.e. contains one of
-    /// <paramref name="foodWords"/> as a whole word of its hyphenated name. Query and fragment are dropped; each page once.
+    /// one of <see cref="FoodWords"/> as a whole word of its hyphenated name. Query and fragment are dropped; each page once.
     /// </summary>
-    public static IReadOnlyList<Uri> FoodCategoryPages(string sitemapXml, IReadOnlyCollection<string> foodWords)
+    public static IReadOnlyList<Uri> FoodCategoryPages(string sitemapXml)
     {
         var pages = new List<Uri>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
@@ -144,7 +146,7 @@ public static partial class LidlParser
         {
             var match = CategoryPath().Match(uri.AbsolutePath.TrimEnd('/'));
             if (!match.Success
-                || !match.Groups["slug"].Value.Split('-').Any(word => foodWords.Contains(word, StringComparer.OrdinalIgnoreCase)))
+                || !match.Groups["slug"].Value.Split('-').Any(word => FoodWords.Contains(word, StringComparer.OrdinalIgnoreCase)))
             {
                 continue;
             }

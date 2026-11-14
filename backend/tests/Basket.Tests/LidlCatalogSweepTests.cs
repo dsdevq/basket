@@ -275,6 +275,15 @@ public sealed class LidlCatalogSweepTests : IClassFixture<BasketFactory>
             Shop().Serve(Chilled, Fixtures.Read("lidl-catalog-page-empty.html")), "showed no products");
 
     [Fact]
+    public Task A_page_of_tiles_that_are_all_unusable_delists_nothing() =>
+        AssertIncompleteSweepDelistsNothingAsync(
+            Shop().Serve(
+                Chilled,
+                Fixtures.Read("lidl-catalog-page-2.html").Replace("erpNumber&quot;: &quot;90000003&quot;", "erpNumber&quot;: &quot;&quot;")
+                    .Replace("erpNumber&quot;: &quot;90000004&quot;", "erpNumber&quot;: &quot;&quot;")),
+            "no usable products");
+
+    [Fact]
     public async Task A_category_that_never_ends_is_cut_at_the_ceiling_and_delists_nothing()
     {
         await CleanAsync();

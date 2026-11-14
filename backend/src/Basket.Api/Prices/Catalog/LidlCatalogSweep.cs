@@ -31,13 +31,15 @@ public sealed class LidlCatalogSweep(
     /// <summary>A category is never walked past this many pages (the food range is about 60), so a page that repeats cannot loop.</summary>
     private const int MaxPagesPerCategory = 120;
 
+    /// <summary>The sitemap index of lidl.ie (robots.txt names it); the page sitemap it lists holds the category pages.</summary>
+    private static readonly Uri SitemapIndex = new("https://www.lidl.ie/static/sitemap.xml");
+
     public async Task RunAsync(CancellationToken ct)
     {
         var started = clock.GetUtcNow();
-        var settings = options.Value;
         var readings = new Dictionary<string, CatalogReading>(StringComparer.Ordinal);
 
-        var discovery = await DiscoverCategoriesAsync(settings, ct);
+        var discovery = await DiscoverCategoriesAsync(ct);
         var refused = discovery.Refused;
         var note = discovery.Note;
 
@@ -79,14 +81,14 @@ public sealed class LidlCatalogSweep(
                 }
 
                 var fresh = new List<CatalogReading>();
+                var repeated = 0;
                 foreach (var item in tiles)
                 {
                     if (item.ExternalId is { } id && readings.ContainsKey(id))
                     {
-                        continue;
+                        repeated++;
                     }
-
-                    if (CatalogReading.TryCreate(Store.Lidl, item, out var reading, out _))
+                    else if (CatalogReading.TryCreate(Store.Lidl, item, out var reading, out _))
                     {
                         readings[reading!.ExternalId] = reading;
                         fresh.Add(reading);
@@ -99,7 +101,12 @@ public sealed class LidlCatalogSweep(
 
                 if (fresh.Count == 0)
                 {
-                    walked = true; // past the last page: nothing new, so the next offset would only repeat or be empty
+                    walked = repeated > 0; // past the last page: it only repeats what was seen; a page of unusable tiles is a failed read
+                    if (!walked)
+                    {
+                        note ??= $"A Lidl listing page showed no usable products ({category.AbsolutePath}).";
+                    }
+
                     break;
                 }
 
@@ -145,9 +152,9 @@ public sealed class LidlCatalogSweep(
     /// The food category pages of the page sitemap: the index names the sitemaps, the one named "pages" lists the categories.
     /// A sitemap that cannot be read leaves no categories to walk and says so; a refusal ends the sweep.
     /// </summary>
-    private async Task<Discovery> DiscoverCategoriesAsync(PricesOptions settings, CancellationToken ct)
+    private async Task<Discovery> DiscoverCategoriesAsync(CancellationToken ct)
     {
-        var index = await fetcher.GetAsync(new Uri(settings.LidlSitemapIndex), ct);
+        var index = await fetcher.GetAsync(SitemapIndex, ct);
         if (index.Status != FetchStatus.Ok)
         {
             return Unreadable(index, "sitemap index");
@@ -166,7 +173,7 @@ public sealed class LidlCatalogSweep(
             return Unreadable(sitemap, "page sitemap");
         }
 
-        var pages = LidlParser.FoodCategoryPages(sitemap.Body!, settings.LidlFoodWords);
+        var pages = LidlParser.FoodCategoryPages(sitemap.Body!);
         return new Discovery(pages, false, pages.Count == 0 ? "The Lidl page sitemap lists no food categories." : null);
     }
 
