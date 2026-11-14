@@ -2108,3 +2108,14 @@ The match sheet only ever had what a person or the PC reader posted to `POST /ap
   barcode link, barcode beside an existing page, confirmed shops and rejected pages honoured, the cap of 5 and a repeat run,
   discontinued rows, the three triggers including a sweep over more than one batch and an empty sweep, the fleet adding a product) and a
   match-sheet spec for the new basis. Fixtures are invented products and ids; no real data or token is in this public repository.
+
+## Adopting `@lifekit-hq/ui` 5.0.0 (2026-11-14)
+
+`@lifekit-hq/ui`, `tokens`, `core`, `elements`, `charts-core` and `config` go from 4.8.0 to 5.0.0. The release makes the library's
+page templates mandatory and drops Tailwind's default spacing and type scales (migration guide: `docs/MIGRATING-TO-5.md` in
+lifekit-common). Frontend only: no endpoint, schema or migration changes.
+
+- **Type scale.** The two headings that used `text-cmn-xl` (the card name on the card page, the number on the till dialog) use
+  `text-cmn-lg`.
+- **Baselines.** The screen baselines were drawn with 4.8.0, so they are redrawn by the **Update screen baselines** workflow on the
+  adopting branch, never locally.
