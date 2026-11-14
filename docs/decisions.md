@@ -1432,3 +1432,39 @@ for Tesco, Dunnes and Aldi, which give no receipts.
 - **Screens.** The Shelf and List mocks gain habits, so the `shelf` and `list` Linux baselines change (a count line on a tile, and a
   Usually bought section). They are re-rendered by the "Update screen baselines" workflow on this branch, not committed from a local
   run.
+
+## The PC reader runs once a day by itself (2026-11-14)
+
+Owner's question: how do Lidl, Tesco, Dunnes and Aldi products get and refresh? Lidl has the server's 03:00 pull; Aldi and Dunnes
+come only from the PC reader, which had no schedule, so they refreshed only when someone ran `npm start`. Tesco stays off
+(`ENABLED_STORES`, ruling of 2026-11-11). Decision: a daily run on the owner's PC, needing nobody at it.
+
+- **Trigger: a Windows scheduled task that runs `wsl.exe`, not a systemd timer in WSL.** WSL starts lazily and a user timer only
+  fires while the distro is up, so "PC on, no WSL session open" would never run. Task Scheduler is running whenever the PC is on;
+  `conhost.exe --headless wsl.exe -d <distro> --exec systemctl --user start basket-pc-reader.service` boots the distro and its
+  systemd if needed and holds it up until the oneshot unit finishes. The unit (not a bare script) gives a timeout, journald logs
+  and one place where concurrent starts serialise. Triggers: logon +2 min, and 12:00 repeated every 3 h for 9 h with
+  `StartWhenAvailable`. An ordinary (non-admin) PowerShell session can register only logon and time triggers with an interactive
+  principal; boot triggers and "whether or not logged on" (S4U) are refused with access denied (verified on this PC), so the task
+  as installed runs while the owner is logged on, which is also when WSL appears to come up on this PC today (its keep-alive and Docker
+  start from the user's startup items). `install.sh` from an elevated session adds the boot trigger and S4U; that variant is written but was not run here.
+- **Catch-up and no double runs are one rule: a stamp of the last local day read.** `src/daily.ts` skips when
+  `~/.local/state/basket-pc-reader/last-read` holds today's date and writes it after a run that finished. A missed day needs no
+  special case (yesterday's stamp does not match, the next trigger reads), and several triggers can overlap safely, which lets
+  Task Scheduler's triggers be generous (boot/logon, midday, three retries). The stamp is a calendar day, not "24 h since the last
+  run", so the schedule stays predictable after an odd-hour manual run.
+- **Gate: the `npm run check` steps, with unreachable told apart from refused.** `CheckStep` gains `unreachable`, set when the
+  issuer, the token endpoint or basket gave no answer at all (Tailscale down, VPS off). That is one `skipped:` log line, exit 0, no
+  stamp, so the next trigger retries. Any other failed step (token refused, issuer string differs, basket 401, no fleet identity) is
+  not an outage and will not heal by waiting, so it is `failed:`, exit 1, visible as a failed unit. The brief said "skip quietly
+  when unreachable"; making every check failure quiet would hide a rotated secret forever.
+- **A blocked store is an outcome, not an error.** The reader's exit `2` (blocked, unreadable or rejected pages) counts as a finished
+  run: exit 0, stamped, summarised in the log line (`dunnes blocked (HTTP 403; ...)`). Only exit `1` (could not start, a batch
+  refused) is `failed:` and leaves the day open. Dunnes is blocked by Cloudflare today; that parser/access work is separate.
+- **Headless.** The scheduled run sets `BASKET_READER_HEADLESS=1` (unless the unit already sets it). Checked on 2026-11-14 against
+  live Aldi: 4 of 4 pages read and accepted headless, and the `conhost --headless` wrapper leaves no console window, so nothing is
+  left open on the PC. Headed would need WSLg and would put a Chrome window on the desktop.
+- **Where it lives.** `pc-reader/src/schedule.ts` (the decision, unit-tested with injected checks/reader/clock), `src/daily.ts` (the
+  entry, `npm run daily`), and `pc-reader/schedule/` (`basket-pc-reader.service.in`, `windows-task.ps1`, `install.sh`,
+  `uninstall.sh`). The unit runs the clone `install.sh` was run from, with absolute paths, so it is re-run after the clone moves.
+  No server change, no migration, nothing new on the VPS.

@@ -11,7 +11,7 @@ an error, and reads Aldi and Dunnes as usual. To read Tesco again, add `'tesco'`
 The Tesco parser, fixtures and tests are kept.
 
 It is a small Node program: Chrome (installed on the PC, with a profile of its own) loads each page, a parser reads what
-the page says, and the readings go to basket in batches. Nothing is scheduled; you run it when the PC is on.
+the page says, and the readings go to basket in batches. Run it by hand with `npm start`, or let the daily schedule do it ("Running it every day", below).
 
 ## Run it
 
@@ -187,9 +187,61 @@ only file that touches Chrome.
 To run it by hand against a local basket: start the dev stack as in the root README, make a `bsk_` token in the dev app's
 Settings (or use the fleet identity), and point `BASKET_API_ORIGIN` at `http://localhost:3310`.
 
-## Running it on a schedule (not set up)
+## Running it every day
 
-Not installed on purpose. On this PC a systemd user timer (`~/.config/systemd/user/basket-pc-reader.timer` plus a oneshot
-`.service` running `node src/main.ts` in this folder with `BASKET_READER_HEADLESS=1`, or a session with a display, and
-`Persistent=true` so a missed run happens when the PC wakes) would do it.
-It needs Tailscale up on the PC (the identity service and basket are tailnet addresses); `npm run check` exits `1` when either is unreachable, which a scheduled run can use to skip quietly.
+On this PC the reader runs once a day by itself, window-less, whenever the PC is on and Tailscale is up. Nobody has to be at the PC
+and no terminal has to be open. Aldi and Dunnes only come from the PC (Lidl has the server's 03:00 pull), so this is what keeps them
+fresh. Tesco stays off (`ENABLED_STORES`).
+
+```text
+Windows Task Scheduler  ->  conhost --headless wsl.exe  ->  systemctl --user start basket-pc-reader.service  ->  node src/daily.ts
+   (the trigger)             (starts WSL if it is down)       (oneshot unit in WSL, logs to the journal)         (gate, stamp, src/main.ts)
+```
+
+Install and remove (inside WSL, in the PC's long-lived clone, after `npm ci` and a filled-in `.env.local`):
+
+```sh
+./schedule/install.sh      # writes ~/.config/systemd/user/basket-pc-reader.service and registers the Windows task
+./schedule/uninstall.sh    # removes both; keeps the log, the stamp, the Chrome profile and .env.local
+```
+
+Re-run `install.sh` after moving the clone or upgrading Node (the unit holds absolute paths). To run it now instead of waiting:
+`systemctl --user start basket-pc-reader.service` (or `schtasks.exe /Run /TN "Basket PC reader (daily)"`).
+
+**What triggers it.** A systemd user timer inside WSL only fires while the distro is up, and WSL starts lazily, so the trigger is
+the Windows task `Basket PC reader (daily)`: at logon (2 minutes in, so Tailscale, which runs inside WSL, is up) and at 12:00,
+repeated every 3 hours until 21:00 (a PC that was off at 12:00 runs it as soon as it is back, `StartWhenAvailable`). `wsl.exe` boots
+the distro and its systemd if needed and holds it up until the run ends. Installed from an ordinary PowerShell session the task runs
+while the user is logged on; Windows refuses boot triggers and "run whether logged on or not" to a non-admin, so if the PC must
+read after a reboot with nobody having logged in, run `install.sh` once from a WSL session started from an **elevated** terminal
+and it registers the boot (+5 min) trigger with a password-less S4U logon too (not exercised on this PC: it needs an admin prompt). `windows-task.ps1` is the whole definition.
+
+**At most once a local day, whatever fires.** `src/daily.ts` writes `~/.local/state/basket-pc-reader/last-read` (the local date)
+after a run that finished, and a later trigger the same day logs `skipped: already read today` and exits 0. That is both the
+catch-up rule (a missed day is read at the next trigger, since yesterday's stamp does not match) and the no-double-run rule (a
+second trigger, or the elevated boot trigger next to the logon one, finds today's stamp). It does not store a time, so a run at
+23:59 does not stop the 00:01 one: that is a new local day.
+
+**Skipping quietly.** Before opening a browser it runs the same four checks as `npm run check`. If the identity service or basket gives
+no answer at all (Tailscale down, the VPS off) it writes one line, `skipped: basket or the identity service is unreachable ...`, exits
+0 and does **not** stamp the day, so the next trigger tries again. A check that fails for any other reason (a refused token, a wrong
+issuer, basket answering 401, no fleet identity configured; the scheduled run needs the fleet identity, not the `bsk_` token)
+is not an outage and would never fix itself: it logs `failed: ...` and exits 1, so the unit shows as failed in
+`systemctl --user status basket-pc-reader`.
+
+**A blocked store is a normal outcome.** The reader's own exit `2` (a store blocked, a page unreadable or rejected) counts as a
+finished run: exit 0, day stamped, the block named in the line. Dunnes is behind a Cloudflare challenge today and shows up like this:
+
+```text
+2026-11-14T10:18:17.195Z read: aldi 4/4 read, 4 accepted; dunnes blocked (HTTP 403; 0 not asked), 0/1 read, 0 accepted (reader exit 2)
+```
+
+Only the reader failing outright (exit `1`: it could not start, or basket refused a batch) is `failed:` and leaves the day open.
+
+**Headless.** The scheduled run sets `BASKET_READER_HEADLESS=1`, so no Chrome window ever opens on the PC; Aldi reads the same
+headless (checked 2026-11-14: 4 of 4 pages read and accepted). To watch a run, put `Environment=BASKET_READER_HEADLESS=0` (and the
+`DISPLAY`/`WAYLAND_DISPLAY`/`XDG_RUNTIME_DIR` of WSLg) in the unit by `systemctl --user edit`. The unit uses the reader's own
+Chrome profile (`~/.local/state/basket-pc-reader/profile`), never the everyday one.
+
+**Where to look.** `~/.local/state/basket-pc-reader/daily.log` has one line per attempt; the reader's page-by-page progress is in
+`journalctl --user -u basket-pc-reader.service`. `npm run daily` runs the same entry point by hand.

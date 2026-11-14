@@ -1,10 +1,12 @@
 import type { Config } from './config.ts';
-import { bearerSource, FLEET_SCOPES } from './fleet.ts';
+import { bearerSource, FLEET_SCOPES, IdentityUnreachableError } from './fleet.ts';
 
 export interface CheckStep {
   name: string;
   ok: boolean;
   detail: string;
+  /** Set on a failed step when the address gave no answer at all (Tailscale down, host off), not when it answered "no". */
+  unreachable?: boolean;
 }
 
 export interface CheckDeps {
@@ -41,8 +43,8 @@ function isLoopback(address: string): boolean {
 export async function checkIdentity(config: Config, deps: CheckDeps = {}): Promise<CheckStep[]> {
   const fetchImpl = deps.fetchImpl ?? fetch;
   const steps: CheckStep[] = [];
-  const record = (name: string, ok: boolean, detail: string): boolean => {
-    steps.push({ name, ok, detail });
+  const record = (name: string, ok: boolean, detail: string, unreachable = false): boolean => {
+    steps.push(unreachable ? { name, ok, detail, unreachable } : { name, ok, detail });
     return ok;
   };
   const { auth } = config;
@@ -70,7 +72,7 @@ export async function checkIdentity(config: Config, deps: CheckDeps = {}): Promi
       record('discovery', true, `answers, and reports the issuer ${reported}`);
     }
   } catch (error) {
-    record('discovery', false, `could not reach ${auth.issuer}: ${error instanceof Error ? error.message : String(error)}`);
+    record('discovery', false, `could not reach ${auth.issuer}: ${error instanceof Error ? error.message : String(error)}`, true);
   }
   if (!steps.at(-1)?.ok) {
     return steps;
@@ -80,7 +82,7 @@ export async function checkIdentity(config: Config, deps: CheckDeps = {}): Promi
   try {
     token = await bearerSource(auth, deps)();
   } catch (error) {
-    record('token', false, error instanceof Error ? error.message : String(error));
+    record('token', false, error instanceof Error ? error.message : String(error), error instanceof IdentityUnreachableError);
     return steps;
   }
   const claims = claimsOf(token);
@@ -104,7 +106,7 @@ export async function checkIdentity(config: Config, deps: CheckDeps = {}): Promi
       ? `${config.origin} accepts the token (GET /api/products, HTTP ${response.status})`
       : `${config.origin} answered GET /api/products with HTTP ${response.status}${response.status === 401 ? ': basket does not accept this token (is its FLEET_AGENT_AUTHORITY the issuer above?)' : ''}`);
   } catch (error) {
-    record('basket', false, `could not reach ${config.origin}: ${error instanceof Error ? error.message : String(error)}`);
+    record('basket', false, `could not reach ${config.origin}: ${error instanceof Error ? error.message : String(error)}`, true);
   }
   return steps;
 }
