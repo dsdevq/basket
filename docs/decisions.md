@@ -1139,8 +1139,9 @@ day. Builds on `LidlPlusConnectionService.AccessAsync`; the Lidl Plus offers (#1
   price, two products differing only by letter case, the job);
   `LidlPlusTicketsClientTests` feeds recorded answers (decimal commas and numbers, bad shapes, refusals, network error) to the real
   client. No test, and no build step, calls Lidl.
-- **Not verified live.** (Superseded for one receipt's address, `App-Version` and lines by "Lidl Plus receipts: Lidl changed its
-  receipts service" below: a receipt is now read from `api/v3` and its lines from the printed HTML, not `itemsLine`.) The receipts service address, the headers (`App`, `Operating-System`, `App-Version`) and the field names
+- **Not verified live.** (Superseded for a receipt's address, `App-Version`, language and lines by "Lidl Plus receipts: Lidl changed
+  its receipts service" below: a receipt is now read from `api/v3` and its lines from the printed HTML, not `itemsLine`, and the paid
+  price nets a coupon.) The receipts service address, the headers (`App`, `Operating-System`, `App-Version`) and the field names
   (`tickets[].id`, `date`, `totalAmount`, `itemsLine[]` with `description`, `quantity`, `isWeight`, `currentUnitPrice`, `extendedAmount`
   or `originalAmount`) follow the community `lidl-plus` client, not an official Lidl document, and nothing here has been run against
   Lidl. Two readings to check against the first real receipts: whether `extendedAmount` is before or after a Lidl Plus coupon (basket
