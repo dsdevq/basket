@@ -54,6 +54,12 @@ public sealed class StoreListing
 
     public DateTimeOffset AddedAt { get; set; }
 
+    /// <summary>
+    /// The combined-catalog row of this shop that this page is, once one is linked; null until then (nothing fills it yet).
+    /// Prices still come from the page's own readings; the link only joins the shelf to the catalog.
+    /// </summary>
+    public Guid? StoreProductId { get; set; }
+
     public DateTimeOffset? LastCheckedAt { get; set; }
 
     /// <summary>

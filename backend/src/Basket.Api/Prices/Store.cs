@@ -56,7 +56,9 @@ public static partial class Stores
     /// Who reads this shop's prices: <c>nightly</c> (the VPS job) or <c>pc</c> (an ordinary browser on the owner's home
     /// connection, writing through the token-signed ingest endpoint, <c>POST /api/ingest/prices</c>). tesco.ie and aldi.ie answer the VPS with
     /// "Access Denied" (checked 2026-11-05) and dunnesstoresgrocery.com with Cloudflare's challenge (checked 2026-11-08);
-    /// basket does not try to get round either.
+    /// basket does not try to get round either. A shop read by <c>pc</c> also posts its whole catalog to
+    /// <c>POST /api/ingest/catalog</c>; a <c>nightly</c> shop's catalog is read by the server in process through the same
+    /// <c>CatalogRecorder</c>. Aldi stays <c>pc</c> until the server-side Aldi catalog sweep exists (its own issue flips it).
     /// </summary>
     public static string ReadBy(this Store store) => store == Store.Lidl ? "nightly" : "pc";
 

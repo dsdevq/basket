@@ -1,0 +1,36 @@
+{
+  "store": "aldi",
+  "items": [
+    {
+      "externalId": "000000000000900101",
+      "url": "https://www.aldi.ie/product/greenfield-grated-mozzarella-000000000000900101",
+      "name": "Grated Mozzarella",
+      "brand": "GREENFIELD",
+      "sizeText": "250 g",
+      "unitPrice": 5.96,
+      "unitPriceBasis": "1 KG",
+      "category": "Chilled Food > Cheese",
+      "imageUrl": "https://images.example.test/product/jpg/scaleWidth/300/aaaa-0001",
+      "price": 1.49
+    },
+    {
+      "externalId": "000000000000900102",
+      "url": "https://www.aldi.ie/product/greenfield-cheese-slices-20-pack-000000000000900102",
+      "name": "Cheese Slices 20 Pack",
+      "brand": "GREENFIELD",
+      "sizeText": "20 pack",
+      "price": 1.29,
+      "wasPrice": 1.35,
+      "category": "Chilled Food > Cheese"
+    },
+    {
+      "externalId": "000000000000900103",
+      "url": "https://www.aldi.ie/product/oakridge-sparkling-water-6-x-330ml-000000000000900103",
+      "name": "Sparkling Water",
+      "brand": "OAKRIDGE",
+      "sizeText": "6 x 330ml",
+      "price": 2.19,
+      "inStock": true
+    }
+  ]
+}

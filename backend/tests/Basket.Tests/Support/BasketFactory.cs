@@ -52,6 +52,9 @@ public class BasketFactory : WebApplicationFactory<Program>
 
     public int AuthRequestsPerMinute { get; init; } = 1000;
 
+    /// <summary>The price and catalog ingest limit per client and minute; the app's own default unless a test needs more room.</summary>
+    public int IngestRequestsPerMinute { get; init; } = 30;
+
     public string? Bootstrap { get; init; } = BootstrapToken;
 
     /// <summary>Whether the host serves /metrics. Off by default: each host's meter provider stays in memory for the whole run.</summary>
@@ -97,6 +100,7 @@ public class BasketFactory : WebApplicationFactory<Program>
         builder.UseSetting("ConnectionStrings:Default", connection.ConnectionString);
         builder.UseSetting("Auth:Origins:0", Origin);
         builder.UseSetting("Auth:AuthRequestsPerMinute", AuthRequestsPerMinute.ToString());
+        builder.UseSetting("Auth:IngestRequestsPerMinute", IngestRequestsPerMinute.ToString());
         builder.UseSetting("Hangfire:Enabled", "false");
         builder.UseSetting("Observability:Metrics:Enabled", Metrics ? "true" : "false");
         builder.UseSetting("LidlPlus:ReceiptPauseMilliseconds", "0");

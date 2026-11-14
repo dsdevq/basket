@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
+using NpgsqlTypes;
 
 #nullable disable
 
@@ -654,6 +655,10 @@ namespace Basket.Api.Data.Migrations
                         .HasColumnType("character varying(16)")
                         .HasColumnName("store");
 
+                    b.Property<Guid?>("StoreProductId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("store_product_id");
+
                     b.Property<string>("Title")
                         .HasMaxLength(300)
                         .HasColumnType("character varying(300)")
@@ -667,10 +672,183 @@ namespace Basket.Api.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("StoreProductId");
+
                     b.HasIndex("ProductId", "Store")
                         .IsUnique();
 
                     b.ToTable("store_listing", (string)null);
+                });
+
+            modelBuilder.Entity("Basket.Api.Data.StoreProduct", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Barcode")
+                        .HasMaxLength(14)
+                        .HasColumnType("character varying(14)")
+                        .HasColumnName("barcode");
+
+                    b.Property<string>("Brand")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("brand");
+
+                    b.Property<string>("Category")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("category");
+
+                    b.Property<DateTimeOffset?>("DiscontinuedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("discontinued_at");
+
+                    b.Property<string>("ExternalId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("external_id");
+
+                    b.Property<DateTimeOffset>("FirstSeenAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("first_seen_at");
+
+                    b.Property<string>("ImageUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("image_url");
+
+                    b.Property<DateTimeOffset>("LastSeenAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_seen_at");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("name");
+
+                    b.Property<NpgsqlTsVector>("SearchVector")
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("tsvector")
+                        .HasColumnName("search_vector")
+                        .HasAnnotation("Npgsql:TsVectorConfig", "english")
+                        .HasAnnotation("Npgsql:TsVectorProperties", new[] { "Name", "Brand" });
+
+                    b.Property<decimal?>("SizeAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("size_amount");
+
+                    b.Property<int>("SizePacks")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1)
+                        .HasColumnName("size_packs");
+
+                    b.Property<string>("SizeText")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("size_text");
+
+                    b.Property<string>("SizeUnit")
+                        .HasMaxLength(4)
+                        .HasColumnType("character varying(4)")
+                        .HasColumnName("size_unit");
+
+                    b.Property<string>("Store")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("store");
+
+                    b.Property<decimal?>("UnitPrice")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("unit_price");
+
+                    b.Property<string>("UnitPriceBasis")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("unit_price_basis");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("character varying(400)")
+                        .HasColumnName("url");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Barcode")
+                        .HasFilter("barcode IS NOT NULL");
+
+                    b.HasIndex("SearchVector");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("SearchVector"), "GIN");
+
+                    b.HasIndex("Store", "ExternalId")
+                        .IsUnique();
+
+                    b.HasIndex("Store", "LastSeenAt");
+
+                    b.ToTable("store_product", (string)null);
+                });
+
+            modelBuilder.Entity("Basket.Api.Data.StoreProductPrice", b =>
+                {
+                    b.Property<Guid>("StoreProductId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("store_product_id");
+
+                    b.Property<DateOnly>("ObservedOn")
+                        .HasColumnType("date")
+                        .HasColumnName("observed_on");
+
+                    b.Property<bool>("InStock")
+                        .HasColumnType("boolean")
+                        .HasColumnName("in_stock");
+
+                    b.Property<decimal?>("LoyaltyPrice")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("loyalty_price");
+
+                    b.Property<string>("LoyaltyScheme")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("loyalty_scheme");
+
+                    b.Property<decimal?>("Price")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("price");
+
+                    b.Property<string>("PromoText")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("promo_text");
+
+                    b.Property<DateOnly?>("ValidFrom")
+                        .HasColumnType("date")
+                        .HasColumnName("valid_from");
+
+                    b.Property<DateOnly?>("ValidUntil")
+                        .HasColumnType("date")
+                        .HasColumnName("valid_until");
+
+                    b.Property<decimal?>("WasPrice")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("was_price");
+
+                    b.HasKey("StoreProductId", "ObservedOn");
+
+                    b.ToTable("store_product_price", (string)null);
                 });
 
             modelBuilder.Entity("Basket.Api.Data.Trip", b =>
@@ -1010,6 +1188,20 @@ namespace Basket.Api.Data.Migrations
                     b.HasOne("Basket.Api.Data.Product", null)
                         .WithMany()
                         .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Basket.Api.Data.StoreProduct", null)
+                        .WithMany()
+                        .HasForeignKey("StoreProductId")
+                        .OnDelete(DeleteBehavior.SetNull);
+                });
+
+            modelBuilder.Entity("Basket.Api.Data.StoreProductPrice", b =>
+                {
+                    b.HasOne("Basket.Api.Data.StoreProduct", null)
+                        .WithMany()
+                        .HasForeignKey("StoreProductId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

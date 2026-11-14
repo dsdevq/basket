@@ -8,6 +8,7 @@ using Basket.Api.Matching;
 using Basket.Api.Plan;
 using Basket.Api.Preferences;
 using Basket.Api.Prices;
+using Basket.Api.Prices.Catalog;
 using Basket.Api.Prices.Ingest;
 using Basket.Api.Prices.Fetching;
 using Basket.Api.Prices.Promotions;
@@ -87,6 +88,8 @@ builder.Services.AddHttpClient<ILidlPlusTickets, LidlPlusTicketsClient>((service
 builder.Services.AddScoped<LidlReceiptImport>();
 builder.Services.AddScoped<LidlReceiptsJob>();
 builder.Services.AddScoped<PriceIngest>();
+builder.Services.AddScoped<CatalogRecorder>();
+builder.Services.AddScoped<CatalogIngest>();
 builder.Services.AddBasketAuth(builder.Configuration);
 builder.Services.Configure<SecurityOptions>(builder.Configuration.GetSection(SecurityOptions.Section));
 builder.Services.AddHostedService<OwnerBootstrap>();
