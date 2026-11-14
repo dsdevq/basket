@@ -1849,3 +1849,58 @@ without a per-page read.
   relink and fleet link, the mirror: replace within a day, a new row the next day, unlinked and other-shop pages untouched, no-price and
   unavailable readings, `confirmed_at` untouched) and the price formatting specs. The existing plan, by-shop, promotion and scorecard tests
   pass unchanged. Fixtures are invented products; no real data or token is in this public repository.
+
+## Compare sheet: the same product across the four shops while forming the list (2026-11-14, issue #35, epic #22)
+
+Owner's words: "My partner lists the products I need to buy - I can see the list. Partnet can compare while forming the list the same
+products from different store." While the list is formed on the Shelf, one product can be opened at all four shops, with price, the
+day it was read and the shop's photo, and a shop picked for the line or left to the plan. Frontend only; no backend change and **no
+migration**.
+
+- **Borrowed pattern, named.** The per-store price row of price-comparison grocery apps (shop, photo, price, the day it was read), the
+  row the Plan tab already uses, here as a bottom sheet (the drawer the match sheet and the item sheet use) with `cmn-list-section`,
+  `cmn-list-item-row` and `cmn-tag` only. A tap on a row is a native row action; nothing else is invented.
+- **Where it opens.** Every Shelf tile has a scale button in its corner (`Compare <product> across the shops`). The tile's own tap
+  stays tap-to-add, the Shelf's rule (Bring! tiles, see "The Shelf" above): making the tile open the sheet would turn the weekly
+  one-tap add into two taps for every product, and a long-press would be an interaction nobody can find. The button sits beside the
+  tile's pressed button, not inside it, so a tap on the tile and a tap on the button never do each other's work.
+- **Data: what the Shelf already has.** The sheet reads the product from `GET /api/products` (each shop's linked page, its latest
+  reading, the shop's photo and title for it, the last price paid from a receipt), the same entry the tile draws. It does not call
+  the catalog and does not wait for the equivalents API (issue 138); when that exists it replaces the source of the rows, not the
+  sheet. A shop with no linked page still gets its row ("No page there"), so the sheet always answers for all four, in the app's
+  fixed order (Lidl, Aldi, Tesco, Dunnes).
+- **Stale or missing is flagged, never guessed.** Staleness is the Plan's and Promotions' window, 3 days (`STALE_AFTER_DAYS`, the same
+  number as `PromotionBuilder.StaleAfterDays`): a reading from the 3rd day back counts, the 4th is "Old price". The shelf answer has no
+  server clock, so the age is the reading's `observedOn` against today's Dublin day, worked out on the phone; a day that cannot be read
+  counts as old. A flagged row keeps its figure and its date dimmed with a warning tag, and shows no promo or old price. A row is one
+  of: a usable price (no tag); `Old price`; `Out of stock`; `Offer not started` or `Offer ended` (the shelf's "from 12 Nov" / "ended");
+  `No price listed`; `Not read yet` (a linked page with no reading; "Waiting for the next PC read" for Aldi, Tesco and Dunnes);
+  `No price read` (a shop known only from a receipt: no figure, just "Last paid €1.19 on 3 Nov", which is not a price today);
+  `No page there` (nothing linked, nothing bought; the row is dimmed and cannot be chosen, and shows the suggested pages waiting for a
+  yes or no on the Prices tab). "Last paid: not yet connected" is Settings' business and is not drawn here.
+- **No "cheapest" tag.** The product answer carries no unit price, and a 2 L at one shop beside a 1 L at another is not a comparison:
+  the Plan owns that call (lowest unit price among fresh, comparable readings, "Not comparable" otherwise). The sheet lists the shops
+  in a fixed order with each shop's own title for the product, so the pack size is readable, and the first row hands the decision on.
+- **Choosing a shop sets the line's chip; leaving it unset leaves it to the plan.** Five rows: "Leave it to the plan" first, then the
+  four shops. A shop row puts the product on the list at that shop (the chip on the List row is that shop's tag); the first row puts
+  it on with no shop, which is what the Plan tab prices. A shop can be chosen when its page is linked or a receipt shows the household
+  bought the product there, the server's own rule (`not_sold_there` otherwise), so a shop with neither is not offered. The sheet marks
+  "On the list" on the shop the product already waits at (or on the first row when it waits with no shop).
+- **A line is one product at one shop, so choosing moves it.** When the product already has exactly one open line at another shop (or
+  none), the new line is added first and the old one deleted only after the server took the new one; a failure leaves the list as it
+  was. When it waits at several shops, which of them is meant is not known: the new line is added and none is removed. A ticked line is
+  history and is ignored. Moving changes who added the line to the person who chose. This is the existing `POST /api/list/items` and
+  `DELETE /api/list/items/{id}`; there is no endpoint to change a line's shop, and none is added here.
+- **On All, "On the list" means on the list anywhere.** The Shelf's "All" tile used to look only for a line with no shop; with a shop
+  chosen from the sheet, a product waiting at Aldi would have looked absent and a tap would have added a second line. On All a tile now
+  shows "On the list" when the product has an open line at any shop (or none) and a tap adds nothing; a shop's filter still looks for
+  that shop's line only.
+- **Screens.** No route, so nothing new in the route scan or the screen list; the sheet is a drawer like the match sheet. The Shelf
+  screen changes (the button on each tile), so its baselines are re-rendered by the **Update screen baselines** workflow on the PR
+  branch, never by hand. No library finding: the sheet is built from the library's components and the tile's button is `cmn-button`.
+- **Tests.** `compare-format.spec.ts` (every state, the 3rd-day and 4th-day boundary, a product with no entries, receipt-only shops,
+  Dublin's day), `compare.sheet.spec.ts` (five rows, which are buttons, choose a shop, leave it to the plan, a refused line keeps the
+  sheet open, the on-list marks), `ListStore.setProductStore` in `list.store.spec.ts` (move, add-first order, same shop, refusal,
+  several shops, ticked line), the Shelf page spec (the button opens the sheet and adds nothing; All's on-list rule) and two
+  end-to-end flows in `shelf-flow.spec.ts` (choose Tesco then move to Lidl, and a price older than three days). Every product in them
+  is invented.

@@ -49,6 +49,6 @@ test('a reloaded Shelf line is marked on the list and tapping its tile adds no s
   const milk = page.locator('bk-shelf-card').filter({hasText: 'Whole milk 2L'});
   await expect(milk).toContainText('On the list');
 
-  await milk.locator('button').click({force: true});
+  await milk.locator('cmn-selectable-card button').click({force: true});
   expect(posts).toBe(0);
 });

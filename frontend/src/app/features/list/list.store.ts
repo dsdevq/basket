@@ -91,6 +91,26 @@ export const ListStore = signalStore(
           }
         },
 
+        /**
+         * Sets the shop of a product's line from the compare sheet. A line is one product at one shop, so a product already
+         * waiting at another shop (or at none) is moved: the new line is added first and the old one removed only after the
+         * server took it, so a failure leaves the list as it was. A product waiting at several shops gets the new line added
+         * and none removed, because which of them is meant is not known. False when the line did not go through.
+         */
+        async setProductStore(productId: string, shop: StoreId | null): Promise<boolean> {
+          const waiting = store.toBuy().filter(item => item.productId === productId);
+          if (waiting.some(item => item.store === shop)) {
+            return true;
+          }
+          if (!(await this.addProduct(productId, shop))) {
+            return false;
+          }
+          if (waiting.length === 1 && waiting[0]) {
+            await this.remove(waiting[0]);
+          }
+          return true;
+        },
+
         async toggle(item: ListItem, checked: boolean): Promise<void> {
           const me = session.user();
           const optimistic: ListItem = {
