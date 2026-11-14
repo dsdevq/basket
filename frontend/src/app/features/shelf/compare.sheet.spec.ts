@@ -116,7 +116,7 @@ describe('CompareSheetComponent', () => {
     const {rows} = await render();
 
     const faded = rows().map(row =>
-      row.querySelector('.font-label')?.classList.contains('text-text-secondary'),
+      row.querySelector('.font-label')?.classList.contains('text-text-secondary')
     );
 
     expect(faded).toEqual([false, false, true, false, true]);
