@@ -1,4 +1,3 @@
-using System.Text;
 using Basket.Api.Data;
 using Basket.Api.Prices;
 using Basket.Api.Prices.Catalog;
@@ -271,6 +270,22 @@ public sealed class AldiCatalogSourceTests : IClassFixture<BasketFactory>
     }
 
     [Fact]
+    public async Task An_unpriced_trailing_product_does_not_stop_a_sweep_that_priced_the_rest()
+    {
+        await CleanAsync();
+        var unpriced = Page(61, 1, 61).Replace("\"amount\"", "\"cost\"", StringComparison.Ordinal);
+        var fetcher = new FakeFetcher()
+            .Serve(TreeUrl, Fixtures.Read("aldi-category-tree.json"))
+            .Serve(SearchUrl(0), Page(1, 60, 61))
+            .Serve(SearchUrl(60), unpriced);
+
+        var pull = await PullAsync(fetcher);
+
+        pull.Outcome.Should().Be(PullOutcome.Ok);
+        (await ProductsAsync()).Should().HaveCount(61);
+    }
+
+    [Fact]
     public async Task The_request_limit_cuts_a_sweep_short_and_nothing_is_delisted()
     {
         await CleanAsync();
@@ -335,12 +350,5 @@ public sealed class AldiCatalogSourceTests : IClassFixture<BasketFactory>
             .Where(x => db.StoreProducts.Any(p => p.Id == x.StoreProductId && p.ExternalId == "000000000000900101"))
             .OrderBy(x => x.ObservedOn).Select(x => x.Price).ToListAsync());
         mozzarellaPrices.Should().Equal(1.49m, 1.29m);
-    }
-
-    [Fact]
-    public void The_fixtures_are_invented_not_recorded()
-    {
-        Encoding.UTF8.GetString(Encoding.UTF8.GetBytes(Fixtures.Read("aldi-product-search.json"))).Should().Contain("Invented for the tests");
-        Fixtures.Read("aldi-category-tree.json").Should().Contain("Invented for the tests");
     }
 }

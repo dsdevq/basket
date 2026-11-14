@@ -46,6 +46,7 @@ public sealed partial class AldiCatalogSource(
         var discontinued = new HashSet<string>(StringComparer.Ordinal);
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var requests = 0;
+        var anyPriced = false;
 
         var tree = await fetcher.GetAsync(new Uri($"{ApiBase}/product-category-tree?currency=EUR"), ct);
         requests++;
@@ -96,13 +97,14 @@ public sealed partial class AldiCatalogSource(
             }
 
             var live = parsed.Products.Where(p => !p.Discontinued).ToList();
-            if (live.Count > 0 && live.All(p => p.Item.Price is null))
+            if (!anyPriced && live.Count > 0 && live.All(p => p.Item.Price is null))
             {
                 log.LogWarning("None of the {Count} Aldi products at offset {Offset} carried a price", live.Count, offset);
                 stopped = $"Aldi's product list at offset {offset} was not in the shape basket reads (no product had a price), the API may have changed.";
                 break;
             }
 
+            anyPriced |= live.Any(p => p.Item.Price is not null);
             var readings = new List<CatalogReading>();
             foreach (var product in parsed.Products)
             {
