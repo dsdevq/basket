@@ -1,0 +1,68 @@
+import type {VerdictPill, VerdictStatus} from '@lifekit-hq/ui';
+
+import {euro} from '../prices/price-format';
+import type {ScorecardMonth, ScorecardResponse, ScorecardStore} from './scorecard.model';
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function plural(count: number, one: string, many: string): string {
+  return `${count} ${count === 1 ? one : many}`;
+}
+
+/** "2026-11" -> "Nov 2026". */
+export function monthLabel(month: string): string {
+  const match = /^(\d{4})-(\d{2})$/.exec(month);
+  return match ? `${MONTHS[Number(match[2]) - 1] ?? ''} ${match[1]}`.trim() : month;
+}
+
+/** The shops with a win, most wins first (the server's fixed order breaks a tie), then the rest. */
+export function orderedStores(card: ScorecardResponse): readonly ScorecardStore[] {
+  return card.stores
+    .map((store, order) => ({store, order}))
+    .sort((a, b) => b.store.wins - a.store.wins || a.order - b.order)
+    .map(entry => entry.store);
+}
+
+/** Newest month first, so the latest sits under the heading. */
+export function newestFirst(card: ScorecardResponse): readonly ScorecardMonth[] {
+  return [...card.trend].reverse();
+}
+
+export function storeDetail(store: ScorecardStore): string {
+  return store.wins
+    ? `${plural(store.wins, 'win', 'wins')} · ${store.share}% of compared lines`
+    : 'No wins';
+}
+
+export function monthDetail(month: ScorecardMonth): string {
+  return month.trips
+    ? `${plural(month.trips, 'trip', 'trips')} · ${plural(month.compared, 'line', 'lines')} compared`
+    : 'No trips';
+}
+
+export interface ScorecardVerdict {
+  readonly status: VerdictStatus;
+  readonly pills: readonly VerdictPill[];
+  readonly caveat: string;
+}
+
+/** The answer on top, worded from the server's counts: who wins most, what the winners saved (in the pill), and how many lines could not be compared. Kept to one short line: the months below carry the trend. */
+export function verdict(card: ScorecardResponse): ScorecardVerdict {
+  const top = card.stores.find(store => store.store === card.topStore);
+  const skipped = card.notCompared ? ` ${card.notCompared} not compared.` : '';
+  if (!top) {
+    return {
+      status: {tone: 'warning', label: 'Nothing to score yet'},
+      pills: [{label: plural(card.trips, 'trip', 'trips'), tone: 'warning'}],
+      caveat: `No line had fresh prices at two shops.${skipped}`,
+    };
+  }
+  return {
+    status: {tone: 'success', label: `${top.storeName} wins most`},
+    pills: [
+      {label: `${euro(card.saved)} saved`, tone: 'success'},
+      {label: plural(card.compared, 'line', 'lines')},
+    ],
+    caveat: `${top.storeName} was cheapest on ${top.wins} of ${card.compared} lines.${skipped}`,
+  };
+}

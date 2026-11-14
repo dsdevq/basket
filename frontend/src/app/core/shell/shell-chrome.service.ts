@@ -21,6 +21,7 @@ const SHELF: NavItem = {label: 'Shelf', icon: 'Store', route: '/shelf'};
 const PLAN: NavItem = {label: 'Plan', icon: 'ListChecks', route: '/plan'};
 const PRICES: NavItem = {label: 'Prices', icon: 'Tag', route: '/prices'};
 const PROMOTIONS: NavItem = {label: 'Promotions', icon: 'BadgePercent', route: '/promotions'};
+const SCORECARD: NavItem = {label: 'Scorecard', icon: 'Trophy', route: '/scorecard'};
 const CARDS: NavItem = {label: 'Cards', icon: 'WalletCards', route: '/cards'};
 const PEOPLE: NavItem = {label: 'People', icon: 'Users', route: '/people'};
 const SETTINGS_ROUTE = '/settings';
@@ -64,8 +65,8 @@ export class ShellChromeService {
 
   public readonly navItems = computed<NavItem[]>(() =>
     this.session.isOwner()
-      ? [LIST, SHELF, PLAN, PRICES, CARDS, PROMOTIONS, PEOPLE]
-      : [LIST, SHELF, PLAN, PRICES, CARDS, PROMOTIONS]
+      ? [LIST, SHELF, PLAN, PRICES, CARDS, PROMOTIONS, SCORECARD, PEOPLE]
+      : [LIST, SHELF, PLAN, PRICES, CARDS, PROMOTIONS, SCORECARD]
   );
 
   public readonly account = computed<AppLayoutAccount | undefined>(() => {

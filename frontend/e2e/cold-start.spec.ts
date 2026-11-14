@@ -14,6 +14,7 @@ const PAGES = [
   '/plan/by-shop',
   '/prices',
   '/promotions',
+  '/scorecard',
   '/cards',
   '/cards/tesco',
   '/more',

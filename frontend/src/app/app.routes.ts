@@ -88,6 +88,13 @@ export const APP_ROUTES: Routes = [
           import('./features/promotions/promotions.page').then(m => m.PromotionsPage),
       },
       {
+        path: 'scorecard',
+        title: 'Scorecard',
+        data: {title: 'Scorecard', parent: '/more'} satisfies PageChromeData,
+        loadComponent: () =>
+          import('./features/scorecard/scorecard.page').then(m => m.ScorecardPage),
+      },
+      {
         path: 'cards',
         title: 'Cards',
         data: {title: 'Cards'} satisfies PageChromeData,

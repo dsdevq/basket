@@ -192,6 +192,42 @@ export const PRODUCTS = {
     },
   ],
 };
+const SCORECARD = {
+  asOf: '2026-11-14',
+  staleAfterDays: 3,
+  months: 6,
+  trips: 5,
+  compared: 14,
+  notCompared: 3,
+  saved: 9.65,
+  topStore: 'aldi',
+  stores: [
+    {store: 'lidl', storeName: 'Lidl', wins: 4, share: 29},
+    {store: 'aldi', storeName: 'Aldi', wins: 8, share: 57},
+    {store: 'tesco', storeName: 'Tesco', wins: 2, share: 14},
+    {store: 'dunnes', storeName: 'Dunnes', wins: 0, share: 0},
+  ],
+  trend: [
+    {month: '2026-06', trips: 0, compared: 0, saved: 0},
+    {month: '2026-07', trips: 0, compared: 0, saved: 0},
+    {month: '2026-08', trips: 0, compared: 0, saved: 0},
+    {month: '2026-09', trips: 1, compared: 3, saved: 1.8},
+    {month: '2026-10', trips: 2, compared: 5, saved: 3.35},
+    {month: '2026-11', trips: 2, compared: 6, saved: 4.5},
+  ],
+};
+
+const SCORECARD_EMPTY = {
+  ...SCORECARD,
+  trips: 0,
+  compared: 0,
+  notCompared: 0,
+  saved: 0,
+  topStore: null,
+  stores: SCORECARD.stores.map(shop => ({...shop, wins: 0, share: 0})),
+  trend: SCORECARD.trend.map(month => ({...month, trips: 0, compared: 0, saved: 0})),
+};
+
 const PROMOTIONS = {
   asOf: '2026-11-06',
   staleAfterDays: 3,
@@ -912,6 +948,7 @@ export async function signedIn(page: Page): Promise<void> {
   await page.route('**/api/promotions', r => r.fulfill({json: PROMOTIONS}));
   await page.route('**/api/plan', r => r.fulfill({json: PLAN}));
   await page.route('**/api/plan/by-shop', r => r.fulfill({json: BY_SHOP}));
+  await page.route('**/api/scorecard', r => r.fulfill({json: SCORECARD}));
   await page.route('**/api/cards', r => r.fulfill({json: {cards: CARDS}}));
   await page.route('**/api/cards/tesco', r => r.fulfill({json: TESCO_CARD}));
   await page.route('**/api/members', r => r.fulfill({json: MEMBERS}));
@@ -981,6 +1018,15 @@ export const ROUTES: readonly Route[] = [
   },
   {name: 'prices', path: '/prices', setup: signedIn},
   {name: 'promotions', path: '/promotions', setup: signedIn},
+  {name: 'scorecard', path: '/scorecard', setup: signedIn},
+  {
+    name: 'scorecard-empty',
+    path: '/scorecard',
+    setup: async page => {
+      await signedIn(page);
+      await page.route('**/api/scorecard', r => r.fulfill({json: SCORECARD_EMPTY}));
+    },
+  },
   {name: 'cards', path: '/cards', setup: signedIn},
   {name: 'card', path: '/cards/tesco', setup: signedIn},
   {
