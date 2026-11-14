@@ -21,13 +21,13 @@ public sealed record ServerCandidateResult(int Products, int Proposed, int Linke
 /// the catalog arrives through the existing ingest and sweeps.
 /// <para>
 /// Narrowing, because the catalog is tens of thousands of rows: a row is a candidate when it has the product's barcode, or when it
-/// states the product's size (amount, unit and pack count) and its name holds the first or the last generic word of the product's
+/// states the product's size (amount, unit and pack count) and its name holds the first generic word of the product's
 /// (the kind of thing it is). A product with neither a barcode nor a size is matched by nobody here: the endpoint still takes a
 /// search for it. Run when a product is added, when a page is confirmed (the product has learned a barcode, size and category) and when
 /// a sweep of a shop is completed (new rows to look at), the last one in batches of <see cref="BatchSize"/> products.
 /// </para>
 /// </summary>
-public sealed class ServerCandidates(AppDbContext db, PriceRecorder prices, TimeProvider clock, ILogger<ServerCandidates> log)
+public sealed class ServerCandidates(AppDbContext db, TimeProvider clock, ILogger<ServerCandidates> log)
 {
     /// <summary>Products loaded and matched together in a sweep-wide run.</summary>
     public const int BatchSize = 25;
@@ -39,42 +39,47 @@ public sealed class ServerCandidates(AppDbContext db, PriceRecorder prices, Time
     public Task<ServerCandidateResult> RunForProductAsync(Guid productId, CancellationToken ct) => RunAsync([productId], null, ct);
 
     /// <summary>Matches every product with an open gap in <paramref name="store"/> against that shop's catalog: a sweep of it has just closed.</summary>
-    public async Task<ServerCandidateResult> RunForStoreAsync(Store store, CancellationToken ct)
-    {
-        var ids = await db.Products.AsNoTracking()
-            .Where(p => !db.StoreListings.Any(l => l.ProductId == p.Id && l.Store == store && l.ConfirmedAt != null))
-            .OrderBy(p => p.Name).ThenBy(p => p.Id)
-            .Select(p => p.Id)
-            .ToListAsync(ct);
-        return await RunAsync(ids, store, ct);
-    }
+    public Task<ServerCandidateResult> RunForStoreAsync(Store store, CancellationToken ct) => RunAsync(null, store, ct);
 
-    private async Task<ServerCandidateResult> RunAsync(IReadOnlyList<Guid> productIds, Store? only, CancellationToken ct)
+    private async Task<ServerCandidateResult> RunAsync(IReadOnlyList<Guid>? productIds, Store? only, CancellationToken ct)
     {
         var total = new ServerCandidateResult(0, 0, 0);
-        foreach (var batch in productIds.Chunk(BatchSize))
+        try
         {
-            var products = await db.Products.Where(p => batch.Contains(p.Id)).OrderBy(p => p.Name).ThenBy(p => p.Id).ToListAsync(ct);
-            var listings = (await db.StoreListings.Where(l => batch.Contains(l.ProductId)).ToListAsync(ct)).ToLookup(l => l.ProductId);
-            var linkedIds = listings.SelectMany(g => g).Where(l => l.ConfirmedAt != null && l.StoreProductId != null).Select(l => l.StoreProductId!.Value).ToList();
-            var linked = await db.StoreProducts.AsNoTracking().Where(p => linkedIds.Contains(p.Id)).ToDictionaryAsync(p => p.Id, ct);
-
-            foreach (var product in products)
+            productIds ??= await db.Products.AsNoTracking()
+                .Where(p => !db.StoreListings.Any(l => l.ProductId == p.Id && l.Store == only && l.ConfirmedAt != null))
+                .OrderBy(p => p.Name).ThenBy(p => p.Id)
+                .Select(p => p.Id)
+                .ToListAsync(ct);
+            foreach (var batch in productIds.Chunk(BatchSize))
             {
-                try
+                var products = await db.Products.Where(p => batch.Contains(p.Id)).OrderBy(p => p.Name).ThenBy(p => p.Id).ToListAsync(ct);
+                var listings = (await db.StoreListings.Where(l => batch.Contains(l.ProductId)).ToListAsync(ct)).ToLookup(l => l.ProductId);
+                var linkedIds = listings.SelectMany(g => g).Where(l => l.ConfirmedAt != null && l.StoreProductId != null).Select(l => l.StoreProductId!.Value).ToList();
+                var linked = await db.StoreProducts.AsNoTracking().Where(p => linkedIds.Contains(p.Id)).ToDictionaryAsync(p => p.Id, ct);
+
+                foreach (var product in products)
                 {
-                    var result = await MatchAsync(product, listings[product.Id].ToList(), linked, only, ct);
-                    await db.SaveChangesAsync(ct);
-                    total += result;
-                }
-                catch (Exception ex) when (ex is not OperationCanceledException)
-                {
-                    // One product's failure (two runs racing on the same page, say) must not stop the others, nor fail the request
-                    // that triggered the run: a proposal is a convenience, the next trigger tries again.
-                    log.LogWarning(ex, "Candidate matching failed for product {ProductId}", product.Id);
-                    db.ChangeTracker.Clear();
+                    try
+                    {
+                        var result = await MatchAsync(product, listings[product.Id].ToList(), linked, only, ct);
+                        await db.SaveChangesAsync(ct);
+                        total += result;
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException)
+                    {
+                        log.LogWarning(ex, "Candidate matching failed for product {ProductId}", product.Id);
+                        db.ChangeTracker.Clear();
+                    }
                 }
             }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // A proposal is a convenience: whatever fails here (a racing run, a dropped connection) must not fail the add, the confirm
+            // or the closing of the sweep that triggered the run; the next trigger tries again.
+            log.LogWarning(ex, "Candidate matching failed");
+            db.ChangeTracker.Clear();
         }
 
         if (total.Proposed > 0 || total.Linked > 0)
@@ -126,13 +131,6 @@ public sealed class ServerCandidates(AppDbContext db, PriceRecorder prices, Time
                 {
                     passed.Add((row, new Proposal(url, title, row.Barcode, verdict)));
                 }
-                else if (known is not null)
-                {
-                    // The catalog's own reading of an open proposal no longer matches (the product learned a barcode or category since):
-                    // it is withdrawn, as changing a product's barcode withdraws what can no longer match.
-                    db.MatchCandidates.Remove(known);
-                    all.Remove(url);
-                }
             }
 
             if (listing is null && passed.FirstOrDefault(p => p.Proposal.Verdict.Basis == MatchBasis.Barcode) is { Row: not null } exact)
@@ -183,8 +181,7 @@ public sealed class ServerCandidates(AppDbContext db, PriceRecorder prices, Time
         }
 
         var size = facts.Size ?? ProductSize.Parse(facts.Name);
-        var words = CandidateMatcher.KeyWords(facts.Name);
-        if (size is not null && words.Count > 0)
+        if (size is not null && CandidateMatcher.KeyWord(facts.Name) is { } word)
         {
             var unit = size.Unit switch
             {
@@ -193,11 +190,10 @@ public sealed class ServerCandidates(AppDbContext db, PriceRecorder prices, Time
                 _ => StoreProduct.Each,
             };
             var bySize = shop.Where(p => p.SizeUnit == unit && p.SizeAmount == size.Amount && p.SizePacks == size.Packs);
-            // The words are letters and digits only (the matcher's folding), so they carry no LIKE syntax.
-            var first = $"%{words[0]}%";
-            var last = $"%{words[^1]}%";
+            // The word is letters and digits only (the matcher's folding), so they carry no LIKE syntax.
+            var like = $"%{word}%";
             foreach (var row in await bySize
-                         .Where(p => EF.Functions.ILike(p.Name, first) || EF.Functions.ILike(p.Name, last) || (p.Brand != null && (EF.Functions.ILike(p.Brand + " " + p.Name, first) || EF.Functions.ILike(p.Brand + " " + p.Name, last))))
+                         .Where(p => EF.Functions.ILike(p.Name, like))
                          .OrderBy(p => p.Name).ThenBy(p => p.Id).Take(MaxRowsPerStore).ToListAsync(ct))
             {
                 rows[row.Id] = row;
@@ -221,25 +217,12 @@ public sealed class ServerCandidates(AppDbContext db, PriceRecorder prices, Time
             ? new ProductSize(unit == StoreProduct.Grams ? SizeUnit.Mass : unit == StoreProduct.Millilitres ? SizeUnit.Volume : SizeUnit.Count, amount, row.SizePacks)
             : null;
 
-    /// <summary>
-    /// Makes the barcode-exact row the product's page in <paramref name="store"/>, unconfirmed, and gives it the row's latest reading so
-    /// it shows a price before the next sweep (the sweep mirrors the same row from then on).
-    /// </summary>
+    /// <summary>Makes the barcode-exact row the product's page in <paramref name="store"/>, unconfirmed.</summary>
     private async Task LinkAsync(Product product, Store store, StoreProduct row, string url, DateTimeOffset now, CancellationToken ct)
     {
         var listing = await ProductEndpoints.PointListingAsync(db, null, product.Id, store, url, now, ct);
         listing.Title = PriceRecorder.Truncate(TitleOf(row), 300);
         listing.ImageUrl = row.ImageUrl;
         listing.Category = PriceRecorder.Truncate(row.Category, StoreListing.MaxCategoryLength);
-
-        var price = await db.StoreProductPrices.AsNoTracking().Where(p => p.StoreProductId == row.Id).OrderByDescending(p => p.ObservedOn).FirstOrDefaultAsync(ct);
-        if (price is not null && (price.Price is not null || price.LoyaltyPrice is not null || !price.InStock))
-        {
-            await prices.RecordAsync(
-                listing,
-                new PriceQuote(TitleOf(row), price.Price, price.WasPrice, price.LoyaltyPrice, price.LoyaltyScheme, price.PromoText, price.ValidFrom, price.ValidUntil, price.InStock, row.ImageUrl, row.Category),
-                row.LastSeenAt,
-                ct);
-        }
     }
 }

@@ -270,11 +270,11 @@ public class GenericMatcherTests
     // ---- narrowing the catalog -----------------------------------------------------------------------------------
 
     [Theory]
-    [InlineData("Avonmore Whole Milk 2L", new[] { "avonmore", "milk" })]
-    [InlineData("Tesco Whole Milk 2L", new[] { "whole", "milk" })]
-    [InlineData("Milk 2L", new[] { "milk" })]
-    [InlineData("Tesco 2L", new string[0])]
-    [InlineData("Free range eggs, pack of 12", new[] { "free", "egg" })]
-    public void The_key_words_are_the_first_and_last_generic_word(string name, string[] expected) =>
-        CandidateMatcher.KeyWords(name).Should().Equal(expected);
+    [InlineData("Avonmore Whole Milk 2L", "avonmore")]
+    [InlineData("Tesco Whole Milk 2L", "whole")]
+    [InlineData("Milk 2L", "milk")]
+    [InlineData("Tesco 2L", null)]
+    [InlineData("Free range eggs, pack of 12", "free")]
+    public void The_key_word_is_the_first_generic_word(string name, string? expected) =>
+        CandidateMatcher.KeyWord(name).Should().Be(expected);
 }
