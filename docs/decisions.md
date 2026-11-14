@@ -1493,3 +1493,27 @@ work for either person (`ListTests`).
   the partner picking from the Shelf, the row naming them as who added it, and the owner ticking and the partner deleting that row.
 - **Screens.** The `list` baselines change (a thumbnail on each row). They are re-rendered by the "Update screen baselines"
   workflow on this branch, not committed from a local run.
+
+## Dunnes: the parser reads the server-rendered state (2026-11-14, parser fix for the scout finding)
+
+- **The finding.** A scout found the PC reader read every Dunnes product page as "no price on the page" (report
+  `bsk-dunnes-no-price`, 2026-11-14). The 2026-11-08 parser (see "Dunnes: the store, its address shape and the reader's parser")
+  read the price from a schema.org JSON-LD Product offer, written blind because Cloudflare had blocked the author; the site never
+  publishes one (its only JSON-LD is a `WebPage` and an `OnlineStore`), so no Dunnes page could ever give a reading.
+- **The fix.** `parseDunnes` reads `window.__PRELOADED_STATE__.product` from the HTML (the parser stays HTML-only). A small helper,
+  `readAssignedJson` (`src/parse/state.ts`), cuts the object at its matching brace with a string- and escape-aware scan and parses it,
+  so another store's parser can read a page's embedded state the same way. Price from `price` (`toMoney` drops the euro sign),
+  stock from `available`, name, category (the deepest `categoryBreadcrumb` without the leading `/Grocery`) and photo
+  (`image.default`, else `og:image`).
+- **Guard.** `String(product.sku)` must equal the number at the end of the address, else the page is unreadable and nothing is
+  posted: an offer recorded against the wrong product is worse than a missing one. No state script, or no price on a product that is
+  not out of stock, stays `unreadable: no price on the page`; `available: false` is a valid out-of-stock reading.
+- **Promotions** map cleanly, so they are read: the first promotion not tied to a loyalty card gives `promoText` (its description) and
+  `validFrom`/`validUntil` from its local `startDate`/`endDate` (dd/mm/yyyy, as the shop shows them). The price stays the shelf price,
+  so a "Buy 2 for EUR 14" deal is text, not a changed price. **Not read:** `wasPrice` (no recorded page has one yet) and loyalty-card
+  promotions (Dunnes has no card price in basket).
+- **Verified on recorded pages, not live.** The fixtures are trimmed Wayback Machine raw captures of the Gold Kiwi 4pk page
+  (2025-09-07) and the Aussie shampoo page (2026-11-04, with a promotion), marked as recorded in their first comment; the two
+  hand-written ones are gone. Cloudflare currently answers the reader's profile with a 403 challenge, so nothing was run against a
+  live page. The reader still stops on a refusal; this changes nothing about that.
+
