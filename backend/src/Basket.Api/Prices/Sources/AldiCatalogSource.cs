@@ -43,7 +43,7 @@ public sealed partial class AldiCatalogSource(
     public async Task<StorePull> PullAsync(IReadOnlyList<ListingToCheck> listings, CancellationToken ct)
     {
         var startedAt = clock.GetUtcNow();
-        var wanted = listings.Select(l => SkuOf(l.Url)).Where(s => s is not null).Select(s => s!).ToHashSet(StringComparer.Ordinal);
+        var wanted = listings.Select(l => SkuOf(l)).Where(s => s is not null).Select(s => s!).ToHashSet(StringComparer.Ordinal);
         var quotes = new Dictionary<string, PriceQuote>(StringComparer.Ordinal);
         var discontinued = new HashSet<string>(StringComparer.Ordinal);
         var unpriced = new HashSet<string>(StringComparer.Ordinal);
@@ -179,7 +179,7 @@ public sealed partial class AldiCatalogSource(
         var results = new Dictionary<Guid, ListingPull>();
         foreach (var listing in listings)
         {
-            var sku = SkuOf(listing.Url);
+            var sku = SkuOf(listing);
             if (sku is not null && quotes.TryGetValue(sku, out var quote))
             {
                 results[listing.ListingId] = ListingPull.Priced(quote);
@@ -219,12 +219,7 @@ public sealed partial class AldiCatalogSource(
     private static PriceQuote QuoteOf(CatalogReading reading) =>
         new(reading.Name, reading.Price.Price, reading.Price.WasPrice, null, null, null, null, null, reading.Price.InStock, reading.ImageUrl, reading.Category);
 
-    /// <summary>Aldi's own id for a product page: the number at the end of its address.</summary>
-    internal static string? SkuOf(Uri url)
-    {
-        var match = SkuAtEnd().Match(url.AbsolutePath);
-        return match.Success ? match.Groups["sku"].Value : null;
-    }
+    private static string? SkuOf(ListingToCheck listing) => Stores.ProductId(Store.Aldi, listing.Url.ToString());
 
     private sealed record AldiProduct(string Sku, bool Discontinued, CatalogItem Item);
 
@@ -428,9 +423,6 @@ public sealed partial class AldiCatalogSource(
                 _ => null,
             }
             : null;
-
-    [GeneratedRegex(@"-(?<sku>\d{6,})$")]
-    private static partial Regex SkuAtEnd();
 
     [GeneratedRegex(@"\d+(?:\.\d{1,2})?")]
     private static partial Regex Amount();
