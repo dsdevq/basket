@@ -33,6 +33,12 @@ public sealed class ScorecardTests
             return product.Id;
         }
 
+        public void Reading(Guid productId, Store store, decimal price, DateOnly on)
+        {
+            var listing = _listings.Single(l => l.ProductId == productId && l.Store == store);
+            _readings.Add(new PriceObservation { Id = Guid.NewGuid(), ListingId = listing.Id, ObservedOn = on, Price = price, InStock = true });
+        }
+
         public ScorecardResponse Build(params ScorecardTrip[] trips) =>
             ScorecardBuilder.Build(trips, _products.ToDictionary(p => p.Id), _listings.ToLookup(l => l.ProductId), _readings.ToLookup(r => r.ListingId), Today);
     }
@@ -82,7 +88,7 @@ public sealed class ScorecardTests
         var tripDay = new DateOnly(2026, 11, 3);
         // Aldi was cheaper on the trip day; a later reading (today) has Lidl cheaper and must not change the trip's winner.
         var milk = shelf.Product("Milk 2L", (Store.Aldi, 1.90m, "Milk 2L", tripDay), (Store.Lidl, 2.20m, "Milk 2L", tripDay));
-        shelf.Product("Other", (Store.Aldi, 5m, "Other 1kg", Today));
+        shelf.Reading(milk, Store.Lidl, 1.50m, Today);
 
         var r = shelf.Build(Trip(tripDay, 1, milk));
 
@@ -128,7 +134,7 @@ public sealed class ScorecardTests
         var (owner, _) = await factory.OwnerAsync();
         factory.Clock.SetUtcNow(new DateTimeOffset(2026, 11, 14, 12, 0, 0, TimeSpan.Zero));
         var day = new DateOnly(2026, 11, 14);
-        var productId = await factory.WithDb(async db =>
+        await factory.WithDb(async db =>
         {
             var by = db.Users.Select(u => u.Id).First();
             var milk = new Product { Id = Guid.NewGuid(), Name = "Whole milk 2L", AddedAt = DateTimeOffset.UtcNow, AddedByUserId = by };
@@ -146,7 +152,7 @@ public sealed class ScorecardTests
                 new TripItem { Id = Guid.NewGuid(), TripId = trip.Id, Text = "Whole milk 2L", ProductId = milk.Id },
                 new TripItem { Id = Guid.NewGuid(), TripId = trip.Id, Text = "Birthday candles" });
             await db.SaveChangesAsync();
-            return milk.Id;
+            return 0;
         });
 
         var body = await owner.GetFromJsonAsync<JsonElement>("/api/scorecard");
@@ -157,6 +163,5 @@ public sealed class ScorecardTests
         body.GetProperty("topStore").GetString().Should().Be("aldi");
         body.GetProperty("staleAfterDays").GetInt32().Should().Be(3);
         body.GetProperty("trend").GetArrayLength().Should().Be(6);
-        productId.Should().NotBeEmpty();
     }
 }
