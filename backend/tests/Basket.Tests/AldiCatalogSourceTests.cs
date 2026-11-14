@@ -36,7 +36,7 @@ public sealed class AldiCatalogSourceTests : IClassFixture<BasketFactory>
         return "{\"meta\":{\"pagination\":{\"totalCount\":" + total + "}},\"data\":[" + products + "]}";
     }
 
-    private async Task<T> SweepAsync<T>(FakeFetcher fetcher, Func<AldiCatalogSource, Task<T>> run, int maxRequests = 60) =>
+    private async Task<T> SweepAsync<T>(FakeFetcher fetcher, Func<AldiCatalogSource, Task<T>> run) =>
         await _factory.WithDb(async db =>
         {
             var recorder = new CatalogRecorder(db);
@@ -46,7 +46,7 @@ public sealed class AldiCatalogSourceTests : IClassFixture<BasketFactory>
                 new CatalogIngest(db, recorder, _factory.Clock),
                 db,
                 _factory.Clock,
-                NullLogger<AldiCatalogSource>.Instance) { MaxRequests = maxRequests };
+                NullLogger<AldiCatalogSource>.Instance);
             return await run(source);
         });
 
@@ -289,14 +289,15 @@ public sealed class AldiCatalogSourceTests : IClassFixture<BasketFactory>
     public async Task The_request_limit_cuts_a_sweep_short_and_nothing_is_delisted()
     {
         await CleanAsync();
-        var fetcher = new FakeFetcher()
-            .Serve(TreeUrl, Fixtures.Read("aldi-category-tree.json"))
-            .Serve(SearchUrl(0), Page(1, 60, 600))
-            .Serve(SearchUrl(60), Page(61, 60, 600));
+        var fetcher = new FakeFetcher().Serve(TreeUrl, Fixtures.Read("aldi-category-tree.json"));
+        for (var page = 0; page < 70; page++)
+        {
+            fetcher.Serve(SearchUrl(page * 60), Page((page * 60) + 1, 60, 6000));
+        }
 
-        var pull = await SweepAsync(fetcher, s => s.PullAsync([], CancellationToken.None), maxRequests: 3);
+        var pull = await PullAsync(fetcher);
 
-        fetcher.Requested.Should().Equal(TreeUrl, SearchUrl(0), SearchUrl(60));
+        fetcher.Requested.Should().HaveCount(60).And.StartWith(new[] { TreeUrl, SearchUrl(0), SearchUrl(60) });
         pull.Outcome.Should().Be(PullOutcome.Partial);
         pull.Message.Should().Contain("request limit");
     }

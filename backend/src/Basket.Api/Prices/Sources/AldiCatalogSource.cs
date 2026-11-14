@@ -26,13 +26,13 @@ public sealed partial class AldiCatalogSource(
     public const int PageSize = 60;
 
     /// <summary>Aldi's product API. asl.api.aldi.ie answers the server while www.aldi.ie does not (docs/decisions.md).</summary>
-    public const string ApiBase = "https://asl.api.aldi.ie/v3";
+    private const string ApiBase = "https://asl.api.aldi.ie/v3";
 
     /// <summary>
     /// The most requests one sweep makes, the category tree included: the 60 polite requests a day the owner accepted for Aldi's
-    /// terms. Only a test lowers it.
+    /// terms.
     /// </summary>
-    public int MaxRequests { get; init; } = 60;
+    private const int MaxRequests = 60;
 
     public Store Store => Store.Aldi;
 
