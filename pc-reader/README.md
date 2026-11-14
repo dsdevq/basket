@@ -173,6 +173,14 @@ whether the live page still has this shape. A refusal stops the shop and is repo
 past it; `npm run profile` and its manual step below are written for Tesco and are not a Dunnes workaround. `npm start -- --store dunnes`
 runs only Dunnes.
 
+## The catalog probe
+
+`npm run probe -- --store tesco|dunnes [--out file.json]` reads `/robots.txt`, `/sitemap.xml`, the home page, one category page and one
+product page of that store (5 s apart, one at a time, no retries, stopping at the first refusal) in the reader's own profile, and
+writes one JSON report: statuses, robots rules, sitemap sizes, the JSON/XHR calls the pages made, a trimmed example product, whether a
+barcode appears, paging parameters and totals. It posts nothing and needs no token. Set `BASKET_READER_HEADLESS=1` to keep it windowless.
+See `docs/decisions.md` ("Catalog 1/14").
+
 ## Develop
 
 ```sh
