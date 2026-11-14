@@ -236,6 +236,24 @@ public sealed class AldiCatalogSourceTests : IClassFixture<BasketFactory>
         (await ProductsAsync()).Should().BeEmpty();
     }
 
+    [Theory]
+    [InlineData("\"meta\":{}")]
+    [InlineData("\"meta\":{\"pagination\":{\"totalCount\":\"many\"}}")]
+    [InlineData("\"paging\":{\"pagination\":{\"totalCount\":900}}")]
+    public async Task A_page_without_a_readable_total_is_not_a_finished_sweep(string meta)
+    {
+        await CleanAsync();
+        var products = Page(1, 3, 3);
+        var body = "{" + meta + products[products.IndexOf(",\"data\"", StringComparison.Ordinal)..];
+        var fetcher = new FakeFetcher().Serve(TreeUrl, Fixtures.Read("aldi-category-tree.json")).Serve(SearchUrl(0), body);
+
+        var pull = await PullAsync(fetcher);
+
+        pull.Outcome.Should().Be(PullOutcome.Failed);
+        pull.Message.Should().Contain("not in the shape");
+        (await ProductsAsync()).Should().BeEmpty();
+    }
+
     [Fact]
     public async Task The_request_limit_cuts_a_sweep_short_and_nothing_is_delisted()
     {

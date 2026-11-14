@@ -266,11 +266,10 @@ public sealed partial class AldiCatalogSource(
             throw new JsonException("no data list");
         }
 
-        var total = 0;
-        if (root.TryGetProperty("meta", out var meta) && meta.TryGetProperty("pagination", out var pagination)
-            && pagination.TryGetProperty("totalCount", out var count) && count.TryGetInt32(out var parsedTotal))
+        if (!root.TryGetProperty("meta", out var meta) || !meta.TryGetProperty("pagination", out var pagination)
+            || !pagination.TryGetProperty("totalCount", out var count) || !count.TryGetInt32(out var total))
         {
-            total = parsedTotal;
+            throw new JsonException("no total count");
         }
 
         var products = new List<AldiProduct>();
