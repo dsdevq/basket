@@ -133,4 +133,81 @@ describe('PricesStore', () => {
     ).toBeNull();
     expect(all).toHaveBeenCalledTimes(1);
   });
+
+  describe('match sheet answers', () => {
+    const CANDIDATE = {
+      id: 'c1',
+      store: 'lidl',
+      url: 'https://www.lidl.ie/p/milk/p1',
+      title: 'Milk',
+      barcode: null,
+      basis: 'name_size',
+      score: 70,
+    } as const;
+
+    it("lists one shop's suggestions only", async () => {
+      const other = {...CANDIDATE, id: 'c2', store: 'aldi'} as const;
+      const {store} = setup({
+        candidates: vi.fn().mockResolvedValue({candidates: [CANDIDATE, other]}),
+      });
+
+      expect(await store.candidates(PRODUCT, 'lidl')).toEqual([CANDIDATE]);
+    });
+
+    it('says null and toasts when the suggestions cannot be loaded', async () => {
+      const {store, toast} = setup({candidates: vi.fn().mockRejectedValue(new Error('offline'))});
+
+      expect(await store.candidates(PRODUCT, 'lidl')).toBeNull();
+      expect(toast.error).toHaveBeenCalledTimes(1);
+    });
+
+    it('saves a yes and a no, then re-reads the products so the answer shows', async () => {
+      const api = {
+        confirm: vi.fn().mockResolvedValue({}),
+        reject: vi.fn().mockResolvedValue(undefined),
+        all: vi.fn().mockResolvedValue({products: [PRODUCT], stores: []}),
+      };
+      const {store} = setup(api);
+
+      expect(await store.confirm(PRODUCT, CANDIDATE)).toBe(true);
+      expect(await store.reject(PRODUCT, CANDIDATE)).toBe(true);
+
+      expect(api.confirm).toHaveBeenCalledWith('p1', 'c1');
+      expect(api.reject).toHaveBeenCalledWith('p1', 'c1');
+      expect(api.all).toHaveBeenCalledTimes(2);
+    });
+
+    it('treats a suggestion the other person already answered as done', async () => {
+      const gone = new HttpErrorResponse({status: 404});
+      const api = {
+        reject: vi.fn().mockRejectedValue(gone),
+        all: vi.fn().mockResolvedValue({products: [PRODUCT], stores: []}),
+      };
+      const {store, toast} = setup(api);
+
+      expect(await store.reject(PRODUCT, CANDIDATE)).toBe(true);
+      expect(toast.error).not.toHaveBeenCalled();
+      expect(api.all).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not report a yes as saved when the suggestion was answered meanwhile', async () => {
+      const api = {
+        confirm: vi.fn().mockRejectedValue(new HttpErrorResponse({status: 404})),
+        all: vi.fn().mockResolvedValue({products: [PRODUCT], stores: []}),
+      };
+      const {store, toast} = setup(api);
+
+      expect(await store.confirm(PRODUCT, CANDIDATE)).toBe(false);
+      expect(toast.error).toHaveBeenCalledTimes(1);
+      expect(api.all).toHaveBeenCalledTimes(1);
+    });
+
+    it('reports a failed answer so the sheet keeps the suggestion', async () => {
+      const api = {confirm: vi.fn().mockRejectedValue(new HttpErrorResponse({status: 500}))};
+      const {store, toast} = setup(api);
+
+      expect(await store.confirm(PRODUCT, CANDIDATE)).toBe(false);
+      expect(toast.error).toHaveBeenCalledTimes(1);
+    });
+  });
 });

@@ -61,6 +61,145 @@ public sealed class MatchingTests : IClassFixture<BasketFactory>
     private static string[] Outcomes(JsonElement body) =>
         body.GetProperty("results").EnumerateArray().Select(r => r.GetProperty("outcome").GetString()!).ToArray();
 
+    // ---- the match sheet: confirm or reject ---------------------------------------------------------------------
+
+    private async Task<Guid[]> ProposeTwoAsync(HttpClient owner, Guid id)
+    {
+        (await owner.PostAsJsonAsync($"/api/products/{id}/candidates", new
+        {
+            store = "lidl",
+            results = new[] { Result(LidlMilk, "Milbona fresh whole milk 2 litres"), Result(LidlMilkOther, "Whole milk 2 litres") },
+        })).EnsureSuccessStatusCode();
+        var list = await Json(await owner.GetAsync($"/api/products/{id}/candidates"));
+        return list.GetProperty("candidates").EnumerateArray().Select(c => c.GetProperty("id").GetGuid()).ToArray();
+    }
+
+    [Fact]
+    public async Task Confirming_a_proposal_links_and_confirms_the_page_and_settles_the_shops_other_proposals()
+    {
+        var (owner, id) = await WithProductAsync();
+        var ids = await ProposeTwoAsync(owner, id);
+        var counts = await Json(await owner.GetAsync("/api/products"));
+        counts.GetProperty("products")[0].GetProperty("stores").EnumerateArray()
+            .Single(s => s.GetProperty("store").GetString() == "lidl").GetProperty("candidates").GetInt32().Should().Be(2);
+
+        var response = await owner.PostAsync($"/api/products/{id}/candidates/{ids[0]}/confirm", null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await Json(response)).GetProperty("confirmed").GetBoolean().Should().BeTrue();
+        var listing = await _factory.WithDb(db => db.StoreListings.AsNoTracking().SingleAsync(l => l.ProductId == id));
+        listing.Url.Should().BeOneOf(LidlMilk, LidlMilkOther);
+        listing.ConfirmedAt.Should().NotBeNull();
+        (await _factory.WithDb(db => db.MatchCandidates.CountAsync(c => c.ProductId == id))).Should().Be(0);
+
+        // The result is persisted: the product list (what the other user loads) shows the page, confirmed, and no open proposals.
+        var after = await Json(await owner.GetAsync("/api/products"));
+        var lidl = after.GetProperty("products")[0].GetProperty("stores").EnumerateArray().Single(s => s.GetProperty("store").GetString() == "lidl");
+        lidl.GetProperty("listing").GetProperty("confirmed").GetBoolean().Should().BeTrue();
+        lidl.GetProperty("candidates").GetInt32().Should().Be(0);
+
+        // A second tap on the same proposal finds nothing.
+        (await owner.PostAsync($"/api/products/{id}/candidates/{ids[0]}/confirm", null)).StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task Confirming_over_a_fleet_linked_page_replaces_it_and_forgets_its_readings()
+    {
+        var (owner, id) = await WithProductAsync();
+        var fleet = Fleet(FleetScopes.CatalogAdd);
+        (await fleet.PutAsJsonAsync($"/api/products/{id}/stores/lidl", new { url = LidlMilkOther })).EnsureSuccessStatusCode();
+        await _factory.WithDb(db => db.StoreListings.Where(l => l.ProductId == id).ExecuteUpdateAsync(u => u.SetProperty(l => l.Title, "Old page")));
+        await _factory.WithDb(db =>
+        {
+            db.MatchCandidates.Add(new MatchCandidate
+            {
+                Id = Guid.NewGuid(), ProductId = id, Store = Store.Lidl, Url = LidlMilk, Title = "Milbona fresh whole milk 2 litres",
+                Basis = MatchBasis.NameAndSize, Score = 70, Status = CandidateStatus.Proposed, ProposedAt = DateTimeOffset.UtcNow,
+            });
+            return db.SaveChangesAsync();
+        });
+        var candidateId = (await Json(await owner.GetAsync($"/api/products/{id}/candidates"))).GetProperty("candidates")[0].GetProperty("id").GetGuid();
+
+        (await owner.PostAsync($"/api/products/{id}/candidates/{candidateId}/confirm", null)).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var listing = await _factory.WithDb(db => db.StoreListings.AsNoTracking().SingleAsync(l => l.ProductId == id));
+        listing.Url.Should().Be(LidlMilk);
+        listing.Title.Should().BeNull();
+        listing.ConfirmedAt.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task Rejecting_a_proposal_keeps_it_as_rejected_and_the_same_page_is_not_proposed_again()
+    {
+        var (owner, id) = await WithProductAsync();
+        var ids = await ProposeTwoAsync(owner, id);
+        var rejectedUrl = (await Json(await owner.GetAsync($"/api/products/{id}/candidates"))).GetProperty("candidates")[0].GetProperty("url").GetString()!;
+
+        (await owner.PostAsync($"/api/products/{id}/candidates/{ids[0]}/reject", null)).StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        var open = (await Json(await owner.GetAsync($"/api/products/{id}/candidates"))).GetProperty("candidates").EnumerateArray().ToList();
+        open.Should().ContainSingle().Which.GetProperty("id").GetGuid().Should().Be(ids[1]);
+        (await _factory.WithDb(db => db.MatchCandidates.CountAsync(c => c.Id == ids[0] && c.Status == CandidateStatus.Rejected))).Should().Be(1);
+        (await _factory.WithDb(db => db.StoreListings.CountAsync(l => l.ProductId == id))).Should().Be(0);
+
+        var again = await owner.PostAsJsonAsync($"/api/products/{id}/candidates", new { store = "lidl", results = new[] { Result(rejectedUrl, Milk) } });
+        Outcomes(await Json(again)).Should().Equal("rejected");
+        (await _factory.WithDb(db => db.MatchCandidates.CountAsync(c => c.Id == ids[0] && c.Status == CandidateStatus.Rejected))).Should().Be(1);
+        (await owner.PostAsync($"/api/products/{id}/candidates/{ids[0]}/reject", null)).StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task Rejected_proposals_do_not_count_toward_the_limit_of_open_ones()
+    {
+        var (owner, id) = await WithProductAsync();
+        await _factory.WithDb(db =>
+        {
+            for (var i = 0; i < MatchEndpoints.MaxProposalsPerStore; i++)
+            {
+                db.MatchCandidates.Add(new MatchCandidate
+                {
+                    Id = Guid.NewGuid(), ProductId = id, Store = Store.Lidl, Url = $"https://www.lidl.ie/p/rejected-{i}/p2000000{i}",
+                    Title = "Whole milk 2L", Basis = MatchBasis.NameAndSize, Score = 90, Status = CandidateStatus.Rejected, ProposedAt = DateTimeOffset.UtcNow,
+                });
+            }
+
+            return db.SaveChangesAsync();
+        });
+
+        var response = await owner.PostAsJsonAsync($"/api/products/{id}/candidates", new { store = "lidl", results = new[] { Result(LidlMilk, Milk) } });
+
+        Outcomes(await Json(response)).Should().Equal("proposed");
+        (await _factory.WithDb(db => db.MatchCandidates.CountAsync(c => c.ProductId == id && c.Status == CandidateStatus.Rejected))).Should().Be(MatchEndpoints.MaxProposalsPerStore);
+    }
+
+    [Fact]
+    public async Task A_fleet_token_cannot_confirm_or_reject()
+    {
+        var (owner, id) = await WithProductAsync();
+        var ids = await ProposeTwoAsync(owner, id);
+
+        foreach (var scope in new[] { FleetScopes.CatalogAdd, FleetScopes.CatalogRead })
+        {
+            (await Fleet(scope).PostAsync($"/api/products/{id}/candidates/{ids[0]}/confirm", null)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+            (await Fleet(scope).PostAsync($"/api/products/{id}/candidates/{ids[0]}/reject", null)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        }
+
+        (await _factory.WithDb(db => db.MatchCandidates.CountAsync(c => c.Status == CandidateStatus.Proposed))).Should().Be(2);
+        (await _factory.WithDb(db => db.StoreListings.CountAsync())).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task A_proposal_of_another_product_cannot_be_decided_through_this_one()
+    {
+        var (owner, id) = await WithProductAsync();
+        var ids = await ProposeTwoAsync(owner, id);
+        var other = await owner.PostAsJsonAsync("/api/products", new { name = "Butter 250g" });
+        var otherId = (await Json(other)).GetProperty("id").GetGuid();
+
+        (await owner.PostAsync($"/api/products/{otherId}/candidates/{ids[0]}/confirm", null)).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await owner.PostAsync($"/api/products/{otherId}/candidates/{ids[0]}/reject", null)).StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
     // ---- proposing ----------------------------------------------------------------------------------------------
 
     [Fact]

@@ -17,7 +17,8 @@ import {
 import {firstValueFrom, fromEvent} from 'rxjs';
 
 import {ComposerBarComponent} from '../../core/shell/composer-bar.component';
-import {detailLines, headline, storeProblem} from './price-format';
+import {MatchSheetComponent, type MatchSheetData, type MatchSheetResult} from './match.sheet';
+import {detailLines, headline, storeProblem, suggestionLine} from './price-format';
 import type {Product, ProductStore} from './prices.model';
 import {PricesStore} from './prices.store';
 import {type ProductAction, ProductActionsSheetComponent} from './product-actions.sheet';
@@ -81,7 +82,7 @@ import {StoreLinkSheetComponent} from './store-link.sheet';
                   [sublabel]="describe(entry)"
                   [dimmed]="!entry.listing"
                   [action]="true"
-                  (activated)="link(product, entry)"
+                  (activated)="open(product, entry)"
                   class="[&_.truncate]:overflow-visible [&_.truncate]:whitespace-pre-line [&_.truncate]:break-words"
                 >
                   <span amount class="text-cmn-sm font-semibold text-text-primary">{{
@@ -157,7 +158,7 @@ export class PricesPage implements OnInit {
 
   /** One line per fact group; the row keeps the line breaks. */
   protected describe(entry: ProductStore): string {
-    return detailLines(entry).join('\n');
+    return suggestionLine(entry).concat(detailLines(entry)).join('\n');
   }
 
   protected async add(): Promise<void> {
@@ -167,6 +168,26 @@ export class PricesPage implements OnInit {
     }
     if (await this.store.add(value)) {
       this.name.reset('');
+    }
+  }
+
+  /** A shop with suggested pages opens the match sheet; a shop without opens the paste-an-address sheet. */
+  protected open(product: Product, entry: ProductStore): void {
+    if (entry.candidates) {
+      void this.match(product, entry);
+    } else {
+      this.link(product, entry);
+    }
+  }
+
+  private async match(product: Product, entry: ProductStore): Promise<void> {
+    const ref = this.drawer.open<MatchSheetResult, MatchSheetData>(MatchSheetComponent, {
+      title: `${product.name} at ${entry.name}`,
+      data: {product, entry},
+      mode: 'sheet',
+    });
+    if ((await firstValueFrom(ref.afterClosed(), {defaultValue: undefined})) === 'paste') {
+      this.link(product, entry);
     }
   }
 

@@ -39,6 +39,10 @@ public static class MatchEndpoints
         products.MapGet("/{id:guid}/candidates", GetCandidates).RequireAuthorization(Policies.CatalogRead);
         products.MapPost("/{id:guid}/candidates", Propose).RequireAuthorization(Policies.CatalogAdd);
         products.MapPut("/{id:guid}/barcode", SetBarcode).RequireAuthorization(Policies.CatalogAdd);
+        // The match sheet's two answers. No policy of their own: like the rest of the group they take a signed-in person
+        // only, so a fleet token can read and propose but never decide.
+        products.MapPost("/{id:guid}/candidates/{candidateId:guid}/confirm", Confirm);
+        products.MapPost("/{id:guid}/candidates/{candidateId:guid}/reject", Reject);
     }
 
     private static async Task<IResult> GetCandidates(Guid id, AppDbContext db, CancellationToken ct)
@@ -88,7 +92,8 @@ public static class MatchEndpoints
         }
 
         var facts = new ProductFacts(product.Name, product.Barcode);
-        var existing = await db.MatchCandidates.Where(c => c.ProductId == id && c.Store == store).ToDictionaryAsync(c => c.Url, StringComparer.Ordinal, ct);
+        var all = await db.MatchCandidates.Where(c => c.ProductId == id && c.Store == store).ToDictionaryAsync(c => c.Url, StringComparer.Ordinal, ct);
+        var existing = all.Where(c => c.Value.Status == CandidateStatus.Proposed).ToDictionary(c => c.Key, c => c.Value, StringComparer.Ordinal);
         var now = clock.GetUtcNow();
         var outcomes = new List<ProposeOutcome>(results.Count);
         var seen = new HashSet<string>(StringComparer.Ordinal);
@@ -115,7 +120,12 @@ public static class MatchEndpoints
                 continue;
             }
 
-            existing.TryGetValue(url, out var known);
+            if (all.TryGetValue(url, out var known) && known.Status == CandidateStatus.Rejected)
+            {
+                // A person already said no to this page; it is not proposed again.
+                outcomes.Add(new ProposeOutcome(url, "rejected"));
+                continue;
+            }
 
             var title = UserNames.Clean(result.Title, 300);
             var verdict = CandidateMatcher.Evaluate(facts, new CandidateFacts(title, result.Barcode));
@@ -165,6 +175,41 @@ public static class MatchEndpoints
         return Results.Ok(new { proposed = outcomes.Count(o => o.Outcome == "proposed"), results = outcomes });
     }
 
+    /// <summary>
+    /// A person says an open proposal is the product's equivalent in that shop: the shop's listing now points at it and is
+    /// confirmed (the same as pasting the page), and the shop's other open proposals are settled. Rejected rows stay.
+    /// </summary>
+    private static async Task<IResult> Confirm(Guid id, Guid candidateId, AppDbContext db, TimeProvider clock, CancellationToken ct)
+    {
+        var candidate = await db.MatchCandidates.SingleOrDefaultAsync(c => c.Id == candidateId && c.ProductId == id && c.Status == CandidateStatus.Proposed, ct);
+        if (candidate is null)
+        {
+            return Results.NotFound();
+        }
+
+        var now = clock.GetUtcNow();
+        var listing = await db.StoreListings.SingleOrDefaultAsync(l => l.ProductId == id && l.Store == candidate.Store, ct);
+        listing = await ProductEndpoints.PointListingAsync(db, listing, id, candidate.Store, candidate.Url, now, ct);
+        listing.ConfirmedAt = now;
+        await db.MatchCandidates.Where(c => c.ProductId == id && c.Store == candidate.Store && c.Status == CandidateStatus.Proposed).ExecuteDeleteAsync(ct);
+        await db.SaveChangesAsync(ct);
+        return Results.Ok(new ListingResponse(listing.Url, listing.Title, listing.LastCheckedAt, listing.LastError, listing.Category, listing.ImageUrl, true));
+    }
+
+    /// <summary>A person says an open proposal is not the equivalent. It is kept as rejected so it never comes back.</summary>
+    private static async Task<IResult> Reject(Guid id, Guid candidateId, AppDbContext db, CancellationToken ct)
+    {
+        var candidate = await db.MatchCandidates.SingleOrDefaultAsync(c => c.Id == candidateId && c.ProductId == id && c.Status == CandidateStatus.Proposed, ct);
+        if (candidate is null)
+        {
+            return Results.NotFound();
+        }
+
+        candidate.Status = CandidateStatus.Rejected;
+        await db.SaveChangesAsync(ct);
+        return Results.NoContent();
+    }
+
     private static async Task<IResult> SetBarcode(Guid id, SetBarcodeRequest request, AppDbContext db, CancellationToken ct)
     {
         var product = await db.Products.SingleOrDefaultAsync(p => p.Id == id, ct);
@@ -187,7 +232,7 @@ public static class MatchEndpoints
         product.Barcode = barcode;
 
         var facts = new ProductFacts(product.Name, barcode);
-        foreach (var candidate in await db.MatchCandidates.Where(c => c.ProductId == id).ToListAsync(ct))
+        foreach (var candidate in await db.MatchCandidates.Where(c => c.ProductId == id && c.Status == CandidateStatus.Proposed).ToListAsync(ct))
         {
             var verdict = CandidateMatcher.Evaluate(facts, new CandidateFacts(candidate.Title, candidate.Barcode));
             if (verdict is null)

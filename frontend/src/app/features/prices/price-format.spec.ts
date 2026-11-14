@@ -1,4 +1,12 @@
-import {detailLines, euro, headline, lastPaidLine, shortDate, storeProblem} from './price-format';
+import {
+  detailLines,
+  euro,
+  headline,
+  lastPaidLine,
+  shortDate,
+  storeProblem,
+  suggestionLine,
+} from './price-format';
 import type {Price, ProductStore, StoreStatus} from './prices.model';
 
 function price(over: Partial<Price> = {}): Price {
@@ -183,5 +191,22 @@ describe('price formatting', () => {
     expect(storeProblem(status('failed'))).toBe('Lidl could not be read');
     expect(storeProblem(status('partial'))).toBe('Lidl some products could not be read');
     expect(storeProblem({store: 'lidl', name: 'Lidl', readBy: 'nightly', lastRun: null})).toBe('');
+  });
+
+  it('says how many suggested pages wait, and nothing when none do', () => {
+    const withCandidates = (candidates?: number): ProductStore => ({
+      store: 'lidl',
+      name: 'Lidl',
+      readBy: 'nightly',
+      listing: null,
+      price: null,
+      lastPaid: null,
+      candidates,
+    });
+
+    expect(suggestionLine(withCandidates())).toEqual([]);
+    expect(suggestionLine(withCandidates(0))).toEqual([]);
+    expect(suggestionLine(withCandidates(1))).toEqual(['1 suggested page to check']);
+    expect(suggestionLine(withCandidates(3))).toEqual(['3 suggested pages to check']);
   });
 });

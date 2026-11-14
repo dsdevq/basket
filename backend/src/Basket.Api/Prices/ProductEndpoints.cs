@@ -43,7 +43,8 @@ public sealed record ProductStoreResponse(
     string ReadBy,
     ListingResponse? Listing,
     PriceResponse? Price,
-    PaidResponse? LastPaid);
+    PaidResponse? LastPaid,
+    int Candidates = 0);
 
 public sealed record ProductResponse(Guid Id, string Name, IReadOnlyList<ProductStoreResponse> Stores, string? Barcode);
 
@@ -81,6 +82,13 @@ public static class ProductEndpoints
             .GroupBy(p => (p.ProductId, p.Store))
             .ToDictionary(g => g.Key, g => g.OrderByDescending(p => p.PaidOn).First());
 
+        var proposals = (await db.MatchCandidates.AsNoTracking()
+                .Where(c => c.Status == CandidateStatus.Proposed)
+                .GroupBy(c => new { c.ProductId, c.Store })
+                .Select(g => new { g.Key.ProductId, g.Key.Store, Count = g.Count() })
+                .ToListAsync(ct))
+            .ToDictionary(g => (g.ProductId, g.Store), g => g.Count);
+
         var response = products.Select(product => new ProductResponse(
             product.Id,
             product.Name,
@@ -93,7 +101,8 @@ public static class ProductEndpoints
                     store.ReadBy(),
                     listing is null ? null : new ListingResponse(listing.Url, listing.Title, listing.LastCheckedAt, listing.LastError, listing.Category, listing.ImageUrl, listing.ConfirmedAt is not null),
                     listing is not null && latest.TryGetValue(listing.Id, out var observation) ? ToPrice(observation, today) : null,
-                    LastPaid(store, paid.GetValueOrDefault((product.Id, store)), connected));
+                    LastPaid(store, paid.GetValueOrDefault((product.Id, store)), connected),
+                    proposals.GetValueOrDefault((product.Id, store)));
             }).ToList(),
             product.Barcode)).ToList();
 
@@ -254,23 +263,8 @@ public static class ProductEndpoints
                 statusCode: 409);
         }
 
-        if (listing is null)
-        {
-            listing = new StoreListing { Id = Guid.NewGuid(), ProductId = id, Store = shop, AddedAt = clock.GetUtcNow() };
-            db.StoreListings.Add(listing);
-        }
-        else if (listing.Url != url.ToString())
-        {
-            // A different page is a different product: forget what the old one said.
-            listing.Title = null;
-            listing.ImageUrl = null;
-            listing.Category = null;
-            listing.LastCheckedAt = null;
-            listing.LastError = null;
-            await db.PriceObservations.Where(o => o.ListingId == listing.Id).ExecuteDeleteAsync(ct);
-        }
+        listing = await PointListingAsync(db, listing, id, shop, url.ToString(), clock.GetUtcNow(), ct);
 
-        listing.Url = url.ToString();
         listing.ImageUrl = imageUrl ?? listing.ImageUrl;
         if (byPerson)
         {
@@ -281,6 +275,33 @@ public static class ProductEndpoints
 
         await db.SaveChangesAsync(ct);
         return Results.Ok(new ListingResponse(listing.Url, listing.Title, listing.LastCheckedAt, listing.LastError, listing.Category, listing.ImageUrl, listing.ConfirmedAt is not null));
+    }
+
+    /// <summary>
+    /// Makes the product's listing in a shop point at <paramref name="url"/>, adding it when there is none. A different page
+    /// is a different product, so what the old one said (title, photo, category, readings) is forgotten.
+    /// </summary>
+    internal static async Task<StoreListing> PointListingAsync(AppDbContext db, StoreListing? listing, Guid productId, Store shop, string url, DateTimeOffset now, CancellationToken ct)
+    {
+        if (listing is null)
+        {
+            listing = new StoreListing { Id = Guid.NewGuid(), ProductId = productId, Store = shop, AddedAt = now, Url = url };
+            db.StoreListings.Add(listing);
+            return listing;
+        }
+
+        if (listing.Url != url)
+        {
+            listing.Title = null;
+            listing.ImageUrl = null;
+            listing.Category = null;
+            listing.LastCheckedAt = null;
+            listing.LastError = null;
+            await db.PriceObservations.Where(o => o.ListingId == listing.Id).ExecuteDeleteAsync(ct);
+            listing.Url = url;
+        }
+
+        return listing;
     }
 
     private static async Task<IResult> UnlinkStore(Guid id, string store, AppDbContext db, CancellationToken ct) =>

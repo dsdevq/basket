@@ -48,6 +48,22 @@ export interface ProductStore {
   readonly listing: Listing | null;
   readonly price: Price | null;
   readonly lastPaid: Paid | null;
+  /** How many pages the matcher suggests for this shop that nobody has confirmed or rejected yet. */
+  readonly candidates?: number;
+}
+
+/** Why the matcher suggested a page: the same barcode, the same name and size, or a close name with no size to check. */
+export type MatchBasis = 'barcode' | 'name_size' | 'name';
+
+/** A page in a shop that may be the product's equivalent there, waiting for a person's yes or no. */
+export interface Candidate {
+  readonly id: string;
+  readonly store: StoreId;
+  readonly url: string;
+  readonly title: string | null;
+  readonly barcode: string | null;
+  readonly basis: MatchBasis;
+  readonly score: number;
 }
 
 export interface Product {
