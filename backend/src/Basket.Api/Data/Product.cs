@@ -71,12 +71,18 @@ public enum CandidateStatus
 {
     /// <summary>Suggested by the matcher; waiting for a person to confirm it.</summary>
     Proposed,
+
+    /// <summary>
+    /// A person said this page is not the product's equivalent. The row stays, so the same page is never proposed again
+    /// and both users see the decision; it is not an open proposal and counts toward no limit.
+    /// </summary>
+    Rejected,
 }
 
 /// <summary>
 /// A shop page the matcher thinks may be the equivalent of a product. Proposals live apart from <see cref="StoreListing"/>:
 /// nothing reads prices from them and they change no confirmed match. A person confirming one (the match sheet) writes the
-/// listing.
+/// listing; rejecting one keeps the row as <see cref="CandidateStatus.Rejected"/>.
 /// </summary>
 public sealed class MatchCandidate
 {

@@ -3,6 +3,7 @@ import {ActivatedRoute, convertToParamMap} from '@angular/router';
 import {CmnDrawerService, ToastService} from '@lifekit-hq/ui';
 import {of} from 'rxjs';
 
+import {MatchSheetComponent} from './match.sheet';
 import {PricesApi} from './prices.api';
 import type {PricesResponse, Product, ProductStore} from './prices.model';
 import {PricesPage} from './prices.page';
@@ -102,6 +103,9 @@ async function render(response: PricesResponse, query: Record<string, string> = 
     remove: vi.fn().mockResolvedValue(undefined),
     link: vi.fn(),
     unlink: vi.fn(),
+    candidates: vi.fn(),
+    confirm: vi.fn(),
+    reject: vi.fn(),
   };
   const drawer = {open: vi.fn().mockReturnValue({afterClosed: () => of(undefined)})};
   TestBed.configureTestingModule({
@@ -194,6 +198,33 @@ describe('PricesPage', () => {
       title: 'Whole milk 2L at Tesco',
       mode: 'sheet',
     });
+  });
+
+  it('opens the match sheet, not the paste sheet, for a shop with suggested pages, and says how many', async () => {
+    const product = milk();
+    const response = {
+      products: [
+        {
+          ...product,
+          stores: product.stores.map(entry =>
+            entry.store === 'tesco' ? {...entry, candidates: 2} : entry
+          ),
+        },
+      ],
+      stores: [],
+    };
+    const {host, drawer} = await render(response);
+
+    expect(host.textContent).toContain('2 suggested pages to check');
+    host
+      .querySelectorAll<HTMLElement>(
+        'cmn-list-item-row button, cmn-list-item-row [role="button"]'
+      )[2]
+      ?.click();
+
+    expect(drawer.open).toHaveBeenCalledTimes(1);
+    expect(drawer.open.mock.calls[0]?.[0]).toBe(MatchSheetComponent);
+    expect(drawer.open.mock.calls[0]?.[1]).toMatchObject({title: 'Whole milk 2L at Tesco'});
   });
 
   it('fills the add box with the typed item that History sent, and adds nothing until Add is tapped', async () => {

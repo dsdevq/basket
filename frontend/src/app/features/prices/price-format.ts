@@ -101,6 +101,15 @@ function unreadLine(entry: ProductStore): string {
     : 'Not read yet - the nightly pull will fetch it';
 }
 
+/** The line that tells a shop has suggested pages waiting for a yes or no; empty when it has none. */
+export function suggestionLine(entry: ProductStore): string[] {
+  const count = entry.candidates ?? 0;
+  if (count <= 0) {
+    return [];
+  }
+  return [count === 1 ? '1 suggested page to check' : `${count} suggested pages to check`];
+}
+
 /**
  * The lines under the store name, one fact group per line: what the price is (card price, old price, promo,
  * how long it lasts), then when it was read and how that went. A shop with no reading yet has one line.

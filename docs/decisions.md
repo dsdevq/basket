@@ -1328,6 +1328,36 @@ you know ?" Typing stays for a one-off that is not on the shelf; after a trip th
 - **Screens.** No new route. The History mock gains `productId`, so the History baselines change (a button per typed item); Linux
   baselines are drawn on CI only, by the "Update screen baselines" workflow dispatched on the branch.
 
+## Phone match sheet: confirm or reject a store's suggested equivalent (2026-11-14, issue #10, part of the Shelf epic #21)
+
+Owner's words: "I shop in 4 different stores. Lidl, aldi, tesco, dunnes. I want to have one app where I could sort things out."
+The matcher (#9) only proposes; this is the person's yes or no. Done when both users see the persisted results.
+
+- **Borrowed pattern, named:** the "is this the same product?" yes/no card of price trackers and the card-stack review of dating
+  apps, without the swipe: one suggestion at a time, two big buttons (Yes, same product / No, not this one), because a swipe is hard
+  to find and awkward one-handed at 390 px. It is a bottom sheet, the same drawer the Prices tab already uses for pasting a page.
+- **Where it lives.** On the Prices tab, a shop row with suggested pages says "N suggested pages to check" and opens the match
+  sheet instead of the paste-an-address sheet; the sheet's last button, "Paste the page address instead", opens the paste sheet.
+  A shop without suggestions behaves as before. No new route, so no route-scan change and no new screen baseline: the sheet is a
+  drawer, and the Prices mock carries no suggestions.
+- **Yes** (`POST /api/products/{id}/candidates/{candidateId}/confirm`) does exactly what pasting that page does: the shop's
+  listing points at it (a new page forgets the old page's title, photo, category and readings), `confirmed_at` is set, and the
+  shop's other open suggestions are settled (deleted). **No** (`.../reject`) keeps the row with status `Rejected`.
+- **Rejections are persisted and final.** Rejected rows stay in `match_candidate`, so the same page is never suggested again
+  (a re-post of it answers `rejected`), and both people see the same list on their next load. They do not count toward the
+  5 open suggestions per product and shop, and a barcode change does not rescore or delete them. There is no undo in this change;
+  a page the owner rejected by mistake can still be linked by pasting its address.
+- **Both users, one result.** Either person may answer; the answer lives on the server, not on the phone. The product list
+  (`GET /api/products`) gains `candidates` per shop (open suggestions), which is what both phones show. If the other person
+  answered a suggestion first, the second answer finds nothing (`404`) and the sheet treats it as done and re-reads.
+- **People only.** Confirm and reject take a signed-in person, no fleet scope: a token can read and propose, never decide.
+- **No migration.** `match_candidate.status` is already stored as text (up to 16 characters), so the new `Rejected` value
+  changes no table, column or index. Nothing waits for the owner's go on that account, and there is nothing to roll back in the
+  database: reverting the code leaves a `Rejected` row that older code would fail to read, so delete those rows
+  (`DELETE FROM match_candidate WHERE status = 'Rejected'`) if the change is ever backed out.
+- **Not here:** who answered or when (no column was added for it), undoing a rejection, confirming a fleet-linked page that has no
+  suggestion beside it, and the Shelf screen (#32).
+
 ## Store scorecard from our own baskets, opened on demand (2026-11-14, issue #49, epic #24)
 
 Owner's words: "I am as a customer should understand what needs to be bought. I want to know where certain position is better. I want

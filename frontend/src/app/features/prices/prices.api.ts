@@ -2,7 +2,7 @@ import {HttpClient} from '@angular/common/http';
 import {inject, Injectable} from '@angular/core';
 import {firstValueFrom} from 'rxjs';
 
-import type {Listing, PricesResponse, Product, StoreId} from './prices.model';
+import type {Candidate, Listing, PricesResponse, Product, StoreId} from './prices.model';
 
 @Injectable({providedIn: 'root'})
 export class PricesApi {
@@ -26,5 +26,23 @@ export class PricesApi {
 
   public unlink(id: string, store: StoreId): Promise<void> {
     return firstValueFrom(this.http.delete<void>(`/api/products/${id}/stores/${store}`));
+  }
+
+  public candidates(id: string): Promise<{candidates: readonly Candidate[]}> {
+    return firstValueFrom(
+      this.http.get<{candidates: readonly Candidate[]}>(`/api/products/${id}/candidates`)
+    );
+  }
+
+  public confirm(id: string, candidateId: string): Promise<Listing> {
+    return firstValueFrom(
+      this.http.post<Listing>(`/api/products/${id}/candidates/${candidateId}/confirm`, {})
+    );
+  }
+
+  public reject(id: string, candidateId: string): Promise<void> {
+    return firstValueFrom(
+      this.http.post<void>(`/api/products/${id}/candidates/${candidateId}/reject`, {})
+    );
   }
 }
