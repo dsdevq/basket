@@ -55,7 +55,7 @@ public sealed class LidlCatalogSweepTests : IClassFixture<BasketFactory>
     private Task SweepAsync(FakeFetcher fetcher, int barcodeCap = 200) =>
         _factory.WithDb(async db =>
         {
-            var recorder = new CatalogRecorder(db);
+            var recorder = new CatalogRecorder(db, new PriceRecorder(db));
             var options = Options.Create(new PricesOptions
             {
                 LidlBarcodePagesPerNight = barcodeCap,
