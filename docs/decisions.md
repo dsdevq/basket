@@ -1849,3 +1849,14 @@ without a per-page read.
   relink and fleet link, the mirror: replace within a day, a new row the next day, unlinked and other-shop pages untouched, no-price and
   unavailable readings, `confirmed_at` untouched) and the price formatting specs. The existing plan, by-shop, promotion and scorecard tests
   pass unchanged. Fixtures are invented products; no real data or token is in this public repository.
+
+## Adopting `@lifekit-hq/ui` 5.0.0 (2026-11-14)
+
+`@lifekit-hq/ui`, `tokens`, `core`, `elements`, `charts-core` and `config` go from 4.8.0 to 5.0.0. The release makes the library's
+page templates mandatory and drops Tailwind's default spacing and type scales (migration guide: `docs/MIGRATING-TO-5.md` in
+lifekit-common). Frontend only: no endpoint, schema or migration changes.
+
+- **Type scale.** The two headings that used `text-cmn-xl` (the card name on the card page, the number on the till dialog) use
+  `text-cmn-lg`.
+- **Baselines.** The screen baselines were drawn with 4.8.0, so they are redrawn by the **Update screen baselines** workflow on the
+  adopting branch, never locally.
