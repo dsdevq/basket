@@ -1,9 +1,9 @@
 {
-  "store": "aldi",
+  "store": "dunnes",
   "items": [
     {
-      "externalId": "000000000000900101",
-      "url": "https://www.aldi.ie/product/greenfield-grated-mozzarella-000000000000900101",
+      "externalId": "900101",
+      "url": "https://www.dunnesstoresgrocery.com/product/greenfield-grated-mozzarella-900101",
       "name": "Grated Mozzarella",
       "brand": "GREENFIELD",
       "sizeText": "250 g",
@@ -14,8 +14,8 @@
       "price": 1.49
     },
     {
-      "externalId": "000000000000900102",
-      "url": "https://www.aldi.ie/product/greenfield-cheese-slices-20-pack-000000000000900102",
+      "externalId": "900102",
+      "url": "https://www.dunnesstoresgrocery.com/product/greenfield-cheese-slices-20-pack-900102",
       "name": "Cheese Slices 20 Pack",
       "brand": "GREENFIELD",
       "sizeText": "20 pack",
@@ -24,8 +24,8 @@
       "category": "Chilled Food > Cheese"
     },
     {
-      "externalId": "000000000000900103",
-      "url": "https://www.aldi.ie/product/oakridge-sparkling-water-6-x-330ml-000000000000900103",
+      "externalId": "900103",
+      "url": "https://www.dunnesstoresgrocery.com/product/oakridge-sparkling-water-6-x-330ml-900103",
       "name": "Sparkling Water",
       "brand": "OAKRIDGE",
       "sizeText": "6 x 330ml",

@@ -1,0 +1,56 @@
+{
+  "_note": "Invented for the tests: shaped like a page of Aldi's product search, with made-up products, ids and picture addresses. Not recorded from Aldi.",
+  "meta": { "pagination": { "offset": 0, "limit": 60, "totalCount": 4 } },
+  "data": [
+    {
+      "sku": "000000000000900101",
+      "name": "Grated Mozzarella",
+      "urlSlugText": "greenfield-grated-mozzarella",
+      "brandName": "GREENFIELD",
+      "sellingSize": "250 g",
+      "discontinued": false,
+      "notForSale": true,
+      "price": { "amount": 149, "comparison": 596, "comparisonDisplay": "€5.96/1 kg" },
+      "wasPriceDisplay": null,
+      "categories": [ { "id": "1000000000", "name": "Products" }, { "id": "1110000000", "name": "Cheese" } ],
+      "assets": [
+        { "url": "https://images.example.test/product/jpg/scaleWidth/{width}/mozzarella-0001", "type": "FR01" },
+        { "url": "https://images.example.test/product/jpg/scaleWidth/{width}/mozzarella-0002", "type": "FR02" }
+      ]
+    },
+    {
+      "sku": "000000000000900102",
+      "name": "Whole Milk 2L",
+      "urlSlugText": "dairy-farm-whole-milk-2l",
+      "brandName": "DAIRY FARM",
+      "sellingSize": "2 l",
+      "discontinued": false,
+      "price": { "amount": 245, "comparison": 123, "comparisonDisplay": "€1.23/1 l" },
+      "wasPriceDisplay": "Was €2.69",
+      "categories": [ { "id": "1120000000", "name": "Milk" } ],
+      "assets": []
+    },
+    {
+      "sku": "000000000000900103",
+      "name": "Old Style Water",
+      "urlSlugText": "oakridge-old-style-water",
+      "brandName": "OAKRIDGE",
+      "sellingSize": "6 x 330 ml",
+      "discontinued": true,
+      "price": { "amount": 199, "comparison": 100, "comparisonDisplay": "€1.00/1 l" },
+      "categories": [ { "id": "1210000000", "name": "Water" } ],
+      "assets": []
+    },
+    {
+      "sku": "000000000000900104",
+      "name": "Special Buy Torch",
+      "brandName": "WORKZONE",
+      "sellingSize": "1 each",
+      "discontinued": false,
+      "price": { "amount": 999 },
+      "wasPriceDisplay": "€9.99",
+      "categories": [ { "id": "9990000000", "name": "Special Buys" } ],
+      "assets": [ { "url": "https://images.example.test/{slug}/{width}/torch" } ]
+    }
+  ]
+}

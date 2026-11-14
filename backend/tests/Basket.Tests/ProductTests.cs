@@ -51,7 +51,7 @@ public sealed class ProductTests : IClassFixture<BasketFactory>
             store.GetProperty("price").ValueKind.Should().Be(JsonValueKind.Null);
         }
 
-        product.GetProperty("stores").EnumerateArray().Select(s => s.GetProperty("readBy").GetString()).Should().Equal("nightly", "pc", "pc", "pc");
+        product.GetProperty("stores").EnumerateArray().Select(s => s.GetProperty("readBy").GetString()).Should().Equal("nightly", "nightly", "pc", "pc");
         Entry(product, "lidl").GetProperty("lastPaid").GetProperty("state").GetString().Should().Be("not_connected");
         Entry(product, "aldi").GetProperty("lastPaid").ValueKind.Should().Be(JsonValueKind.Null);
     }

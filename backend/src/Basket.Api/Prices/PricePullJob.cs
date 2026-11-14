@@ -48,7 +48,7 @@ public sealed class PricePullJob(
 
         var started = clock.GetUtcNow();
         var listings = await db.StoreListings.Where(l => l.Store == source.Store).ToListAsync(ct);
-        if (listings.Count == 0)
+        if (listings.Count == 0 && !source.SweepsCatalog)
         {
             return;
         }
