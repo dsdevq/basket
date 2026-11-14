@@ -68,7 +68,7 @@ import {TillDialogComponent} from './till.dialog';
           [attr.aria-label]="shown.name + ' card'"
           class="flex w-full max-w-md flex-col gap-cmn-3"
         >
-          <h2 class="font-headline text-cmn-xl font-semibold text-text-primary">
+          <h2 class="font-headline text-cmn-lg font-semibold text-text-primary">
             {{ shown.name }}
           </h2>
           @if (shown.number; as number) {
