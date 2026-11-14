@@ -115,7 +115,9 @@ describe('CompareSheetComponent', () => {
   it('fades the rows whose figure is old and the shop with no page, and no other', async () => {
     const {rows} = await render();
 
-    const faded = rows().map(row => row.querySelector('div')?.classList.contains('opacity-55'));
+    const faded = rows().map(row =>
+      row.querySelector('.font-label')?.classList.contains('text-text-secondary'),
+    );
 
     expect(faded).toEqual([false, false, true, false, true]);
   });
