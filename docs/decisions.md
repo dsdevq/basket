@@ -1349,7 +1349,8 @@ The matcher (#9) only proposes; this is the person's yes or no. Done when both u
   a page the owner rejected by mistake can still be linked by pasting its address.
 - **Both users, one result.** Either person may answer; the answer lives on the server, not on the phone. The product list
   (`GET /api/products`) gains `candidates` per shop (open suggestions), which is what both phones show. If the other person
-  answered a suggestion first, the second answer finds nothing (`404`) and the sheet treats it as done and re-reads.
+  answered a suggestion first, the second answer finds nothing (`404`). A late No counts as done and the sheet re-reads; a late
+  Yes is not reported as saved: the person is told it was already answered and the sheet re-reads the suggestions.
 - **People only.** Confirm and reject take a signed-in person, no fleet scope: a token can read and propose, never decide.
 - **No migration.** `match_candidate.status` is already stored as text (up to 16 characters), so the new `Rejected` value
   changes no table, column or index. Nothing waits for the owner's go on that account, and there is nothing to roll back in the
