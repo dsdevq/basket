@@ -42,6 +42,7 @@
     {
       "sku": "000000000000900104",
       "name": "Special Buy Torch",
+      "urlSlugText": "workzone-special-buy-torch",
       "brandName": "WORKZONE",
       "sellingSize": "1 each",
       "discontinued": false,

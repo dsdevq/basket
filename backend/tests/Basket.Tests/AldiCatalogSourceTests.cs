@@ -113,7 +113,19 @@ public sealed class AldiCatalogSourceTests : IClassFixture<BasketFactory>
         products[1].Category.Should().Be("Chilled Food > Milk");
         products[2].Category.Should().BeNull("a category the tree does not know is not guessed from the product");
         products[2].ImageUrl.Should().Be("https://images.example.test/special-buy-torch/300/torch");
-        products[2].Url.Should().Be("https://www.aldi.ie/product/special-buy-torch-000000000000900104", "no slug from Aldi, so one is made from the name");
+        products[2].Url.Should().Be("https://www.aldi.ie/product/workzone-special-buy-torch-000000000000900104");
+    }
+
+    [Fact]
+    public async Task A_product_without_a_slug_from_aldi_is_not_stored()
+    {
+        await CleanAsync();
+        var noSlug = Fixtures.Read("aldi-product-search.json").Replace("\"urlSlugText\": \"workzone-special-buy-torch\",", "", StringComparison.Ordinal);
+        var fetcher = new FakeFetcher().Serve(TreeUrl, Fixtures.Read("aldi-category-tree.json")).Serve(SearchUrl(0), noSlug);
+
+        await PullAsync(fetcher);
+
+        (await ProductsAsync()).Select(p => p.ExternalId).Should().Equal("000000000000900101", "000000000000900102");
     }
 
     [Fact]

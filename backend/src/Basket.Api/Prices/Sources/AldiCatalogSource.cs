@@ -318,11 +318,6 @@ public sealed partial class AldiCatalogSource(
     {
         var name = Text(e, "name");
         var slug = Text(e, "urlSlugText");
-        if (string.IsNullOrWhiteSpace(slug) || !Slug().IsMatch(slug))
-        {
-            slug = Slugify(name);
-        }
-
         decimal? price = null;
         decimal? unit = null;
         decimal? was = null;
@@ -344,7 +339,7 @@ public sealed partial class AldiCatalogSource(
 
         var item = new CatalogItem(
             sku,
-            $"https://{Store.Aldi.Host()}/product/{slug}-{sku}",
+            string.IsNullOrWhiteSpace(slug) ? null : $"https://{Store.Aldi.Host()}/product/{slug}-{sku}",
             name,
             Text(e, "brandName"),
             Text(e, "sellingSize"),
@@ -434,21 +429,9 @@ public sealed partial class AldiCatalogSource(
             }
             : null;
 
-    private static string Slugify(string? name)
-    {
-        var slug = NonSlug().Replace((name ?? string.Empty).ToLowerInvariant(), "-").Trim('-');
-        return slug.Length == 0 ? "product" : slug;
-    }
-
     [GeneratedRegex(@"-(?<sku>\d{6,})$")]
     private static partial Regex SkuAtEnd();
 
     [GeneratedRegex(@"\d+(?:\.\d{1,2})?")]
     private static partial Regex Amount();
-
-    [GeneratedRegex(@"^[a-z0-9-]+$")]
-    private static partial Regex Slug();
-
-    [GeneratedRegex(@"[^a-z0-9]+")]
-    private static partial Regex NonSlug();
 }

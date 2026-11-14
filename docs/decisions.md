@@ -1987,7 +1987,7 @@ Owner direction, 2026-11-14: per-store catalog readers feed one combined catalog
   with "not in the shape basket reads", writes and delists nothing. That includes a page with no `meta.pagination.totalCount` (a
   missing total is never a finished sweep) and a sweep whose products so far all lack a readable price (a renamed `price.amount` would
   otherwise write an empty price over every known one); once any product has been priced, a single unpriced product is still just unpriced.
-- **Field mapping.** `sku` is `external_id` (the zero-padded number, also the end of the page address); `brandName`; `sellingSize`
+- **Field mapping.** `sku` is `external_id` (the zero-padded number, also the end of the page address, which is built from Aldi's own `urlSlugText`; a product without one is not stored); `brandName`; `sellingSize`
   is `size_text`; inside the `price` object, `amount` / 100 is the price (Aldi sends whole cents), `comparison` / 100 is the unit price,
   labelled with the text after the "/" of `comparisonDisplay` ("€5.96/1 KG" gives "1 KG"), and `wasPriceDisplay` ("€1.35", null when there is
   no was price) is parsed and kept only when it is higher than the price; the first `assets` entry with `{width}` replaced by `300` is the
