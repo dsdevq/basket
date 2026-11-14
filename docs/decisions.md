@@ -1829,8 +1829,8 @@ Owner direction, 2026-11-14: per-store catalog readers feed one combined catalog
   forbids it); the paths, the `v3` and the response shape come from the scout's notes (`api.aldi.ie/v3/product-search`) and the
   fixtures are invented in that shape. The first nightly run is the check: a page in another shape stops the sweep as `Failed`
   with "not in the shape basket reads", writes and delists nothing. That includes a page with no `meta.pagination.totalCount` (a
-  missing total is never a finished sweep) and a page whose products all lack a readable price (a renamed `price.amount` would
-  otherwise write an empty price over every known one); a single unpriced product is still just unpriced.
+  missing total is never a finished sweep) and a sweep whose products so far all lack a readable price (a renamed `price.amount` would
+  otherwise write an empty price over every known one); once any product has been priced, a single unpriced product is still just unpriced.
 - **Field mapping.** `sku` is `external_id` (the zero-padded number, also the end of the page address); `brandName`; `sellingSize`
   is `size_text`; `price.amount` / 100 is the price (Aldi sends whole cents); `price.comparison` / 100 is the unit price, labelled with the text after the "/" of
   `comparisonDisplay` ("1 kg"); `wasPriceDisplay` ("Was €2.69", "€9.99") is parsed and kept only when it is higher
