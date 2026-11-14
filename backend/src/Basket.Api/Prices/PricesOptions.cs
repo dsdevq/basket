@@ -19,4 +19,7 @@ public sealed class PricesOptions
         "https://www.lidl.ie/c/store/super-savers/a10028883",
         "https://www.lidl.ie/c/food-drink/s10068374",
     ];
+
+    /// <summary>Product pages one night may open to read a barcode. About 700 food products take a few nights, then only new products.</summary>
+    public int LidlBarcodePagesPerNight { get; set; } = 200;
 }
