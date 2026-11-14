@@ -17,4 +17,6 @@ export interface ListItem {
   readonly productId: string | null;
   /** The shop it was picked from; null for a free-text line or a pick from "All". */
   readonly store: StoreId | null;
+  /** The product's photo address from its shop page; null for a free-text line or a product with no photo. */
+  readonly imageUrl: string | null;
 }

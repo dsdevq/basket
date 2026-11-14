@@ -154,4 +154,46 @@ public sealed class ListProductTests : IClassFixture<BasketFactory>
         item.GetProperty("text").GetString().Should().Be("Whole milk 2L");
         item.GetProperty("productId").ValueKind.Should().Be(JsonValueKind.Null);
     }
+
+    [Fact]
+    public async Task A_picked_line_shows_the_photo_of_its_shop_and_a_pick_from_All_the_first_shop_alphabetically_that_has_one()
+    {
+        var (owner, milk, bread) = await SeedAsync();
+        await _factory.WithDb(async db =>
+        {
+            db.StoreListings.Add(new StoreListing { Id = Guid.NewGuid(), ProductId = milk, Store = Store.Lidl, Url = "https://www.lidl.ie/p/milk/p11000002", ImageUrl = "https://img.lidl.ie/milk.jpg", AddedAt = DateTimeOffset.UtcNow });
+            await db.SaveChangesAsync();
+            await db.StoreListings.Where(l => l.ProductId == milk && l.Store == Store.Aldi)
+                .ExecuteUpdateAsync(s => s.SetProperty(l => l.ImageUrl, "https://img.aldi.ie/milk.jpg"));
+            return 0;
+        });
+
+        (await owner.PostAsJsonAsync("/api/list/items", new { productId = milk, store = "aldi" })).EnsureSuccessStatusCode();
+        (await owner.PostAsJsonAsync("/api/list/items", new { productId = milk })).EnsureSuccessStatusCode();
+        (await owner.PostAsJsonAsync("/api/list/items", new { productId = bread, store = "lidl" })).EnsureSuccessStatusCode();
+        (await owner.PostAsJsonAsync("/api/list/items", new { text = "candles" })).EnsureSuccessStatusCode();
+
+        var photos = (await ItemsAsync(owner))
+            .ToDictionary(i => (i.GetProperty("text").GetString(), i.GetProperty("store").GetString()), i => i.GetProperty("imageUrl").GetString());
+        photos[("Whole milk 2L", "aldi")].Should().Be("https://img.aldi.ie/milk.jpg");
+        photos[("Whole milk 2L", null)].Should().Be("https://img.aldi.ie/milk.jpg");
+        photos[("Sliced pan", "lidl")].Should().BeNull();
+        photos[("candles", null)].Should().BeNull();
+    }
+
+    [Fact]
+    public async Task A_partner_can_pick_from_the_shelf_and_the_line_says_who_added_it()
+    {
+        var (owner, milk, _) = await SeedAsync();
+        var (her, _) = await _factory.MemberAsync(owner, "Her");
+
+        var added = await her.PostAsJsonAsync("/api/list/items", new { productId = milk, store = "tesco" });
+
+        added.StatusCode.Should().Be(HttpStatusCode.Created);
+        var item = (await ItemsAsync(owner)).Single();
+        item.GetProperty("addedBy").GetProperty("name").GetString().Should().Be("Her");
+        (await owner.PatchAsJsonAsync($"/api/list/items/{item.GetProperty("id").GetGuid()}", new { @checked = true })).EnsureSuccessStatusCode();
+        (await her.DeleteAsync($"/api/list/items/{item.GetProperty("id").GetGuid()}")).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await ItemsAsync(owner)).Should().BeEmpty();
+    }
 }

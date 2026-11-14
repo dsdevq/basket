@@ -31,6 +31,7 @@ import type {StoreId} from '../prices/prices.model';
 import {type ItemAction, ItemActionsSheetComponent} from './item-actions.sheet';
 import type {ListItem} from './list.model';
 import {ListStore} from './list.store';
+import {ListPhotoComponent} from './list-photo.component';
 
 /** How often the list re-reads while the page is open and visible, so the other person's changes show. */
 const REFRESH_MS = 15_000;
@@ -49,6 +50,7 @@ const USUAL_SHOWN = 5;
     EmptyStateComponent,
     InputComponent,
     ListItemRowComponent,
+    ListPhotoComponent,
     ListSectionComponent,
     PageComponent,
     SkeletonComponent,
@@ -167,6 +169,7 @@ const USUAL_SHOWN = 5;
           (changed)="toggle(item, $event)"
           avatar
         />
+        <bk-list-photo [name]="item.text" [src]="item.imageUrl" avatar />
         <cmn-button
           [aria-label]="'More for ' + item.text"
           (clicked)="more(item)"

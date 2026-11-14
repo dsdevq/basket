@@ -31,6 +31,7 @@ function item(id: string, text: string, over: Partial<ListItem> = {}): ListItem 
     checkedBy: null,
     productId: null,
     store: null,
+    imageUrl: null,
     ...over,
   };
 }
@@ -158,6 +159,30 @@ describe('ListPage', () => {
     const rows = Array.from(host.querySelectorAll('cmn-list-item-row'));
     expect(rows[0]?.textContent).toContain('Tesco');
     expect(rows[1]?.textContent).not.toMatch(/Tesco|Lidl|Aldi|Dunnes/);
+  });
+
+  it('shows the product photo on a row, and the first letter when there is none or it fails to load', async () => {
+    const {fixture, host} = await render([
+      item('1', 'Whole milk 2L', {
+        productId: 'p1',
+        store: 'tesco',
+        imageUrl: 'https://img.tesco.ie/milk.jpg',
+      }),
+      item('2', 'Candles'),
+    ]);
+
+    const rows = Array.from(host.querySelectorAll('cmn-list-item-row'));
+    expect(rows[0]?.querySelector('img')?.getAttribute('src')).toBe(
+      'https://img.tesco.ie/milk.jpg'
+    );
+    expect(rows[1]?.querySelector('img')).toBeNull();
+    expect(rows[1]?.querySelector('bk-list-photo')?.textContent?.trim()).toBe('C');
+
+    rows[0]?.querySelector('img')?.dispatchEvent(new Event('error'));
+    fixture.detectChanges();
+
+    expect(rows[0]?.querySelector('img')).toBeNull();
+    expect(rows[0]?.querySelector('bk-list-photo')?.textContent?.trim()).toBe('W');
   });
 
   it('adds the typed text and clears the field', async () => {

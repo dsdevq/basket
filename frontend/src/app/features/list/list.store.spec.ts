@@ -19,6 +19,7 @@ function item(id: string, over: Partial<ListItem> = {}): ListItem {
     checkedBy: null,
     productId: null,
     store: null,
+    imageUrl: null,
     ...over,
   };
 }

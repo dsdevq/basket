@@ -1469,6 +1469,31 @@ come only from the PC reader, which had no schedule, so they refreshed only when
   `uninstall.sh`). The unit runs the clone `install.sh` was run from, with absolute paths, so it is re-run after the clone moves.
   No server change, no migration, nothing new on the VPS.
 
+## The list built from the shelf by tap: a photo on every row (2026-11-14, issue #33, epic #22)
+
+Owner's words: "My partner lists the products I need to buy - I can see the list. Partnet can compare while forming the list the
+same products from different store." The done criteria are a tap on a shelf product adds it to the shared list, each row shows
+photo, who added it and a store chip, and both people can add, tick and remove. Read against main, only the photo was missing: the
+Shelf tap (issue #11), the "added by" name under each row and the shop tag were already there, and ticking and deleting already
+work for either person (`ListTests`).
+
+- **Borrowed patterns, named.** **Bring!** tap-to-add with a photo per item (the Shelf tile in, a thumbnail on the row) and the
+  **AnyList** "added by" line on a shared row (the name under the item, unchanged). No new interaction is invented.
+- **The photo is read, not copied.** `GET /api/list` and the add and tick answers return `imageUrl` on each line, taken at read
+  time from the product's shop page (`store_listing.image_url`): the shop the line was picked from, or, for a pick from "All", the
+  first shop alphabetically (Aldi, Dunnes, Lidl, Tesco) that has a photo. A free-text line, a product with no photo and a line whose
+  product was deleted return `null`. The Shelf's "All" tile prefers the cheapest shop's photo instead; the list row has no price to
+  follow, so it uses a fixed, repeatable order. Reading it each time keeps one source of truth: a photo the nightly read fixes
+  later reaches the lines already on the list, and no column is added to `list_item`.
+- **No migration.** Nothing is stored for this change; it is one more projected field on the existing list query.
+- **The row.** A 40 px thumbnail beside the tick box (`bk-list-photo`), the Shelf tile's own fallback: the first letter on the
+  surface colour when there is no photo or it fails to load. A free-text line gets the letter too, so every row keeps one leading
+  edge. The row still wraps its name rather than truncating it.
+- **Same powers for the partner.** Nothing to change: the shelf and the basket take no owner check, and `ListProductTests` now holds
+  the partner picking from the Shelf, the row naming them as who added it, and the owner ticking and the partner deleting that row.
+- **Screens.** The `list` baselines change (a thumbnail on each row). They are re-rendered by the "Update screen baselines"
+  workflow on this branch, not committed from a local run.
+
 ## Dunnes: the parser reads the server-rendered state (2026-11-14, parser fix for the scout finding)
 
 - **The finding.** A scout found the PC reader read every Dunnes product page as "no price on the page" (report
