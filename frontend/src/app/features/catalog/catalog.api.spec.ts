@@ -3,7 +3,7 @@ import {HttpTestingController, provideHttpClientTesting} from '@angular/common/h
 import {TestBed} from '@angular/core/testing';
 
 import {CatalogApi} from './catalog.api';
-import type {CatalogProduct, CatalogSearchResponse} from './catalog.model';
+import type {CatalogEquivalents, CatalogProduct, CatalogSearchResponse} from './catalog.model';
 
 const ITEM: CatalogSearchResponse['items'][number] = {
   id: '0b6f1f0e-0000-4000-8000-000000000001',
@@ -87,5 +87,39 @@ describe('CatalogApi', () => {
     request.flush(product);
 
     await expect(result).resolves.toEqual(product);
+  });
+
+  it('reads the equivalents of a product', async () => {
+    const {api, http} = setup();
+    const body: CatalogEquivalents = {
+      product: {
+        item: ITEM,
+        basis: null,
+        score: null,
+        comparison: {unit: 'kg', pack: '100 g', unitPrice: 14.9, difference: null, flags: []},
+      },
+      reason: null,
+      stores: [
+        {
+          store: 'aldi',
+          storeName: 'Aldi',
+          items: [
+            {
+              item: {...ITEM, id: 'a1', store: 'aldi', storeName: 'Aldi'},
+              basis: 'name_size',
+              score: 90,
+              comparison: {unit: 'kg', pack: '100 g', unitPrice: 12.5, difference: -2.4, flags: []},
+            },
+          ],
+        },
+      ],
+    };
+
+    const result = api.equivalents(ITEM.id);
+    const request = http.expectOne(`/api/catalog/${ITEM.id}/equivalents`);
+    expect(request.request.method).toBe('GET');
+    request.flush(body);
+
+    await expect(result).resolves.toEqual(body);
   });
 });
