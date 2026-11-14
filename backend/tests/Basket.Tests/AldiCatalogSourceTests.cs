@@ -8,7 +8,6 @@ using Basket.Tests.Support;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 
 namespace Basket.Tests;
 
@@ -48,8 +47,7 @@ public sealed class AldiCatalogSourceTests : IClassFixture<BasketFactory>
                 new CatalogIngest(db, recorder, _factory.Clock),
                 db,
                 _factory.Clock,
-                Options.Create(new PricesOptions { AldiMaxRequests = maxRequests }),
-                NullLogger<AldiCatalogSource>.Instance);
+                NullLogger<AldiCatalogSource>.Instance) { MaxRequests = maxRequests };
             return await run(source);
         });
 
@@ -252,6 +250,24 @@ public sealed class AldiCatalogSourceTests : IClassFixture<BasketFactory>
         pull.Outcome.Should().Be(PullOutcome.Failed);
         pull.Message.Should().Contain("not in the shape");
         (await ProductsAsync()).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task A_page_where_no_product_has_a_price_is_a_changed_shape_and_wipes_nothing()
+    {
+        await CleanAsync();
+        var first = new FakeFetcher().Serve(TreeUrl, Fixtures.Read("aldi-category-tree.json")).Serve(SearchUrl(0), Page(1, 10, 10));
+        await PullAsync(first);
+
+        _factory.Clock.Advance(TimeSpan.FromHours(24));
+        var renamed = Page(1, 10, 10).Replace("\"amount\"", "\"cost\"", StringComparison.Ordinal);
+        var pull = await PullAsync(new FakeFetcher().Serve(TreeUrl, Fixtures.Read("aldi-category-tree.json")).Serve(SearchUrl(0), renamed));
+
+        pull.Outcome.Should().Be(PullOutcome.Failed);
+        pull.Message.Should().Contain("not in the shape").And.Contain("no product had a price");
+        var prices = await _factory.WithDb(db => db.StoreProductPrices.Select(x => x.Price).ToListAsync());
+        prices.Should().HaveCount(10).And.OnlyContain(p => p != null, "no empty price row was written over the known prices");
+        (await ProductsAsync()).Should().OnlyContain(p => p.DiscontinuedAt == null);
     }
 
     [Fact]

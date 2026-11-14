@@ -4,7 +4,6 @@ using System.Text.RegularExpressions;
 using Basket.Api.Data;
 using Basket.Api.Prices.Catalog;
 using Basket.Api.Prices.Fetching;
-using Microsoft.Extensions.Options;
 
 namespace Basket.Api.Prices.Sources;
 
@@ -22,10 +21,18 @@ public sealed partial class AldiCatalogSource(
     CatalogIngest sweeps,
     AppDbContext db,
     TimeProvider clock,
-    IOptions<PricesOptions> options,
     ILogger<AldiCatalogSource> log) : IStorePriceSource
 {
     public const int PageSize = 60;
+
+    /// <summary>Aldi's product API. asl.api.aldi.ie answers the server while www.aldi.ie does not (docs/decisions.md).</summary>
+    public const string ApiBase = "https://asl.api.aldi.ie/v3";
+
+    /// <summary>
+    /// The most requests one sweep makes, the category tree included: the 60 polite requests a day the owner accepted for Aldi's
+    /// terms. Only a test lowers it.
+    /// </summary>
+    public int MaxRequests { get; init; } = 60;
 
     public Store Store => Store.Aldi;
 
@@ -33,16 +40,14 @@ public sealed partial class AldiCatalogSource(
 
     public async Task<StorePull> PullAsync(IReadOnlyList<ListingToCheck> listings, CancellationToken ct)
     {
-        var settings = options.Value;
         var startedAt = clock.GetUtcNow();
         var wanted = listings.Select(l => SkuOf(l.Url)).Where(s => s is not null).Select(s => s!).ToHashSet(StringComparer.Ordinal);
         var quotes = new Dictionary<string, PriceQuote>(StringComparer.Ordinal);
         var discontinued = new HashSet<string>(StringComparer.Ordinal);
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var requests = 0;
-        var baseUrl = settings.AldiApiBase.TrimEnd('/');
 
-        var tree = await fetcher.GetAsync(new Uri($"{baseUrl}/product-category-tree?currency=EUR"), ct);
+        var tree = await fetcher.GetAsync(new Uri($"{ApiBase}/product-category-tree?currency=EUR"), ct);
         requests++;
         if (tree.Status == FetchStatus.Blocked)
         {
@@ -58,13 +63,13 @@ public sealed partial class AldiCatalogSource(
         string? stopped = null;
         for (var offset = 0; ; offset += PageSize)
         {
-            if (requests >= settings.AldiMaxRequests)
+            if (requests >= MaxRequests)
             {
-                stopped = $"The sweep stopped at the request limit ({settings.AldiMaxRequests}) before the end of Aldi's range.";
+                stopped = $"The sweep stopped at the request limit ({MaxRequests}) before the end of Aldi's range.";
                 break;
             }
 
-            var page = await fetcher.GetAsync(new Uri($"{baseUrl}/product-search?currency=EUR&limit={PageSize}&offset={offset}"), ct);
+            var page = await fetcher.GetAsync(new Uri($"{ApiBase}/product-search?currency=EUR&limit={PageSize}&offset={offset}"), ct);
             requests++;
             if (page.Status == FetchStatus.Blocked)
             {
@@ -87,6 +92,14 @@ public sealed partial class AldiCatalogSource(
             {
                 log.LogWarning(ex, "Aldi's product list at offset {Offset} was not in the expected shape", offset);
                 stopped = $"Aldi's product list at offset {offset} was not in the shape basket reads, the API may have changed.";
+                break;
+            }
+
+            var live = parsed.Products.Where(p => !p.Discontinued).ToList();
+            if (live.Count > 0 && live.All(p => p.Item.Price is null))
+            {
+                log.LogWarning("None of the {Count} Aldi products at offset {Offset} carried a price", live.Count, offset);
+                stopped = $"Aldi's product list at offset {offset} was not in the shape basket reads (no product had a price), the API may have changed.";
                 break;
             }
 
@@ -301,12 +314,8 @@ public sealed partial class AldiCatalogSource(
             price = Cents(p, "amount");
             unit = Cents(p, "comparison");
             var display = Text(p, "comparisonDisplay");
-            if (display is not null)
-            {
-                var slash = display.IndexOf('/');
-                basis = slash >= 0 ? display[(slash + 1)..].Trim() : null;
-                unit ??= ParseMoney(display);
-            }
+            var slash = display?.IndexOf('/') ?? -1;
+            basis = slash >= 0 ? display![(slash + 1)..].Trim() : null;
         }
 
         var was = ParseMoney(Text(e, "wasPriceDisplay"));
@@ -325,7 +334,7 @@ public sealed partial class AldiCatalogSource(
             basis,
             null,
             CategoryOf(e, paths),
-            ImageOf(e, slug),
+            ImageOf(e),
             price,
             was);
         return new AldiProduct(sku, e.TryGetProperty("discontinued", out var d) && d.ValueKind == JsonValueKind.True, item);
@@ -363,8 +372,8 @@ public sealed partial class AldiCatalogSource(
         return best ?? (names.Count > 0 ? string.Join(StoreListing.CategorySeparator, names) : null);
     }
 
-    /// <summary>The first picture, at 300 pixels wide: its address is a template with <c>{width}</c> (and <c>{slug}</c>) in it.</summary>
-    private static string? ImageOf(JsonElement e, string slug)
+    /// <summary>The first picture, at 300 pixels wide: its address is a template with <c>{width}</c> in it.</summary>
+    private static string? ImageOf(JsonElement e)
     {
         if (!e.TryGetProperty("assets", out var assets) || assets.ValueKind != JsonValueKind.Array)
         {
@@ -375,7 +384,7 @@ public sealed partial class AldiCatalogSource(
         {
             if (asset.ValueKind == JsonValueKind.Object && Text(asset, "url") is { Length: > 0 } url)
             {
-                return url.Replace("{width}", "300", StringComparison.Ordinal).Replace("{slug}", slug, StringComparison.Ordinal);
+                return url.Replace("{width}", "300", StringComparison.Ordinal);
             }
         }
 

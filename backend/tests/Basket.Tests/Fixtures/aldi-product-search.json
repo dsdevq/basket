@@ -50,7 +50,7 @@
       "price": { "amount": 999 },
       "wasPriceDisplay": "€9.99",
       "categories": [ { "id": "9990000000", "name": "Special Buys" } ],
-      "assets": [ { "url": "https://images.example.test/{slug}/{width}/torch" } ]
+      "assets": [ { "url": "https://images.example.test/special-buy-torch/{width}/torch" } ]
     }
   ]
 }
