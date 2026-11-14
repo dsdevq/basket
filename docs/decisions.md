@@ -1906,3 +1906,65 @@ migration**.
   several shops, ticked line), the Shelf page spec (the button opens the sheet and adds nothing; All's on-list rule) and two
   end-to-end flows in `shelf-flow.spec.ts` (choose Tesco then move to Lidl, and a price older than three days). Every product in them
   is invented.
+
+## Catalog 7/14: server-side candidates (2026-11-14, issue 133 of epic 126)
+
+The match sheet only ever had what a person or the PC reader posted to `POST /api/products/{id}/candidates`. With the catalog in
+`store_product` (issues 128, 131, 132) the server can look for a shelf product's equivalents itself, in every shop, without a search.
+
+- **Reuse, nothing new at the door.** No endpoint, scope, token or identity is added. The catalog still arrives through the existing ingest
+  (`POST /api/ingest/catalog` and `.../complete`, the ingest token or the fleet identity with its existing scopes) and the server's own
+  sweeps; the candidate search is what runs after them, in the same process. Candidates are written to `match_candidate` and read through
+  `GET /api/products/{id}/candidates` (`basket:catalog-read`) exactly as before; a person still confirms (no machine route to confirm).
+  The matcher is the same pure `CandidateMatcher`; the cap and the update-in-place rules moved out of the endpoint into `CandidateBook`,
+  which both the endpoint and the server run call, so there is one place that says "5 open proposals per product and shop, rejected pages
+  never again".
+- **No migration.** `match_candidate`, `store_listing.store_product_id` and `store_product` already carry everything. Basis is a string
+  column; the new value `generic` needs no schema change.
+- **When it runs** (`Matching/ServerCandidates`, scoped service). (1) A product is added (`POST /api/products`, a person or the fleet):
+  that product, every shop. (2) A listing is confirmed (a person pastes a page, or accepts a proposal): that product, the shops where it
+  still has no confirmed page, now that it may know a barcode, a size and a category. (3) A sweep is closed
+  (`CatalogIngest.CompleteAsync`, whether the PC reader's `.../complete` or an in-process sweep calls it, and only when the sweep touched a
+  product): every product with an open gap in that shop, in batches of 25 products, one save per product. An open gap is a shop where
+  the product has no confirmed page. A failure is logged and swallowed per product: a proposal is a convenience, it must not fail the
+  add, the confirm or the closing of a sweep. A product the user deletes takes its proposals with it, as before.
+- **What a run looks at.** SQL narrows each shop's live (not discontinued) rows to (a) those with the product's barcode, plus (b) those that
+  state the product's size (unit, amount and pack count all equal) and whose name, with the brand put in front, holds the product's first or
+  last generic word (the kind of thing: milk, beans). At most 300 rows per shop, in name order. The matcher judges what is left. A
+  product with neither a barcode nor a size gets nothing from the server (the search endpoint still serves it): no size, no cheap and
+  safe way to narrow tens of thousands of rows. A product's size is the one in its name, else the one of a confirmed page's catalog row; its
+  barcode is its own, else a confirmed page's; its category is a confirmed page's. A page a machine linked and no person confirmed is not
+  evidence of anything.
+- **Matcher: generic names, brand-agnostic.** After the old name-and-size rule finds nothing, both names are compared again with each
+  shop's own-label words removed (the shop names and their store brands, matched as whole phrases: "Dunnes Stores Simply Better",
+  "Specially Selected", "Milbona", ...), under the same containment rule. Both sizes must be stated and equal. Basis `generic`, score
+  25-49, so it always ranks below a `name_size` match (50-90). A manufacturer's brand is never removed: "Heinz baked beans" and
+  "Branston baked beans" do not match; that is why a catalog row is compared under its brand and name together, as the shops keep the
+  brand in a field of its own. A shelf name that carries only a shop's label ("Tesco baked beans") accepts any brand of the same
+  beans as a low-ranked proposal; a person decides. The list of labels is data in the matcher, easy to extend.
+- **Matcher: size and pack rules unchanged and tested in the new rule.** `6 x 330 ml` is not `330 ml`, not `1980 ml`, not `4 x 330 ml`
+  and not `6 pack`; the same multipack written two ways (`6 x 330ml`, `6x33cl`) is the same size. A catalog row's size comes from its
+  own fields (`size_amount`, `size_unit`, `size_packs`), with the name as the fallback, and is compared as if the name stated it.
+- **Matcher: category agreement.** A second opinion, because shops file differently ("Chilled Food > Milk", "Fresh Food > Dairy > Milk"):
+  two paths that share a meaningful word (lower case, accents folded, plural dropped, "food", "fresh" and the like ignored) agree and add
+  5 to the score; paths with words and none in common disagree, which rejects the loose matches (`generic`, and a name-only match with a
+  size missing) but never a match that states the same name and size. A missing category (either side) changes nothing, so the
+  endpoint, which has no categories, behaves as before.
+- **Barcodes link, names propose.** A row with the product's own barcode, in a shop where the product has no page at all, becomes the
+  shop's page directly: a `store_listing` linked to the catalog row, `confirmed_at` null (as for a fleet link: read for prices, still the
+  owner's to confirm), with the row's title, photo and category and, once, its latest price as that day's observation so the page shows a
+  price before the next sweep (the one case where a linked page is seeded from the catalog; sweeps mirror it from then on). If the shop
+  already has a page for the product, confirmed or not, an exact-barcode row is proposed beside it with score 100 and the page is never
+  swapped. Different valid barcodes never match, as before.
+- **Rejections and confirmations are honoured.** A rejected page is neither proposed nor linked again. A shop with a confirmed page gets no
+  proposals and no link. An open proposal that the catalog's own reading no longer matches (the product learned a barcode or a category)
+  is withdrawn; one it still matches is rescored in place, so a repeated run changes nothing.
+- **Screens.** The match sheet explains the new basis ("Same kind and size, other label"); `MatchBasis` gains `generic`. No page template or
+  route changed, so the screen baselines are unchanged.
+- **Not here.** Add-to-shelf by catalog search (issue 134), the equivalents API (138) and catalog health (139) are separate. Matching by
+  name alone for a product with no size, and a model, stay out (Q6 in the first section).
+- **Tests.** `GenericMatcherTests` (own-label phrases, manufacturer brands kept, the pack rules, structured sizes, category agreement and
+  disagreement, key words), `ServerCandidatesTests` (proposals per shop by size and name, six-pack vs single, own label, no-size products,
+  barcode link with its price, barcode beside an existing page, confirmed shops and rejected pages honoured, the cap of 5 and a repeat run,
+  discontinued rows, the three triggers including a sweep over more than one batch and an empty sweep, the fleet adding a product) and a
+  match-sheet spec for the new basis. Fixtures are invented products and ids; no real data or token is in this public repository.

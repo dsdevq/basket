@@ -70,6 +70,17 @@ describe('MatchSheetComponent', () => {
     expect(host.querySelector('a')?.getAttribute('href')).toBe(FIRST.url);
   });
 
+  it("says a suggestion from another shop's own label is the same kind and size, not the same name", async () => {
+    const {host} = await render({
+      candidates: vi
+        .fn()
+        .mockResolvedValue([{...FIRST, basis: 'generic', title: 'Milbona whole milk 2 litres'}]),
+    });
+
+    expect(host.textContent).toContain('Same kind and size, other label');
+    expect(host.textContent).not.toContain('Same name and size');
+  });
+
   it('asks the store for this shop only', async () => {
     const candidates = vi.fn().mockResolvedValue([FIRST]);
     await render({candidates});
