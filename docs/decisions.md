@@ -1819,21 +1819,22 @@ Owner direction, 2026-11-14: per-store catalog readers feed one combined catalog
   links to and the shelf shows); they are built, never fetched.
 - **Terms note.** Aldi's terms are not an invitation to automated reading; the owner accepted that risk on the footing of 60 polite
   requests a day for a two-person household (issue 129, "accept Aldi terms risk"). The budget is about 60 requests a day: one category tree plus the range in pages of 60
-  (`AldiMaxRequests` = 60 caps a sweep, tree included), 5 s apart (`MinRequestIntervalSeconds`, per host), honest user agent
+  (a fixed cap of 60 requests a sweep, tree included, not a setting), 5 s apart (`MinRequestIntervalSeconds`, per host), honest user agent
   (`basket-price-check/1.0 (a household app ...)`), one sweep a night, no retry. A sweep stops, it never goes round: a 403 or 429
   (`FetchStatus.Blocked`) ends it at once, keeps what the earlier pages recorded, delists nothing and shows on the Prices page as
   blocked. If the owner or Aldi withdraws the acceptance, the fix is to set the source off, not to change how it asks.
-- **What is read.** `GET {AldiApiBase}/product-category-tree` once (category id to its path, outermost first, joined with " > ";
-  the catalogue root "Products" is dropped as everywhere else), then `GET {AldiApiBase}/product-search?limit=60&offset=0..` until
-  `totalCount`, with `currency=EUR`. `AldiApiBase` (`Prices:AldiApiBase`, default `https://asl.api.aldi.ie/v3`) is one setting so
-  a version bump or a host move is configuration. **Not verified live:** no request was made to Aldi for this change (the brief
+- **What is read.** `GET https://asl.api.aldi.ie/v3/product-category-tree` once (category id to its path, outermost first, joined with " > ";
+  the catalogue root "Products" is dropped as everywhere else), then `GET https://asl.api.aldi.ie/v3/product-search?limit=60&offset=0..` until
+  `totalCount`, with `currency=EUR`. The host and version are constants in `AldiCatalogSource`, as the cap is. **Not verified live:** no request was made to Aldi for this change (the brief
   forbids it); the paths, the `v3` and the response shape come from the scout's notes (`api.aldi.ie/v3/product-search`) and the
   fixtures are invented in that shape. The first nightly run is the check: a page in another shape stops the sweep as `Failed`
-  with "not in the shape basket reads", writes and delists nothing.
+  with "not in the shape basket reads", writes and delists nothing. That includes a page with no `meta.pagination.totalCount` (a
+  missing total is never a finished sweep) and a page whose products all lack a readable price (a renamed `price.amount` would
+  otherwise write an empty price over every known one); a single unpriced product is still just unpriced.
 - **Field mapping.** `sku` is `external_id` (the zero-padded number, also the end of the page address); `brandName`; `sellingSize`
-  is `size_text`; `price.amount` / 100 is the price (Aldi sends whole cents); `price.comparison` / 100 with the unit after the "/" of
-  `comparisonDisplay` ("1 kg") is the unit price; `wasPriceDisplay` ("Was €2.69", "€9.99") is parsed and kept only when it is higher
-  than the price; the first `assets` entry with `{width}` replaced by `300` is the photo (`{slug}` too, if present); the product's deepest category the tree knows
+  is `size_text`; `price.amount` / 100 is the price (Aldi sends whole cents); `price.comparison` / 100 is the unit price, labelled with the text after the "/" of
+  `comparisonDisplay` ("1 kg"); `wasPriceDisplay` ("Was €2.69", "€9.99") is parsed and kept only when it is higher
+  than the price; the first `assets` entry with `{width}` replaced by `300` is the photo; the product's deepest category the tree knows
   is the category, else the names it carries; `discontinued` products are not recorded. `notForSale` (Aldi has no online shop) is ignored: a
   listed product is in stock. Aldi has no loyalty price. The barcode is not in the API, so none is stored.
 - **One door, one matcher.** The sweep writes through the same `CatalogRecorder` as `POST /api/ingest/catalog` (write-on-change
