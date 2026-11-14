@@ -1550,3 +1550,23 @@ finds out what those two stores will give a browser on this PC.
   shell has no display, and the browser and profile are the ones already refused. For Tesco the open call remains the owner's one-off
   manual `npm run profile` warm-up; no one did it on his behalf. Issues 135 and 136 therefore have no endpoint facts yet; they wait on
   a profile either store will serve, then one `npm run probe` run.
+
+## Seeded typical section order per chain, the fallback of walk order (2026-11-14, issue #42, epic #25)
+
+Owner's words: "in lidl all the products are almost in the same position - what i mean is that first of all there is fruit section
+then meat and so on and so on. And once my partner drafts the list - I wanted to see it sorted according to what goes after
+another. So i get predictable list by what is closest to me."
+
+- **Borrowed pattern, named:** the default aisle order of AnyList and the Tesco app: a fixed, typical order of departments that is
+  used until the app knows better. No interaction is invented, and nobody enters an aisle by hand: not the owner, not the partner.
+- **One order per chain.** Lidl, Aldi, Tesco and Dunnes each have a seeded list of sections in walking order, in code
+  (`SeededSectionOrder`): Fruit & veg, Bakery, Meat & fish, Dairy & eggs, then Frozen, Cupboard, Drinks (Tesco and Dunnes put Frozen
+  after Drinks), Household, Health & beauty, Pet, and Other last. The order is a typical guess for a shop of that chain, not a
+  floor plan; the order learned from trips (#43) replaces it for a store once that store has enough trips.
+- **The unit is the product's category.** A product's section comes from the shop-page breadcrumb kept on its listing (#41), read
+  from the innermost part outward, so "Fresh Food > Milk" is Dairy & eggs and not Fruit & veg. A product with no category, or one
+  no section claims, is in Other and sorts last. Matching is by plain keywords, fixed in code.
+- **Where it can be read.** `GET /api/walk/seeded` (signed-in people only) returns the sections of each chain in order, read-only.
+  The basket is not re-sorted yet: showing the basket in walk order is #44, which applies the learned order where there is one and
+  this one where there is not.
+- **No migration, no new screen.** Nothing is stored and no page changes, so the screen baselines are untouched.
