@@ -109,6 +109,29 @@ export function lineDetail(line: ByShopLine): string {
   return joined(parts);
 }
 
+/** A run of one shop's lines that sit in the same section of the shop. */
+export interface WalkSection {
+  readonly section: string;
+  readonly lines: readonly ByShopLine[];
+}
+
+/**
+ * A shop's lines cut into the sections you walk through, each under its own header (the sectioned list of AnyList and the
+ * Tesco app). The API already sends the lines in walk order, so a section is a run of neighbours; nothing is re-sorted here.
+ */
+export function walkSections(lines: readonly ByShopLine[]): WalkSection[] {
+  const sections: {section: string; lines: ByShopLine[]}[] = [];
+  for (const line of lines) {
+    const last = sections.at(-1);
+    if (last?.section === line.section) {
+      last.lines.push(line);
+    } else {
+      sections.push({section: line.section, lines: [line]});
+    }
+  }
+  return sections;
+}
+
 /** The stores in reading order: the cheapest complete shop, the other complete ones by total, then the incomplete by lines priced. */
 export function orderedShops(basket: ByShopResponse): ByShopStore[] {
   return [...basket.stores].sort((a, b) => {

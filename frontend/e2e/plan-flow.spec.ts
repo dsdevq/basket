@@ -44,6 +44,6 @@ test('the Plan tab leads to the list priced at each shop, with what each lacks a
   await expect(page).toHaveURL(/\/plan\/by-shop$/);
   await expect(page.getByTestId('verdict')).toContainText('No shop prices the whole list');
   await expect(page.getByText('Not priced at Lidl')).toBeVisible();
-  await expect(page.getByText('Split: buy at Aldi')).toBeVisible();
+  await expect(page.getByRole('heading', {name: /^Aldi · Dairy & eggs/})).toBeVisible();
   await expect(page.getByText('Seen 6 Nov').first()).toBeVisible();
 });

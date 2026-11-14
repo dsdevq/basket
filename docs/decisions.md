@@ -1603,9 +1603,40 @@ another. So i get predictable list by what is closest to me."
   no section claims, is in Other and sorts last. Matching is by plain keywords, fixed in code, and a keyword counts only as a whole
   word (with an optional plural), so "tea" is not found in "steak".
 - **Where it can be read.** `GET /api/walk/seeded` (signed-in people only) returns the sections of each chain in order, read-only.
-  The basket is not re-sorted yet: showing the basket in walk order is #44, which applies the learned order where there is one and
-  this one where there is not.
+  The basket was not re-sorted by this change: showing it in walk order is #44 (below), which applies the learned order where there
+  is one and this one where there is not.
 - **No migration, no new screen.** Nothing is stored and no page changes, so the screen baselines are untouched.
+
+## The basket per shop, in walk order (2026-11-14, issue #44, epic #25)
+
+Owner's ask, as in the seed above: a list that is "predictable by what is closest to me". The basket grouped per shop (By shop's
+split and the Plan tab's two-shop split, which share one group shape) now comes in the order that shop is walked, under a header
+per section.
+
+- **Borrowed pattern, named:** the sectioned shopping list of AnyList and the Tesco app (items under department headers, in the
+  store's aisle order). On the library side it is the page template's own `cmn-list-section` of `cmn-list-item-row`, one section
+  per header; no new component, no new interaction, nothing to drag or enter.
+- **Seeded order, today.** The order is `SeededSectionOrder` (#42) for the shop's chain; no order is learned yet (#43), so this is
+  the only source. When #43 lands, `ByShopBuilder.Group` is the one place that swaps the seed for a store's learned order where it
+  has one. The category of a line is the one on its listing at that shop (#41), as the seed reads it, so the same product can sit
+  in different sections at two shops, which is right: the walk is one shop's.
+- **The server sorts, the page only cuts.** `ByShopBuilder.Group` orders a shop's lines by section rank, stable, so inside a
+  section lines stay in the order they were added to the list. Each `ByShopLine` carries its `section` ("Other" for a product with
+  no category, last in every chain). The page cuts the lines it is sent into runs of one section (`walkSections`) and never sorts,
+  so the order is one rule, tested on the server.
+- **What is shown.** One card per section, headed "Lidl · Fruit & veg" (the shop first, so two shops' cards under each other are
+  never confused), with the lines in it. A shop's subtotal, which used to head its single card ("Buy at Lidl · €0.99"), moved to
+  the first card's aside as "Shop total €0.99", so the number is kept and the header is only the place. A heading-only section
+  was tried for the shop and looked broken in the library's list section (an empty block with a rule), so the shop is in each
+  heading instead.
+- **Not changed.** The List tab, whose lines are not tied to a shop until one is chosen, and the per-line cards on the Plan tab keep
+  their order. Which shop buys a line, the totals and the plan's rules are untouched. `PlanStorePrice` gained the listing's
+  `category` (additive, nullable) so the sort has it.
+- **No migration.** The category column exists (`StoreListingCategory`); nothing is stored.
+- **Tests.** Backend: `ByShopTests` (a shop's lines in walk order with their sections, the total unchanged by sorting, two chains
+  with different orders) and `PlanTests` (the pair split in walk order). Frontend: `walkSections`, and both pages against recorded
+  responses (headers, order, shop total). The e2e fixtures for `by-shop-complete` and `plan-split` now carry sections; their
+  baselines are rendered by the Update screen baselines workflow on the PR branch, never committed by hand.
 
 ## Tesco pages linked for Golden kiwi and Salt (2026-11-14)
 

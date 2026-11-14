@@ -1,10 +1,13 @@
+using Basket.Api.Data;
 using Basket.Api.Prices;
+using Basket.Api.Walk;
 
 namespace Basket.Api.Plan;
 
 /// <summary>
 /// One line bought at one shop: what the shop's usable offer charges for one pack (a card price or a multi-buy counts, as in the
-/// plan), the deal behind it and the day the price was read.
+/// plan), the deal behind it and the day the price was read. <see cref="Section"/> is where the shop keeps it, one of
+/// <see cref="SeededSectionOrder.For"/> (the walk-order section its category falls in, "Other" when it has none).
 /// </summary>
 public sealed record ByShopLine(
     Guid ItemId,
@@ -16,7 +19,8 @@ public sealed record ByShopLine(
     string? PackSize,
     decimal? UnitPrice,
     string? Unit,
-    DateOnly ObservedOn);
+    DateOnly ObservedOn,
+    string Section);
 
 /// <summary>
 /// The whole list priced at one shop. <see cref="Total"/> adds only the <see cref="Priced"/> lines (fresh, in stock, current); a
@@ -38,7 +42,10 @@ public sealed record ByShopStore(
     IReadOnlyList<string> Cards,
     IReadOnlyList<PlanBlocker> Missing);
 
-/// <summary>The lines bought at one shop in the split, with what they cost together.</summary>
+/// <summary>
+/// The lines bought at one shop in the split, with what they cost together, in the order that shop is walked: section by section
+/// (<see cref="SeededSectionOrder"/>), the order the lines were added within a section.
+/// </summary>
 public sealed record ByShopGroup(string Store, string StoreName, decimal Total, IReadOnlyList<ByShopLine> Lines);
 
 /// <summary>
@@ -148,7 +155,7 @@ public static class ByShopBuilder
                 .ToList();
             if (lines.Count > 0)
             {
-                groups.Add(new ByShopGroup(slug, store.DisplayName(), lines.Sum(l => l.Price), lines));
+                groups.Add(Group(store, lines));
             }
         }
 
@@ -162,9 +169,30 @@ public static class ByShopBuilder
         return new ByShopSplit(total, complete, complete && cheapest is not null ? total - cheapest.Total : null, groups, unplaced);
     }
 
+    /// <summary>
+    /// One shop's group with its lines in walk order. The sort is stable, so within a section the lines stay in the order they were
+    /// added to the list. The one place the walk is applied, shared with the two-shop split.
+    /// </summary>
+    internal static ByShopGroup Group(Store store, IEnumerable<ByShopLine> lines)
+    {
+        var walk = lines.OrderBy(l => SeededSectionOrder.RankOfSection(store, l.Section)).ToList();
+        return new ByShopGroup(store.Slug(), store.DisplayName(), walk.Sum(l => l.Price), walk);
+    }
+
     internal static ByShopLine Line(PlanItem item, PlanStorePrice entry)
     {
         var offer = entry.Offer!;
-        return new ByShopLine(item.Id, item.Text, offer.EachPrice, offer.Deal, offer.IsPromo, offer.Card, offer.PackSize, offer.UnitPrice, offer.Unit, offer.ObservedOn);
+        return new ByShopLine(
+            item.Id,
+            item.Text,
+            offer.EachPrice,
+            offer.Deal,
+            offer.IsPromo,
+            offer.Card,
+            offer.PackSize,
+            offer.UnitPrice,
+            offer.Unit,
+            offer.ObservedOn,
+            SeededSectionOrder.SectionOf(entry.Category));
     }
 }
