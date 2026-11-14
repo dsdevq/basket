@@ -60,7 +60,9 @@ describe('ProductSearchSheetComponent', () => {
 
     expect(search).toHaveBeenCalledWith('oat');
     expect(host.textContent).toContain('OATLY Oat Barista Drink');
-    expect(host.querySelector('img')?.getAttribute('src')).toContain('oat.png');
+    expect(host.querySelector('img')?.getAttribute('src')).toBe(
+      'https://www.lidl.ie/assets/oat.png?ngsw-bypass=true'
+    );
     expect(host.textContent).toContain('O');
     expect(host.textContent).toContain('Tesco cannot be searched from here');
   });

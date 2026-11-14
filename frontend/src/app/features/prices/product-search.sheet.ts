@@ -76,7 +76,7 @@ export interface ProductSearchData {
                 <div leading>
                   @if (result.imageUrl && !broken().has(result.url)) {
                     <img
-                      [ngSrc]="result.imageUrl"
+                      [ngSrc]="photo(result.imageUrl)"
                       (error)="markBroken(result.url)"
                       class="size-28 rounded-cmn-md bg-surface-raised object-contain"
                       alt=""
@@ -144,6 +144,14 @@ export class ProductSearchSheetComponent {
     } finally {
       this.searching.set(false);
     }
+  }
+
+  /**
+   * The shops' photos are cross-origin. The service worker would fetch them itself, under
+   * its own connect-src 'self', and answer 504; ngsw-bypass lets the browser load them directly.
+   */
+  protected photo(src: string): string {
+    return `${src}${src.includes('?') ? '&' : '?'}ngsw-bypass=true`;
   }
 
   protected markBroken(url: string): void {
