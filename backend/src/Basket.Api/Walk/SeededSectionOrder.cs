@@ -22,11 +22,11 @@ public static class SeededSectionOrder
     [
         ("Frozen", ["frozen", "ice cream"]),
         ("Fruit & veg", ["fruit", "veg", "vegetable", "salad", "potato", "herb"]),
-        ("Bakery", ["bakery", "bread", "baker", "cake", "roll"]),
+        ("Bakery", ["bakery", "bread", "baker", "cake"]),
         ("Meat & fish", ["meat", "fish", "poultry", "chicken", "beef", "pork", "seafood", "bacon", "sausage"]),
         ("Dairy & eggs", ["dairy", "milk", "cheese", "yogurt", "yoghurt", "butter", "egg", "cream", "chilled"]),
         ("Cupboard", ["cupboard", "pantry", "tinned", "pasta", "rice", "cereal", "sauce", "snack", "biscuit", "confectionery", "sweet", "chocolate"]),
-        ("Drinks", ["drink", "beverage", "water", "juice", "wine", "beer", "cider", "spirit", "tea", "coffee", "soft"]),
+        ("Drinks", ["drink", "beverage", "water", "juice", "wine", "beer", "cider", "spirit", "tea", "coffee"]),
         ("Household", ["household", "cleaning", "laundry", "paper", "kitchen"]),
         ("Health & beauty", ["health", "beauty", "toiletries", "baby", "pharmacy", "personal care"]),
         ("Pet", ["pet"]),
