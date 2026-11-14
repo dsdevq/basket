@@ -53,7 +53,7 @@ public sealed record CatalogProductResponse(
     DateTimeOffset? DiscontinuedAt);
 
 /// <summary>
-/// Reading the combined catalog: <c>GET /api/catalog/search</c> and <c>GET /api/catalog/{id}</c>. Both take the same policy as the
+/// Reading the combined catalog: <c>GET /api/catalog/search</c>, <c>GET /api/catalog/{id}</c> and <c>GET /api/catalog/{id}/equivalents</c>. All take the same policy as the
 /// shelf's product list (a signed-in person, or the fleet identity holding <c>basket:catalog-read</c>); nothing here writes.
 /// </summary>
 public static partial class CatalogEndpoints
@@ -72,6 +72,7 @@ public static partial class CatalogEndpoints
         var catalog = api.MapGroup("/catalog").RequireAuthorization(Policies.CatalogRead);
         catalog.MapGet("/search", SearchAsync);
         catalog.MapGet("/{id:guid}", GetAsync);
+        catalog.MapGet("/{id:guid}/equivalents", EquivalentsAsync);
     }
 
     private static async Task<IResult> SearchAsync(string? q, string? store, int? limit, AppDbContext db, TimeProvider clock, CancellationToken ct)
@@ -151,6 +152,12 @@ public static partial class CatalogEndpoints
             product.DiscontinuedAt));
     }
 
+    private static async Task<IResult> EquivalentsAsync(Guid id, AppDbContext db, TimeProvider clock, CancellationToken ct)
+    {
+        var product = await db.StoreProducts.AsNoTracking().SingleOrDefaultAsync(p => p.Id == id, ct);
+        return product is null ? Results.NotFound() : Results.Ok(await CatalogEquivalents.BuildAsync(db, product, PriceRecorder.DublinDay(clock.GetUtcNow()), ct));
+    }
+
     /// <summary>The words of a search, lower-cased: runs of letters and digits, at most 8 of them within the length cap.</summary>
     private static List<string> Tokens(string? raw)
     {
@@ -158,7 +165,7 @@ public static partial class CatalogEndpoints
         return Word().Matches(text).Select(m => m.Value.ToLowerInvariant()).Distinct().Take(8).ToList();
     }
 
-    private static async Task<Dictionary<Guid, StoreProductPrice>> LatestPricesAsync(AppDbContext db, List<Guid> ids, CancellationToken ct) =>
+    internal static async Task<Dictionary<Guid, StoreProductPrice>> LatestPricesAsync(AppDbContext db, List<Guid> ids, CancellationToken ct) =>
         ids.Count == 0
             ? []
             : (await db.StoreProductPrices.AsNoTracking()
@@ -168,7 +175,7 @@ public static partial class CatalogEndpoints
                 .ToListAsync(ct))
             .ToDictionary(p => p.StoreProductId);
 
-    private static CatalogItemResponse ToItem(StoreProduct p, StoreProductPrice? price, DateOnly today) => new(
+    internal static CatalogItemResponse ToItem(StoreProduct p, StoreProductPrice? price, DateOnly today) => new(
         p.Id,
         p.Store.Slug(),
         p.Store.DisplayName(),
@@ -182,7 +189,7 @@ public static partial class CatalogEndpoints
         price is null ? null : ToPrice(price, today),
         p.LastSeenAt);
 
-    private static PriceResponse ToPrice(StoreProductPrice p, DateOnly today)
+    internal static PriceResponse ToPrice(StoreProductPrice p, DateOnly today)
     {
         var state = PriceStates.Of(p.Price, p.LoyaltyPrice, p.ValidFrom, p.ValidUntil, today);
         decimal? best = state == PriceStates.Current
