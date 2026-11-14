@@ -1670,3 +1670,62 @@ now follow the person to every device they sign in on, as in finance-sentry, ins
   person deleting their row) and the two verbs in the anonymous-401 list. Frontend: `preferences.provider.spec.ts` (nothing asked
   while signed out, load after sign-in, clear on sign-out, a fresh read for the next person) and `e2e/appearance-sync.spec.ts` (the
   account's theme wins after sign-in and is what Settings shows; choosing a mode in Settings is `PATCH`ed).
+
+## Catalog 2/14: the catalog tables and the catalog ingest (2026-11-14, issue 128 of epic 126)
+
+Owner's direction, 2026-11-14: per-store catalog readers feed one combined catalog API, and linking similar products and price
+comparison are built on it. The design is the catalog scout's report (sections 6 and 7). This issue is its data model and its write
+door; no sweep, search, linking or screen is here (issues 129 to 140).
+
+- **Supersedes "prices: his products only".** The plan's 2026-10-29 call (basket reads prices only for products the household put on
+  its shelf, outside this repository) is replaced by the owner's 2026-11-14 direction: a shop's whole catalog is read, shelf or not.
+  The shelf `Product` stays the canonical node; the catalog is a separate table that the shelf's 300-product guard does not bound. Prices
+  of shelf products still come from `store_listing` and `price_observation`, untouched.
+- **Reused, not rebuilt.** The door is the existing ingest: `POST /api/ingest/catalog` and `/api/ingest/catalog/complete` sit beside
+  `POST /api/ingest/prices` and run the same admission (`IngestEndpoints.AdmitAsync`, extracted from the price route so there is one
+  check): an owner-minted `bsk_` token, or the fleet identity with the existing scope `basket:price-ingest` (no new Logto scope, so no
+  account step), the same `ingest` rate limiter (30 requests a minute per client, shared by every ingest route), the same 256 KB body cap
+  and 200 items a batch, the same reason-code style (`unknown_store`, `store_not_ingested`, `url_invalid`, `price_invalid`,
+  `dates_invalid`, `duplicate`, plus `external_id_invalid` and `no_name`), 200 when anything was kept and 422 when nothing was. Size,
+  barcode and photo go through the matcher's `ProductSize` and `Gtin` and the price feature's `ImageUrls`; the shop's product address
+  through `Stores.TryNormalizeProductUrl`. Nothing in the matcher or the fleet identity changed.
+- **One write path, two callers.** `CatalogRecorder` upserts by `(store, external_id)` and is what the server's own sweeps (Aldi, Lidl)
+  will call in process, as `LidlPriceSource` calls `PriceRecorder`; the endpoint is the PC reader's way in. `CatalogReading.TryCreate`
+  is the single validation and normalisation, so both callers get the same rules.
+- **The tables (migration `StoreCatalog`, purely additive).** `store_product` (one row per product per shop: name, brand, size text and
+  the size reduced to `size_amount`/`size_unit` (`g`, `ml`, `each`) per pack plus `size_packs`, the shop's unit price and its basis,
+  GTIN-14 barcode, category path, https photo address, `first_seen_at`, `last_seen_at`, `discontinued_at`), `store_product_price`
+  (history) and a nullable `store_listing.store_product_id` foreign key (`ON DELETE SET NULL`), not backfilled. Indexes: unique
+  `(store, external_id)`, `barcode` where not null, `(store, last_seen_at)`, and a GIN index over a database-generated `tsvector`
+  of name and brand (`english` configuration; no extension). Nothing existing is dropped or rewritten; rollback is dropping the two
+  tables and the column.
+- **`size_packs` is not in the scout's sketch.** A "6 x 330 ml" and a single 330 ml bottle must never read as the same size (the matcher's
+  rule), so the pack count is kept beside the per-pack amount.
+- **Price history is write-on-change.** A `store_product_price` row is written only when the price tuple (price, was price, loyalty
+  price and scheme, promo text, dates, in stock) differs from the latest row; `observed_on` is the Dublin day the value first appeared.
+  A different reading on the same Dublin day replaces that day's row. A product with no price at all (Lidl's in-store-only lines) is
+  stored without one, not rejected; a price that disappears is recorded as an empty row. About 40,000 products times a daily row would
+  be 14 million rows a year for almost no information.
+- **A thinner reading never erases.** A later reading without a barcode, photo, brand or category keeps the stored one; a barcode that
+  is not a valid GTIN or a photo that is not a plain https address is dropped, and the product is kept. A barcode is evidence that two
+  products are the same, so a malformed one is never stored.
+- **Server-dated.** `last_seen_at` is the server's clock, never the poster's.
+- **Closing a sweep.** `/complete` takes `{store, seen, startedAt}`. Products last seen before `startedAt` are marked
+  `discontinued_at` only if the sweep covered at least 90 percent of the live products known before it. Both numbers must clear the
+  bar: the reader's `seen` and the server's own count of the known products the sweep actually listed (new products do not make up for
+  missed ones, and a reader that claims more than it posted cannot get the rest delisted). `startedAt` must be within the last 24 hours
+  and no more than 5 minutes ahead, so a skewed PC clock cannot make everything look unseen. A product listed again comes back. Each
+  closed sweep writes one `price_pull_run` row (`Ok`; `Partial` or `Failed` with the reason in the message when the guard held), which the
+  Prices page already reads; an individual batch writes none.
+- **Which shops post.** The shops `Stores.ReadBy` calls `pc` (Aldi, Tesco, Dunnes today); Lidl is read by the server and gets
+  `store_not_ingested`. `ReadBy(Aldi)` stays `pc` here: the server-side Aldi sweep (issue 129) flips it together with the
+  sweep itself, so the page never says "nightly" for a shop nothing reads yet.
+- **Aldi's terms, accepted knowingly.** Aldi's terms of use (clause 7.1.1) forbid systematic or automated data collection without
+  written approval. The pc-reader already reads Aldi pages, and the catalog sweep (issue 129) makes that more systematic: 60 polite requests
+  a day (the JSON host `asl.api.aldi.ie`, honest user agent, 5 s apart, stop on 403 or 429), for a two-person household, no
+  redistribution. The risk is accepted for a two-person household. The 2026-11-05 ruling "aldi.ie refuses the VPS" stands for
+  `www.aldi.ie`; the API host answered a plain request from the VPS when the scout checked on 2026-11-14, which is why the Aldi sweep moves to the server.
+- **Tests.** Contract tests for both endpoints (`CatalogIngestTests`: admission, scopes, reason codes, limits, rate limit, write-on-change,
+  the 90 percent guard and the run row), recorder tests against Postgres (`CatalogRecorderTests`, including the generated `tsvector`), and
+  pure tests for the validation (`CatalogReadingTests`). Fixtures are invented products shaped like the scout's Aldi and Lidl records;
+  no real catalog data and no tokens are in this public repository.

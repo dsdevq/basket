@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using System.Text.Json;
 using Basket.Api.Auth;
+using Basket.Api.Prices.Catalog;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
@@ -35,6 +36,16 @@ public static class IngestEndpoints
             .AllowAnonymous()
             .RequireRateLimiting(Limiter)
             .WithMetadata(new RequestSizeLimitAttribute(MaxBodyBytes));
+
+        // The combined catalog: the same door (token, scope, limiter, size), a different body. /complete closes a sweep.
+        api.MapPost("/ingest/catalog", PostCatalog)
+            .AllowAnonymous()
+            .RequireRateLimiting(Limiter)
+            .WithMetadata(new RequestSizeLimitAttribute(MaxBodyBytes));
+        api.MapPost("/ingest/catalog/complete", CompleteCatalog)
+            .AllowAnonymous()
+            .RequireRateLimiting(Limiter)
+            .WithMetadata(new RequestSizeLimitAttribute(MaxBodyBytes));
     }
 
     private static async Task<IResult> ListTokens(IngestTokenService tokens, CancellationToken ct) =>
@@ -54,16 +65,19 @@ public static class IngestEndpoints
     private static async Task<IResult> RevokeToken(Guid id, IngestTokenService tokens, CancellationToken ct) =>
         await tokens.RevokeAsync(id, ct) ? Results.NoContent() : Results.NotFound();
 
-    private static async Task<IResult> PostPrices(
+    /// <summary>
+    /// Who is asking comes first, so a caller without a token learns nothing about the request's shape. The owner-minted
+    /// bsk_ token is judged exactly as before; only when it is not one does a fleet token get a look. Then the request's size
+    /// and type. Null when the request may go on, otherwise the answer to send. Shared by every ingest route: one door, one check.
+    /// </summary>
+    private static async Task<IResult?> AdmitAsync(
         HttpContext http,
         IngestTokenService tokens,
         FleetAgentAuthenticator fleet,
-        PriceIngest ingest,
-        ILogger<PriceIngest> log,
+        ILogger log,
+        string what,
         CancellationToken ct)
     {
-        // Who is asking comes first, so a caller without a token learns nothing about the request's shape. The
-        // owner-minted bsk_ token is judged exactly as before; only when it is not one does a fleet token get a look.
         if (!await tokens.AuthenticateAsync(IngestTokens.FromHeader(http.Request.Headers.Authorization), ct))
         {
             var caller = await fleet.AuthenticateAsync(http);
@@ -75,7 +89,7 @@ public static class IngestEndpoints
 
             if (!caller.Has(FleetScopes.PriceIngest))
             {
-                return Results.Json(new { error = "forbidden", message = "That token may not send prices." }, statusCode: 403);
+                return Results.Json(new { error = "forbidden", message = $"That token may not send {what}." }, statusCode: 403);
             }
 
             log.LogInformation("Fleet agent {ClientId} authorised for {Scope}", caller.ClientId, FleetScopes.PriceIngest);
@@ -89,6 +103,22 @@ public static class IngestEndpoints
         if (!http.Request.HasJsonContentType())
         {
             return Results.Json(new { error = "json_required", message = "Send application/json." }, statusCode: 415);
+        }
+
+        return null;
+    }
+
+    private static async Task<IResult> PostPrices(
+        HttpContext http,
+        IngestTokenService tokens,
+        FleetAgentAuthenticator fleet,
+        PriceIngest ingest,
+        ILogger<PriceIngest> log,
+        CancellationToken ct)
+    {
+        if (await AdmitAsync(http, tokens, fleet, log, "prices", ct) is { } refusal)
+        {
+            return refusal;
         }
 
         IngestRequest? body;
@@ -120,6 +150,109 @@ public static class IngestEndpoints
 
         log.LogInformation("Price ingest: {Accepted} accepted, {Rejected} rejected", result.Accepted, result.Rejected);
         return Results.Json(result, statusCode: result.Accepted == 0 ? 422 : 200);
+    }
+
+    private static async Task<IResult> PostCatalog(
+        HttpContext http,
+        IngestTokenService tokens,
+        FleetAgentAuthenticator fleet,
+        CatalogIngest ingest,
+        ILogger<CatalogIngest> log,
+        CancellationToken ct)
+    {
+        if (await AdmitAsync(http, tokens, fleet, log, "catalog products", ct) is { } refusal)
+        {
+            return refusal;
+        }
+
+        CatalogIngestRequest? body;
+        try
+        {
+            body = await http.Request.ReadFromJsonAsync<CatalogIngestRequest>(ct);
+        }
+        catch (JsonException)
+        {
+            return BadBatch("The body is not the JSON basket expects.");
+        }
+
+        if (body?.Items is not { Count: > 0 } items || items.Count > CatalogIngest.MaxBatch || items.Any(i => i is null))
+        {
+            return BadBatch($"Send between 1 and {CatalogIngest.MaxBatch} products in \"items\".");
+        }
+
+        IngestResponse result;
+        try
+        {
+            result = await ingest.IngestAsync(body.Store, items, ct);
+        }
+        catch (DbUpdateException ex)
+        {
+            // Two batches for the same product at the same moment; the loser can simply send again.
+            log.LogWarning(ex, "A catalog batch collided with another write");
+            return Results.Json(new { error = "conflict", message = "Another batch was being saved. Send it again." }, statusCode: 409);
+        }
+
+        log.LogInformation("Catalog ingest: {Accepted} accepted, {Rejected} rejected", result.Accepted, result.Rejected);
+        return Results.Json(result, statusCode: result.Accepted == 0 ? 422 : 200);
+    }
+
+    private static async Task<IResult> CompleteCatalog(
+        HttpContext http,
+        IngestTokenService tokens,
+        FleetAgentAuthenticator fleet,
+        CatalogIngest ingest,
+        TimeProvider clock,
+        ILogger<CatalogIngest> log,
+        CancellationToken ct)
+    {
+        if (await AdmitAsync(http, tokens, fleet, log, "catalog products", ct) is { } refusal)
+        {
+            return refusal;
+        }
+
+        CatalogCompleteRequest? body;
+        try
+        {
+            body = await http.Request.ReadFromJsonAsync<CatalogCompleteRequest>(ct);
+        }
+        catch (JsonException)
+        {
+            return BadBatch("The body is not the JSON basket expects.");
+        }
+
+        var now = clock.GetUtcNow();
+        if (body is not { Seen: >= 0 and <= 1_000_000, StartedAt: { } startedAt }
+            || startedAt > now + CatalogIngest.ClockSkew
+            || startedAt < now - CatalogIngest.MaxSweepAge)
+        {
+            return BadBatch("Send \"store\", \"seen\" (a count) and \"startedAt\" (when the sweep began, within the last day).");
+        }
+
+        if (!Stores.TryParse(body.Store, out var store))
+        {
+            return Results.Json(new { error = CatalogIngest.Reasons.UnknownStore, message = "That is not a shop basket knows." }, statusCode: 422);
+        }
+
+        if (!CatalogIngest.Accepts(store))
+        {
+            return Results.Json(new { error = CatalogIngest.Reasons.StoreNotIngested, message = "Basket reads that shop's catalog itself." }, statusCode: 422);
+        }
+
+        CatalogCompleteResponse result;
+        try
+        {
+            result = await ingest.CompleteAsync(store, body.Seen.Value, startedAt, ct);
+        }
+        catch (DbUpdateException ex)
+        {
+            log.LogWarning(ex, "Closing a catalog sweep collided with another write");
+            return Results.Json(new { error = "conflict", message = "Another batch was being saved. Send it again." }, statusCode: 409);
+        }
+
+        log.LogInformation(
+            "Catalog sweep of {Store} closed: seen {Seen} of {Previous}, {Discontinued} discontinued, guarded {Guarded}",
+            result.Store, result.Seen, result.PreviousLive, result.Discontinued, result.Guarded);
+        return Results.Json(result);
     }
 
     private static IResult BadBatch(string message) =>

@@ -23,6 +23,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
     public DbSet<StoreListing> StoreListings => Set<StoreListing>();
 
+    public DbSet<StoreProduct> StoreProducts => Set<StoreProduct>();
+
+    public DbSet<StoreProductPrice> StoreProductPrices => Set<StoreProductPrice>();
+
     public DbSet<MatchCandidate> MatchCandidates => Set<MatchCandidate>();
 
     public DbSet<PriceObservation> PriceObservations => Set<PriceObservation>();
@@ -132,6 +136,47 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             listing.Property(l => l.LastError).HasMaxLength(500);
             listing.HasOne<Product>().WithMany().HasForeignKey(l => l.ProductId).OnDelete(DeleteBehavior.Cascade);
             listing.HasIndex(l => new { l.ProductId, l.Store }).IsUnique();
+            // The catalog row this page is, when linked. A catalog row is never deleted by a sweep (it is marked
+            // discontinued), so the link only clears if a row is removed by hand.
+            listing.HasOne<StoreProduct>().WithMany().HasForeignKey(l => l.StoreProductId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        builder.Entity<StoreProduct>(catalog =>
+        {
+            catalog.ToTable("store_product");
+            catalog.HasKey(p => p.Id);
+            catalog.Property(p => p.Store).HasConversion<string>().HasMaxLength(16);
+            catalog.Property(p => p.ExternalId).HasMaxLength(StoreProduct.MaxExternalIdLength).IsRequired();
+            catalog.Property(p => p.Url).HasMaxLength(400).IsRequired();
+            catalog.Property(p => p.Name).HasMaxLength(StoreProduct.MaxNameLength).IsRequired();
+            catalog.Property(p => p.Brand).HasMaxLength(StoreProduct.MaxBrandLength);
+            catalog.Property(p => p.SizeText).HasMaxLength(StoreProduct.MaxSizeTextLength);
+            catalog.Property(p => p.SizeAmount).HasPrecision(12, 2);
+            catalog.Property(p => p.SizeUnit).HasMaxLength(4);
+            catalog.Property(p => p.SizePacks).HasDefaultValue(1);
+            catalog.Property(p => p.UnitPrice).HasPrecision(10, 2);
+            catalog.Property(p => p.UnitPriceBasis).HasMaxLength(StoreProduct.MaxUnitPriceBasisLength);
+            catalog.Property(p => p.Barcode).HasMaxLength(14);
+            catalog.Property(p => p.Category).HasMaxLength(StoreListing.MaxCategoryLength);
+            catalog.Property(p => p.ImageUrl).HasMaxLength(ImageUrls.MaxLength);
+            catalog.HasIndex(p => new { p.Store, p.ExternalId }).IsUnique();
+            catalog.HasIndex(p => p.Barcode).HasFilter("barcode IS NOT NULL");
+            catalog.HasIndex(p => new { p.Store, p.LastSeenAt });
+            catalog.HasGeneratedTsVectorColumn(p => p.SearchVector, "english", p => new { p.Name, p.Brand })
+                .HasIndex(p => p.SearchVector)
+                .HasMethod("GIN");
+        });
+
+        builder.Entity<StoreProductPrice>(price =>
+        {
+            price.ToTable("store_product_price");
+            price.HasKey(p => new { p.StoreProductId, p.ObservedOn });
+            price.Property(p => p.Price).HasPrecision(10, 2);
+            price.Property(p => p.WasPrice).HasPrecision(10, 2);
+            price.Property(p => p.LoyaltyPrice).HasPrecision(10, 2);
+            price.Property(p => p.LoyaltyScheme).HasMaxLength(32);
+            price.Property(p => p.PromoText).HasMaxLength(200);
+            price.HasOne<StoreProduct>().WithMany().HasForeignKey(p => p.StoreProductId).OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<MatchCandidate>(candidate =>

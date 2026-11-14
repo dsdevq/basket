@@ -210,6 +210,6 @@ public sealed class PriceIngest(AppDbContext db, PriceRecorder recorder, TimePro
     }
 
     /// <summary>Absent, or a positive euro amount with at most cents.</summary>
-    private static bool IsMoney(decimal? value) =>
+    internal static bool IsMoney(decimal? value) =>
         value is null || (value > 0 && value <= MaxPrice && decimal.Round(value.Value, 2) == value);
 }
