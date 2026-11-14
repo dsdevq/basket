@@ -496,6 +496,19 @@ unchanged: same endpoints, scopes and validation as "Fleet identity on the machi
 only when the reader has no fleet identity or the catalog call fails; the `bsk_` token path is unchanged and used when no fleet
 setting is present. A fleet identity set alongside a `bsk_` token wins. No migration.
 
+## The PC reader reaches the identity service over https, no tunnel (2026-11-14)
+
+The reader's documented issuer was `http://127.0.0.1:3001/oidc`, reachable from the PC only through a reverse ssh tunnel held open by
+hand. Scouted from the PC on 2026-11-14: Logto's discovery document at the tailnet address reports
+`issuer: https://<vps>.<tailnet>.ts.net:3001/oidc`, the same string its tokens carry as `iss` and basket's `FleetAgent:Authority`
+(`FLEET_AGENT_AUTHORITY`) pins, so a token fetched over that address validates without any change on the VPS. With
+`BASKET_FLEET_ISSUER` set to it (and `BASKET_API_ORIGIN` on the tailnet address) the reader gets its token, and basket answers
+`GET /api/products` 200, with no tunnel running and nothing listening on `127.0.0.1:3001`. Not verified (it would need a tunnel up): whether Logto stamps a different `iss` when reached as `127.0.0.1`. The reader only uses the value as the base of `<issuer>/token`, but it is kept equal to the issuer Logto reports so there is one string everywhere. This change is therefore repo-side only: `.env.example` and the README now give the tailnet https issuer, and
+`npm run check` (`pc-reader/src/identity-check.ts`) proves the four links (issuer not loopback, discovery reports the configured
+issuer, token `iss`/audience/scopes, basket accepts it) and exits non-zero otherwise. The loopback `http` allowance in the config
+stays for local development against a local Logto. No Funnel is needed for Logto: the PC is on the tailnet, and the PC reader
+therefore depends on Tailscale being up, which the scheduled run should treat as "skip quietly" when it is not.
+
 ## The fleet links store pages (2026-11-09)
 
 Owner's goal: the Tesco and Aldi reader gets its work list without the owner linking each product by hand. The fleet identity

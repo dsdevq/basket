@@ -8,6 +8,7 @@
   "scripts": {
     "start": "node src/main.ts",
     "profile": "node src/profile.ts",
+    "check": "node src/check.ts",
     "test": "node --test \"test/*.test.ts\"",
     "typecheck": "tsc --noEmit"
   },
