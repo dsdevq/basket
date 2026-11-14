@@ -1,5 +1,5 @@
 import {card, entry} from './scorecard-fixtures';
-import {monthLabel, orderedStores, trendSentence, verdict} from './scorecard-format';
+import {monthLabel, orderedStores, verdict} from './scorecard-format';
 
 const SCORED = card({
   trips: 4,
@@ -30,24 +30,17 @@ describe('scorecard format', () => {
     expect(orderedStores(SCORED).map(s => s.store)).toEqual(['aldi', 'lidl', 'tesco', 'dunnes']);
   });
 
-  it('compares the latest month with the one before it', () => {
-    expect(trendSentence(SCORED)).toBe('Nov 2026 saved €0.50 more than Oct 2026.');
-    expect(
-      trendSentence(card({trend: [{month: '2026-11', trips: 1, compared: 2, saved: 1}]}))
-    ).toBe('');
-  });
-
   it('says who wins, what was saved and what was left out', () => {
     const answer = verdict(SCORED);
     expect(answer.status.label).toBe('Aldi wins most');
     expect(answer.pills.map(p => p.label)).toEqual(['€6.50 saved', '10 lines']);
-    expect(answer.caveat).toContain('Aldi was cheapest on 6 of 10 compared lines');
-    expect(answer.caveat).toContain('2 lines were not compared');
+    expect(answer.caveat).toBe('Aldi was cheapest on 6 of 10 lines. 2 not compared.');
+    expect(answer.caveat.length).toBeLessThan(75);
   });
 
   it('does not name a winner when nothing could be compared', () => {
     const answer = verdict(card({trips: 2, notCompared: 1}));
     expect(answer.status.label).toBe('Nothing to score yet');
-    expect(answer.caveat).toContain('1 line was not compared');
+    expect(answer.caveat).toBe('No line had fresh prices at two shops. 1 not compared.');
   });
 });

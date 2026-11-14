@@ -1353,6 +1353,7 @@ still stands: this is a view he opens, never pushed, scheduled or mailed.
   i.e. what the same quantity would have cost more at the dearest comparable shop. Summed, rounded to cents per line. It is a
   like-for-like quantity saving, not what was actually paid (trips keep no prices, except Lidl receipts, which are not used here).
 - **Trend.** One row per month of the window (oldest first in the API, newest first on the page): trips, lines compared and saved.
-  The headline sentence sets the latest month with compared lines against the one before it.
+  The verdict stays one short line (the shop with most wins and how many lines were not compared, under the 75-character line
+  limit of the route scan); the saving is in its pill and the trend is the month list itself, newest first.
 - **Screens.** New route, so new baselines (`scorecard` and `scorecard-empty`, 390 / 1280, light and dark). They are drawn on CI by
   the "Update screen baselines" workflow dispatched on the branch, not committed from a local run.

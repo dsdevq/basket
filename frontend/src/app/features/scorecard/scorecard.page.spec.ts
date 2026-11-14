@@ -72,7 +72,7 @@ describe('ScorecardPage', () => {
     const answer = squash(host.querySelector('[data-testid="verdict"]')?.textContent);
     expect(answer).toContain('Aldi wins most');
     expect(answer).toContain('€6.50 saved');
-    expect(answer).toContain('2 lines were not compared');
+    expect(answer).toContain('2 not compared');
   });
 
   it('lists the shops by wins, the winner marked', async () => {
