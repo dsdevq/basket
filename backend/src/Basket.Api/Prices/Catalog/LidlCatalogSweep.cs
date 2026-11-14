@@ -7,22 +7,14 @@ using Microsoft.Extensions.Options;
 
 namespace Basket.Api.Prices.Catalog;
 
-/// <summary>A shop whose whole catalog the server reads itself, once a night, into the combined catalog.</summary>
-public interface ICatalogSweep
-{
-    Store Store { get; }
-
-    Task RunAsync(CancellationToken ct);
-}
-
 /// <summary>
 /// The nightly Lidl catalog sweep. lidl.ie lists its whole range but shows an everyday price on only part of it, so this is a
-/// range reader: the food listing pages (found in the page sitemap, plus the configured food root) are walked with
-/// <c>?offset=</c> in steps of 12, each tile is stored as a catalog product through <see cref="CatalogRecorder"/> (the path the
-/// PC reader's endpoint also ends in), and the sweep is closed through <see cref="CatalogIngest.CompleteAsync"/> so the
-/// discontinued guard and the run row are the ones every shop has. Then the product pages of at most
-/// <see cref="PricesOptions.LidlBarcodePagesPerNight"/> products with no stored barcode are opened to read the GTIN. It never
-/// calls Lidl's search API, and a refusal ends the sweep (nothing is tried again or worked around).
+/// range reader: the food listing pages found in the page sitemap are walked with <c>?offset=</c> in steps of 12, each tile is
+/// stored as a catalog product through <see cref="CatalogRecorder"/> (the path the PC reader's endpoint also ends in). A sweep that
+/// read every category to its end is closed through <see cref="CatalogIngest.CompleteAsync"/>, so the discontinued guard and the
+/// run row are the ones every shop has; a sweep that missed any page is recorded as it was and delists nothing. Then the product
+/// pages of at most <see cref="PricesOptions.LidlBarcodePagesPerNight"/> products with no stored barcode are opened to read the
+/// GTIN. It never calls Lidl's search API, and a refusal ends the sweep (nothing is tried again or worked around).
 /// </summary>
 public sealed class LidlCatalogSweep(
     IPageFetcher fetcher,
@@ -31,7 +23,7 @@ public sealed class LidlCatalogSweep(
     CatalogIngest ingest,
     IOptions<PricesOptions> options,
     TimeProvider clock,
-    ILogger<LidlCatalogSweep> log) : ICatalogSweep
+    ILogger<LidlCatalogSweep> log)
 {
     /// <summary>Tiles per listing page; Lidl's server decides it, the sweep only steps by it.</summary>
     public const int PageSize = 12;
@@ -39,38 +31,27 @@ public sealed class LidlCatalogSweep(
     /// <summary>A category is never walked past this many pages (the food range is about 60), so a page that repeats cannot loop.</summary>
     private const int MaxPagesPerCategory = 120;
 
-    public Store Store => Store.Lidl;
-
     public async Task RunAsync(CancellationToken ct)
     {
         var started = clock.GetUtcNow();
         var settings = options.Value;
         var readings = new Dictionary<string, CatalogReading>(StringComparer.Ordinal);
-        var refused = false;
-        var pagesLeft = Math.Max(settings.LidlCatalogMaxPages, 0);
-        string? note = null;
 
-        var categories = new List<Uri>();
-        var sitemap = await DiscoverCategoriesAsync(settings, ct);
-        refused = sitemap.Refused;
-        if (!refused)
-        {
-            categories.AddRange(settings.LidlCatalogRootPages.Select(p => new Uri(p)));
-            categories.AddRange(sitemap.Pages.Where(p => !categories.Contains(p)));
-            pagesLeft -= sitemap.Requests;
-        }
+        var discovery = await DiscoverCategoriesAsync(settings, ct);
+        var refused = discovery.Refused;
+        var note = discovery.Note;
 
         var rejected = 0;
-        foreach (var category in categories)
+        foreach (var category in discovery.Pages)
         {
-            for (var page = 0; page < MaxPagesPerCategory && !refused; page++)
+            if (refused)
             {
-                if (pagesLeft-- <= 0)
-                {
-                    note ??= "The page budget ran out before every category was walked.";
-                    break;
-                }
+                break;
+            }
 
+            var walked = false;
+            for (var page = 0; page < MaxPagesPerCategory; page++)
+            {
                 var result = await fetcher.GetAsync(page == 0 ? category : new Uri($"{category}?offset={page * PageSize}"), ct);
                 if (result.Status == FetchStatus.Blocked)
                 {
@@ -81,13 +62,24 @@ public sealed class LidlCatalogSweep(
 
                 if (result.Status != FetchStatus.Ok)
                 {
-                    // A page that is down costs its own products only; the guard on closing keeps a thin sweep from delisting anything.
                     note ??= $"A Lidl listing page was not read ({result.Detail ?? "no detail"}).";
                     break;
                 }
 
+                var tiles = LidlParser.ParseCatalogTiles(result.Body!);
+                if (tiles.Count == 0)
+                {
+                    walked = page > 0; // an empty first page is a layout that changed or a page that failed, not a category with nothing in it
+                    if (!walked)
+                    {
+                        note ??= $"A Lidl listing page showed no products ({category.AbsolutePath}).";
+                    }
+
+                    break;
+                }
+
                 var fresh = new List<CatalogReading>();
-                foreach (var item in LidlParser.ParseCatalogTiles(result.Body!))
+                foreach (var item in tiles)
                 {
                     if (item.ExternalId is { } id && readings.ContainsKey(id))
                     {
@@ -107,16 +99,17 @@ public sealed class LidlCatalogSweep(
 
                 if (fresh.Count == 0)
                 {
-                    break; // past the last page: nothing new, so the next offset would only repeat or be empty
+                    walked = true; // past the last page: nothing new, so the next offset would only repeat or be empty
+                    break;
                 }
 
                 await recorder.RecordAsync(Store.Lidl, fresh, clock.GetUtcNow(), ct);
                 await db.SaveChangesAsync(ct);
             }
 
-            if (refused || pagesLeft < 0)
+            if (!walked && !refused)
             {
-                break;
+                note ??= $"A Lidl category still listed new products after {MaxPagesPerCategory} pages ({category.AbsolutePath}).";
             }
         }
 
@@ -127,69 +120,66 @@ public sealed class LidlCatalogSweep(
 
         if (refused)
         {
-            await RecordRefusedAsync(started, readings.Count, note ?? "Lidl refused automated access.", ct);
+            await RecordRunAsync(started, PullOutcome.Blocked, readings.Count, note ?? "Lidl refused automated access.", ct);
             return;
         }
 
-        var closed = await ingest.CompleteAsync(Store.Lidl, readings.Count, started, ct);
-        log.LogInformation("Lidl catalog sweep: {Seen} products, {Outcome}", closed.Seen, closed.Outcome);
         if (note is not null)
         {
-            await AppendNoteAsync(started, note, ct);
+            log.LogWarning("Lidl catalog sweep incomplete, nothing marked discontinued: {Note}", note);
+            await RecordRunAsync(
+                started, readings.Count == 0 ? PullOutcome.Failed : PullOutcome.Partial, readings.Count, $"{note} Nothing was marked discontinued.", ct);
+        }
+        else
+        {
+            var closed = await ingest.CompleteAsync(Store.Lidl, readings.Count, started, ct);
+            log.LogInformation("Lidl catalog sweep: {Seen} products, {Outcome}", closed.Seen, closed.Outcome);
         }
 
         await ReadBarcodesAsync(readings, ct);
     }
 
-    private sealed record Discovery(IReadOnlyList<Uri> Pages, int Requests, bool Refused);
+    private sealed record Discovery(IReadOnlyList<Uri> Pages, bool Refused, string? Note);
 
     /// <summary>
     /// The food category pages of the page sitemap: the index names the sitemaps, the one named "pages" lists the categories.
-    /// A sitemap that cannot be read costs only the extra categories (the configured food root is still walked); a refusal ends the sweep.
+    /// A sitemap that cannot be read leaves no categories to walk and says so; a refusal ends the sweep.
     /// </summary>
     private async Task<Discovery> DiscoverCategoriesAsync(PricesOptions settings, CancellationToken ct)
     {
-        var requests = 0;
         var index = await fetcher.GetAsync(new Uri(settings.LidlSitemapIndex), ct);
-        requests++;
-        if (index.Status == FetchStatus.Blocked)
-        {
-            return new Discovery([], requests, true);
-        }
-
         if (index.Status != FetchStatus.Ok)
         {
-            log.LogWarning("The Lidl sitemap index was not read: {Detail}", index.Detail);
-            return new Discovery([], requests, false);
+            return Unreadable(index, "sitemap index");
         }
 
         var pagesSitemap = LidlParser.SitemapLocations(index.Body!)
             .FirstOrDefault(u => Path.GetFileName(u.AbsolutePath).StartsWith("pages", StringComparison.OrdinalIgnoreCase));
         if (pagesSitemap is null)
         {
-            log.LogWarning("The Lidl sitemap index lists no page sitemap");
-            return new Discovery([], requests, false);
+            return new Discovery([], false, "The Lidl sitemap index lists no page sitemap.");
         }
 
         var sitemap = await fetcher.GetAsync(pagesSitemap, ct);
-        requests++;
-        if (sitemap.Status == FetchStatus.Blocked)
-        {
-            return new Discovery([], requests, true);
-        }
-
         if (sitemap.Status != FetchStatus.Ok)
         {
-            log.LogWarning("The Lidl page sitemap was not read: {Detail}", sitemap.Detail);
-            return new Discovery([], requests, false);
+            return Unreadable(sitemap, "page sitemap");
         }
 
-        return new Discovery(LidlParser.FoodCategoryPages(sitemap.Body!, settings.LidlFoodWords), requests, false);
+        var pages = LidlParser.FoodCategoryPages(sitemap.Body!, settings.LidlFoodWords);
+        return new Discovery(pages, false, pages.Count == 0 ? "The Lidl page sitemap lists no food categories." : null);
     }
 
+    private static Discovery Unreadable(FetchResult result, string what) =>
+        result.Status == FetchStatus.Blocked
+            ? new Discovery([], true, $"{result.Detail}. basket does not try to get around a block.")
+            : new Discovery([], false, $"The Lidl {what} was not read ({result.Detail ?? "no detail"}).");
+
     /// <summary>
-    /// Opens the product page of products with no stored barcode (at most the nightly cap, in product-number order) and stores the
-    /// GTIN of the JSON-LD. A page that is gone, down or without a valid GTIN is skipped and tried again another night; a refusal ends it.
+    /// Opens the product page of products with no stored barcode (at most the nightly cap) and stores the GTIN of the JSON-LD.
+    /// The candidates are in product-number order, started from a place that moves on by the cap every UTC day, so products whose
+    /// page never gives a valid GTIN cannot take the whole cap every night. A page that is gone, down or without a valid GTIN is
+    /// skipped and tried again on a later night; a refusal ends it.
     /// </summary>
     private async Task ReadBarcodesAsync(Dictionary<string, CatalogReading> readings, CancellationToken ct)
     {
@@ -200,12 +190,14 @@ public sealed class LidlCatalogSweep(
         }
 
         var ids = readings.Keys.ToList();
-        var wanted = await db.StoreProducts
+        var candidates = await db.StoreProducts
             .Where(p => p.Store == Store.Lidl && p.Barcode == null && ids.Contains(p.ExternalId))
             .OrderBy(p => p.ExternalId)
             .Select(p => p.ExternalId)
-            .Take(cap)
             .ToListAsync(ct);
+        var day = DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime).DayNumber;
+        var first = candidates.Count == 0 ? 0 : (int)(day * (long)cap % candidates.Count);
+        var wanted = candidates.Skip(first).Concat(candidates.Take(first)).Take(cap).ToList();
 
         var found = 0;
         foreach (var id in wanted)
@@ -231,7 +223,7 @@ public sealed class LidlCatalogSweep(
         log.LogInformation("Lidl catalog sweep: {Found} barcodes read from {Opened} product pages", found, wanted.Count);
     }
 
-    private async Task RecordRefusedAsync(DateTimeOffset started, int seen, string message, CancellationToken ct)
+    private async Task RecordRunAsync(DateTimeOffset started, PullOutcome outcome, int seen, string message, CancellationToken ct)
     {
         db.PricePullRuns.Add(new PricePullRun
         {
@@ -239,37 +231,21 @@ public sealed class LidlCatalogSweep(
             Store = Store.Lidl,
             StartedAt = started,
             FinishedAt = clock.GetUtcNow(),
-            Outcome = PullOutcome.Blocked,
+            Outcome = outcome,
             Read = seen,
             Message = PriceRecorder.Truncate(message, 500),
         });
         await db.SaveChangesAsync(ct);
     }
-
-    /// <summary>Adds what the sweep could not do to the message of the run row it just closed.</summary>
-    private async Task AppendNoteAsync(DateTimeOffset started, string note, CancellationToken ct)
-    {
-        var run = await db.PricePullRuns
-            .Where(r => r.Store == Store.Lidl && r.StartedAt == started)
-            .OrderByDescending(r => r.FinishedAt)
-            .FirstOrDefaultAsync(ct);
-        if (run is null)
-        {
-            return;
-        }
-
-        run.Message = PriceRecorder.Truncate(run.Message is null ? note : $"{run.Message} {note}", 500);
-        await db.SaveChangesAsync(ct);
-    }
 }
 
 /// <summary>
-/// The nightly catalog job: runs each shop's <see cref="ICatalogSweep"/> on its own, so one failing leaves the others and the
-/// price pull alone. Separate from <see cref="PricePullJob"/> because that reads the shelf's listings and this the shop's range.
+/// The nightly Lidl catalog job. Separate from <see cref="PricePullJob"/> because that reads the shelf's listings and this the
+/// shop's range; a sweep that fails leaves the price pull alone.
 /// </summary>
-public sealed class CatalogSweepJob(IServiceScopeFactory scopes, TimeProvider clock, ILogger<CatalogSweepJob> log)
+public sealed class LidlCatalogJob(IServiceScopeFactory scopes, TimeProvider clock, ILogger<LidlCatalogJob> log)
 {
-    public const string Id = "catalog-sweep";
+    public const string Id = "lidl-catalog-sweep";
 
     private static readonly TimeZoneInfo Dublin = TimeZoneInfo.FindSystemTimeZoneById("Europe/Dublin");
 
@@ -277,32 +253,23 @@ public sealed class CatalogSweepJob(IServiceScopeFactory scopes, TimeProvider cl
     [DisableConcurrentExecution(timeoutInSeconds: 3600)]
     public async Task RunAsync(CancellationToken ct)
     {
-        List<Store> stores;
-        await using (var probe = scopes.CreateAsyncScope())
+        try
         {
-            stores = probe.ServiceProvider.GetServices<ICatalogSweep>().Select(s => s.Store).ToList();
+            await using var scope = scopes.CreateAsyncScope();
+            await scope.ServiceProvider.GetRequiredService<LidlCatalogSweep>().RunAsync(ct);
         }
-
-        foreach (var store in stores)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            try
-            {
-                await using var scope = scopes.CreateAsyncScope();
-                await scope.ServiceProvider.GetServices<ICatalogSweep>().First(s => s.Store == store).RunAsync(ct);
-            }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested)
-            {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                log.LogError(ex, "The {Store} catalog sweep failed", store);
-                await RecordFailureAsync(store, ex.Message, ct);
-            }
+            throw;
+        }
+        catch (Exception ex)
+        {
+            log.LogError(ex, "The Lidl catalog sweep failed");
+            await RecordFailureAsync(ex.Message, ct);
         }
     }
 
-    private async Task RecordFailureAsync(Store store, string message, CancellationToken ct)
+    private async Task RecordFailureAsync(string message, CancellationToken ct)
     {
         try
         {
@@ -312,7 +279,7 @@ public sealed class CatalogSweepJob(IServiceScopeFactory scopes, TimeProvider cl
             db.PricePullRuns.Add(new PricePullRun
             {
                 Id = Guid.NewGuid(),
-                Store = store,
+                Store = Store.Lidl,
                 StartedAt = now,
                 FinishedAt = now,
                 Outcome = PullOutcome.Failed,
@@ -322,13 +289,13 @@ public sealed class CatalogSweepJob(IServiceScopeFactory scopes, TimeProvider cl
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            log.LogError(ex, "Could not record the failed {Store} catalog sweep", store);
+            log.LogError(ex, "Could not record the failed Lidl catalog sweep");
         }
     }
 
     /// <summary>Half an hour after the price pull, so the two never share the shop's politeness gap.</summary>
     public static void Schedule(IRecurringJobManager jobs) =>
-        jobs.AddOrUpdate<CatalogSweepJob>(
+        jobs.AddOrUpdate<LidlCatalogJob>(
             Id,
             job => job.RunAsync(CancellationToken.None),
             "30 3 * * *",

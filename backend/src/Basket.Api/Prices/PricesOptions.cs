@@ -23,12 +23,6 @@ public sealed class PricesOptions
     /// <summary>The sitemap index of lidl.ie (robots.txt names it); the sweep reads the page sitemap it lists to find the food category pages.</summary>
     public string LidlSitemapIndex { get; set; } = "https://www.lidl.ie/static/sitemap.xml";
 
-    /// <summary>
-    /// Food listing pages the catalog sweep always walks, even when the page sitemap is unreadable. Lidl's food-and-drink page lists
-    /// the whole food range; the sitemap's category pages only add to it (each product is stored once).
-    /// </summary>
-    public string[] LidlCatalogRootPages { get; set; } = ["https://www.lidl.ie/c/food-drink/s10068374"];
-
     /// <summary>A sitemap category page is walked when its hyphenated name holds one of these words.</summary>
     public string[] LidlFoodWords { get; set; } =
     [
@@ -36,9 +30,6 @@ public sealed class PricesOptions
         "bread", "chilled", "frozen", "snacks", "sweets", "chocolate", "biscuits", "cereal", "pasta", "rice", "sauces", "tea",
         "coffee", "juice", "water", "wine", "beer", "cider", "spirits", "grocery", "pantry", "deli",
     ];
-
-    /// <summary>Listing pages one nightly Lidl sweep may fetch. A sweep that reaches it stops and leaves the rest for the next night.</summary>
-    public int LidlCatalogMaxPages { get; set; } = 300;
 
     /// <summary>Product pages one night may open to read a barcode. About 700 food products take a few nights, then only new products.</summary>
     public int LidlBarcodePagesPerNight { get; set; } = 200;

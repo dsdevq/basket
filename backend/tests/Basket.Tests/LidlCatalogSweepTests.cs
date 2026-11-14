@@ -39,7 +39,7 @@ public sealed class LidlCatalogSweepTests : IClassFixture<BasketFactory>
             .Serve(Root + "?offset=24", Fixtures.Read("lidl-catalog-page-empty.html"))
             .Serve(FruitVeg, Fixtures.Read("lidl-catalog-page-2.html"))
             .Serve(FruitVeg + "?offset=12", Fixtures.Read("lidl-catalog-page-empty.html"))
-            .Serve(Chilled, Fixtures.Read("lidl-catalog-page-empty.html"));
+            .Serve(Chilled, Fixtures.Read("lidl-catalog-page-2.html"));
         if (withBarcodes)
         {
             fetcher.Serve(ButterPage, Fixtures.Read("lidl-product-page-gtin.html"))
@@ -51,14 +51,12 @@ public sealed class LidlCatalogSweepTests : IClassFixture<BasketFactory>
         return fetcher;
     }
 
-    private Task SweepAsync(FakeFetcher fetcher, int barcodeCap = 200, int maxPages = 300) =>
+    private Task SweepAsync(FakeFetcher fetcher, int barcodeCap = 200) =>
         _factory.WithDb(async db =>
         {
             var recorder = new CatalogRecorder(db);
             var options = Options.Create(new PricesOptions
             {
-                LidlCatalogRootPages = [Root],
-                LidlCatalogMaxPages = maxPages,
                 LidlBarcodePagesPerNight = barcodeCap,
             });
             var sweep = new LidlCatalogSweep(
@@ -164,8 +162,22 @@ public sealed class LidlCatalogSweepTests : IClassFixture<BasketFactory>
 
         await SweepAsync(fetcher, barcodeCap: 2);
 
-        fetcher.Requested.Where(u => u.Contains("/p/")).Should().Equal(ButterPage, BiscuitsPage);
-        (await ProductsAsync()).Count(p => p.Barcode != null).Should().Be(1);
+        fetcher.Requested.Count(u => u.Contains("/p/")).Should().Be(2);
+        (await ProductsAsync()).Count(p => p.Barcode != null).Should().BeInRange(1, 2);
+    }
+
+    [Fact]
+    public async Task A_page_that_never_gives_a_barcode_cannot_hold_the_cap_every_night()
+    {
+        await CleanAsync();
+
+        for (var night = 0; night < 6; night++)
+        {
+            await SweepAsync(Shop(), barcodeCap: 1);
+            _clock.Advance(TimeSpan.FromDays(1));
+        }
+
+        (await ProductsAsync()).Where(p => p.ExternalId != "90000002").Should().OnlyContain(p => p.Barcode != null, "the bad page took one night in a few, not every night");
     }
 
     [Fact]
@@ -217,30 +229,68 @@ public sealed class LidlCatalogSweepTests : IClassFixture<BasketFactory>
     }
 
     [Fact]
-    public async Task An_unreadable_sitemap_still_walks_the_food_root()
+    public async Task An_unreadable_sitemap_walks_nothing_and_the_run_says_failed()
     {
         await CleanAsync();
         var fetcher = Shop().Serve(Index, new FetchResult(FetchStatus.Failed, null, "down"));
 
         await SweepAsync(fetcher);
 
-        fetcher.Requested.Should().Contain([Root, Root + "?offset=12"]);
-        (await ProductsAsync()).Should().HaveCount(4);
+        fetcher.Requested.Should().Equal(Index);
+        await _factory.WithDb(async db =>
+        {
+            var run = await db.PricePullRuns.SingleAsync(r => r.Store == Store.Lidl);
+            run.Outcome.Should().Be(PullOutcome.Failed);
+            run.Message.Should().Contain("sitemap index was not read");
+            return 0;
+        });
+    }
+
+    private async Task AssertIncompleteSweepDelistsNothingAsync(FakeFetcher incomplete, string reason)
+    {
+        await CleanAsync();
+        await SweepAsync(Shop());
+        _clock.Advance(TimeSpan.FromDays(1));
+
+        await SweepAsync(incomplete);
+
+        await _factory.WithDb(async db =>
+        {
+            (await db.StoreProducts.CountAsync(p => p.DiscontinuedAt != null)).Should().Be(0, "a sweep that missed a page must not delist, however small the gap");
+            var run = await db.PricePullRuns.Where(r => r.Store == Store.Lidl).OrderByDescending(r => r.StartedAt).FirstAsync();
+            run.Outcome.Should().Be(PullOutcome.Partial);
+            run.Message.Should().Contain(reason).And.Contain("Nothing was marked discontinued");
+            return 0;
+        });
     }
 
     [Fact]
-    public async Task The_page_budget_stops_the_sweep_and_the_run_says_so()
+    public Task A_listing_page_that_is_down_delists_nothing() =>
+        AssertIncompleteSweepDelistsNothingAsync(
+            Shop().Serve(Root + "?offset=12", new FetchResult(FetchStatus.Failed, null, "HTTP 500")), "was not read");
+
+    [Fact]
+    public Task A_first_page_with_no_products_delists_nothing() =>
+        AssertIncompleteSweepDelistsNothingAsync(
+            Shop().Serve(Chilled, Fixtures.Read("lidl-catalog-page-empty.html")), "showed no products");
+
+    [Fact]
+    public async Task A_category_that_never_ends_is_cut_at_the_ceiling_and_delists_nothing()
     {
         await CleanAsync();
-        var fetcher = Shop();
-
-        await SweepAsync(fetcher, maxPages: 3);
-
-        fetcher.Requested.Where(u => u.Contains("/c/")).Should().Equal(Root); // the two sitemap requests used two of the three pages
-        await _factory.WithDb(async db =>
+        await SweepAsync(Shop());
+        _clock.Advance(TimeSpan.FromDays(1));
+        var endless = Shop();
+        for (var page = 2; page < 130; page++)
         {
-            (await db.PricePullRuns.SingleAsync(r => r.Store == Store.Lidl)).Message.Should().Contain("page budget");
-            return 0;
-        });
+            var listing = Fixtures.Read("lidl-catalog-page-2.html")
+                .Replace("90000003", (91000000 + page * 2).ToString()).Replace("90000004", (91000001 + page * 2).ToString());
+            endless.Serve($"{Root}?offset={page * LidlCatalogSweep.PageSize}", listing);
+        }
+
+        await SweepAsync(endless);
+
+        endless.Requested.Count(u => u.StartsWith(Root)).Should().BeLessThanOrEqualTo(120);
+        (await _factory.WithDb(db => db.StoreProducts.CountAsync(p => p.DiscontinuedAt != null))).Should().Be(0);
     }
 }
