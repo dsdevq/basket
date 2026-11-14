@@ -61,7 +61,7 @@ export interface CompareSheetData {
           <cmn-list-item-row
             [label]="row.name"
             [sublabel]="row.lines"
-            [dimmed]="!row.choosable"
+            [dimmed]="row.dimmed"
             [action]="row.choosable && !busy()"
             (activated)="choose(row.store)"
             class="[&_.truncate]:overflow-visible [&_.truncate]:whitespace-pre-line [&_.truncate]:break-words"

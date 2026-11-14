@@ -132,6 +132,40 @@ describe('compareRows', () => {
     });
   });
 
+  it.each([
+    ['stale', {observedOn: '2026-11-10'}, 'Old price', 'Seen 10 Nov'],
+    ['out_of_stock', {inStock: false}, 'Out of stock', 'Seen 13 Nov'],
+    ['ended', {state: 'ended', validUntil: '2026-11-12'}, 'Offer ended', 'Seen 13 Nov'],
+  ] as const)(
+    'keeps only the title and the date on a %s row: no card price, old price or promo',
+    (state, over, tag, seen) => {
+      const row = rowFor(
+        'tesco',
+        entry('tesco', {
+          price: price({
+            wasPrice: 1.29,
+            promoText: '3 for 2',
+            loyaltyPrice: 1.0,
+            loyaltyScheme: 'Clubcard',
+            ...over,
+          }),
+        })
+      );
+
+      expect(row).toMatchObject({state, tag, was: null, dimmed: true, choosable: true});
+      expect(row?.lines).toContain('tesco whole milk 2 L');
+      expect(row?.lines).toContain(seen);
+      expect(row?.lines).not.toContain('Clubcard');
+      expect(row?.lines).not.toContain('was');
+      expect(row?.lines).not.toContain('3 for 2');
+      expect(row?.lines).not.toContain('€1.00');
+    }
+  );
+
+  it('leaves a usable price undimmed', () => {
+    expect(rowFor('aldi', entry('aldi'))?.dimmed).toBe(false);
+  });
+
   it('says a linked page has not been read yet instead of showing a number', () => {
     const row = rowFor('dunnes', entry('dunnes', {price: null}));
 

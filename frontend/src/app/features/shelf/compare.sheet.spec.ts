@@ -112,6 +112,14 @@ describe('CompareSheetComponent', () => {
     expect(text[4]).toContain('No page there');
   });
 
+  it('fades the rows whose figure is old and the shop with no page, and no other', async () => {
+    const {rows} = await render();
+
+    const faded = rows().map(row => row.querySelector('div')?.classList.contains('opacity-55'));
+
+    expect(faded).toEqual([false, false, true, false, true]);
+  });
+
   it('makes every shop with something to choose a button and leaves the shop with no page inert', async () => {
     const {rows} = await render();
 

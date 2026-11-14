@@ -29,6 +29,14 @@ export type CompareState =
   | 'paid_only'
   | 'not_linked';
 
+/** The states drawn faded: a figure that is not today's price, or no page at all. */
+const DIMMED_STATES: ReadonlySet<CompareState> = new Set([
+  'stale',
+  'out_of_stock',
+  'ended',
+  'not_linked',
+]);
+
 /** One shop's row in the compare sheet, every line already worded. */
 export interface CompareRow {
   readonly store: StoreId;
@@ -47,6 +55,8 @@ export interface CompareRow {
   readonly lines: string;
   /** False for a shop that has no page for the product and never sold it to the household: nothing to choose there. */
   readonly choosable: boolean;
+  /** True for a row whose figure is not today's price to trust, or that has no page: drawn faded. */
+  readonly dimmed: boolean;
 }
 
 /** The word beside a shop whose reading is not a usable price today. */
@@ -126,6 +136,24 @@ function titleLine(entry: ProductStore): string[] {
   return title ? [title] : [];
 }
 
+/** A reading that is not a usable price keeps its date but sheds the deal: no card price, old price or promo. */
+function withoutDeal(entry: ProductStore): ProductStore {
+  const price = entry.price;
+  return price
+    ? {
+        ...entry,
+        price: {
+          ...price,
+          loyaltyPrice: null,
+          loyaltyScheme: null,
+          wasPrice: null,
+          promoText: null,
+          validUntil: price.state === 'ended' ? price.validUntil : null,
+        },
+      }
+    : entry;
+}
+
 function linesOf(entry: ProductStore, state: CompareState): string[] {
   // What was paid is only worth a line when a receipt says so; "not connected yet" is Settings' business, not a shop's.
   const known = entry.lastPaid?.state === 'known' ? entry.lastPaid : null;
@@ -139,6 +167,10 @@ function linesOf(entry: ProductStore, state: CompareState): string[] {
         ...detailLines(shown).filter(line => line.startsWith('Last paid')),
         ...suggestionLine(entry),
       ];
+    case 'stale':
+    case 'out_of_stock':
+    case 'ended':
+      return [...titleLine(entry), ...detailLines(withoutDeal(shown))];
     default:
       return [...titleLine(entry), ...detailLines(shown)];
   }
@@ -158,6 +190,7 @@ function rowOf(entry: ProductStore, today: string): CompareRow {
     tagVariant: variantOf(state),
     lines: linesOf(entry, state).join('\n'),
     choosable: state !== 'not_linked',
+    dimmed: DIMMED_STATES.has(state),
   };
 }
 
