@@ -70,7 +70,6 @@ describe('ProductSearchSheetComponent', () => {
     const {host} = await render('', search);
 
     expect(search).not.toHaveBeenCalled();
-    expect(host.textContent).not.toContain('Nothing found');
   });
 
   it('adds the tapped result and closes', async () => {
@@ -94,14 +93,7 @@ describe('ProductSearchSheetComponent', () => {
     expect(ref.close).not.toHaveBeenCalled();
   });
 
-  it('says nothing was found, and points at paste-a-link, for an empty result', async () => {
-    const {host} = await render('zzz', vi.fn().mockResolvedValue({results: [], stores: RESPONSE.stores}));
-
-    expect(host.textContent).toContain('Nothing found');
-    expect(host.textContent).toContain("paste the product's link");
-  });
-
-  it('shows the shop note instead of "Nothing found" when no shop could be searched', async () => {
+  it('shows the Lidl failure note when a search returns no results', async () => {
     const note =
       "Lidl's search page had no products, the page layout may have changed. Paste the product's link instead.";
     const {host} = await render(
@@ -113,7 +105,6 @@ describe('ProductSearchSheetComponent', () => {
     );
 
     expect(host.textContent).toContain(note);
-    expect(host.textContent).not.toContain('Nothing found');
   });
 
   it('shows an error when the search request fails', async () => {

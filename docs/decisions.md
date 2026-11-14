@@ -1568,7 +1568,7 @@ finds out what those two stores will give a browser on this PC.
   A Lidl refusal or outage is the same answer with `searched: false` for Lidl and no results. So is a 200 page that yields no
   product tiles: a real search for a nonsense term still returns 200 with fallback/suggested tiles and no confirmable no-results
   marker, so an empty tile list can only mean the page layout changed. It is reported as a failed search with a note pointing at
-  paste-a-link, never as "Nothing found"; the sheet shows "Nothing found" only when some shop was actually searched.
+  paste-a-link, never as "Nothing found". The sheet has no empty state of its own: when a search returns no results it shows the shops' notes.
 - **Tapping adds the product once.** The client adds the product named as the shop names it (cut to 120 characters) with
   `POST /api/products`, then links the tapped page and photo with `PUT /api/products/{id}/stores/lidl`. That second call is made by
   a person, so it is a confirmed match (`confirmed_at`), as a pasted link already is, and Lidl's nightly read prices it from then on.
