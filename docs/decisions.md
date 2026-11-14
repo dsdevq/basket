@@ -1492,3 +1492,36 @@ come only from the PC reader, which had no schedule, so they refreshed only when
   hand-written ones are gone. Cloudflare currently answers the reader's profile with a 403 challenge, so nothing was run against a
   live page. The reader still stops on a refusal; this changes nothing about that.
 
+
+## Catalog 1/14: the PC catalog probe (2026-11-14, issue 127 of epic 126)
+
+Owner's words, 2026-11-14: "I believe we should have 3 apis that is going to be combined into one. We need scrapers that are going to
+give us catalog from dunnes, tesco, lidl, aldi, etc. After that, with having those apis - we can do our job? Linking similar products,
+comparing prices, and so on." Before anyone builds the Tesco and Dunnes catalog sweeps (issues 135 and 136), one read-only command
+finds out what those two stores will give a browser on this PC.
+
+- **The command.** `npm run probe -- --store tesco|dunnes [--out file.json]` (`pc-reader/src/probe.ts`). It opens the reader's own
+  profile through the same `openBrowser` as the reader (same directory, channel and `BASKET_READER_HEADLESS` as `npm start`; the
+  profile `npm run profile` leaves is the one it uses), then asks for `/robots.txt`, `/sitemap.xml`, the home page, one category page
+  and one product page, one at a time, 5 s apart (`MIN_GAP_MS`, reused from `run.ts`), no retries. The category and product addresses
+  are the first links of the right shape on the previous page. The **first refusal** (the reader's own `detectBlock`: 403/429, Akamai
+  "Access Denied", Cloudflare "Just a moment...") ends the probe and is the result; the later steps are listed as not asked.
+- **The report** is one JSON document, to stdout or `--out`: status, content type and size per address; robots `Disallow` lines,
+  `Sitemap` lines and crawl delay; sitemap kind and entry count; the JSON/XHR addresses each page fetched for itself (browser
+  network events, the Aldi discovery method); one trimmed example product record with its field names; whether a barcode-looking key
+  (`gtin*`, `ean*`, `upc`, `barcode`, 8 to 14 digits) appears and where; paging parameters in the page's own calls and links; and the
+  count, page-size and page-number figures found in the listing's JSON. Long strings and arrays are cut, no cookies or headers are
+  recorded, and the probe never reads or prints configuration.
+- **Reused, not rebuilt.** The browser launch, profile and politeness (`browser.ts`, `run.ts`), the block detection
+  (`parse/block.ts`), and the profile resolution (`config.ts`, which gains `loadProbeSettings`; no token needed). Reusable by the
+  later sweeps: `probe/discover.ts` (capture of a page's own JSON/XHR calls) and `probe/report.ts` (the report writer).
+- **What it does not touch: the ingest door, the fleet identity, the matcher.** It posts nothing, signs in to nothing and never
+  reaches basket's `POST /api/ingest/prices`. The sweeps that follow reuse that existing door (same batch shape, same fleet identity
+  by client credentials, same server-side matcher that links a store's product to a basket product); this probe only decides their
+  endpoint, paging, barcode and page size.
+- **First live run, 2026-11-14, headless, this PC: both stores refused the very first request.** `www.dunnesstoresgrocery.com/robots.txt`
+  answered HTTP 403 (Cloudflare challenge page, 44 KB) and `www.tesco.ie/robots.txt` answered HTTP 403 (Akamai, 298 bytes). The probe
+  stopped there for each store, retried nothing, rotated nothing and used no unblocking service. A headed run was not attempted: this
+  shell has no display, and the browser and profile are the ones already refused. For Tesco the open call remains the owner's one-off
+  manual `npm run profile` warm-up; no one did it on his behalf. Issues 135 and 136 therefore have no endpoint facts yet; they wait on
+  a profile either store will serve, then one `npm run probe` run.

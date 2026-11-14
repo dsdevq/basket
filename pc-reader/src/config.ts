@@ -63,6 +63,15 @@ export function loadProfileSettings(
   return { profileDir: profileDirFrom(get, env), channel: get('BASKET_READER_CHANNEL') ?? 'chrome' };
 }
 
+/** What `npm run probe` needs: the profile and browser as the reader resolves them, and whether to run headless. No token. */
+export function loadProbeSettings(
+  env: NodeJS.ProcessEnv = process.env,
+  readFile: (path: string) => string = (p) => readFileSync(p, 'utf8'),
+): { profileDir: string; channel: string; headless: boolean } {
+  const { get } = settings(env, readFile);
+  return { profileDir: profileDirFrom(get, env), channel: get('BASKET_READER_CHANNEL') ?? 'chrome', headless: get('BASKET_READER_HEADLESS') === '1' };
+}
+
 /** An https address, or http for this machine only: the same rule for basket's origin and the identity service's issuer. */
 function checkedAddress(name: string, value: string, example: string): URL {
   let parsed: URL;
