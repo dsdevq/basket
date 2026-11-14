@@ -108,8 +108,8 @@ describe('price formatting', () => {
     );
   });
 
-  it('says Tesco and Aldi rows wait for the PC until a reading arrives, never "unavailable"', () => {
-    const waiting = entry({
+  it('says a linked Tesco or Aldi row waits for the PC until a reading arrives, never "unavailable"', () => {
+    const unlinked = entry({
       store: 'tesco',
       name: 'Tesco',
       readBy: 'pc',
@@ -118,10 +118,10 @@ describe('price formatting', () => {
     });
     const linked = entry({store: 'aldi', name: 'Aldi', readBy: 'pc', price: null});
 
-    expect(detailLines(waiting)).toEqual(['Waiting for the next PC read']);
+    expect(detailLines(unlinked)).toEqual(['No page linked yet']);
     expect(detailLines(linked)).toEqual(['Waiting for the next PC read']);
     expect(headline(linked)).toBe('—');
-    expect(headline(waiting)).toBe('');
+    expect(headline(unlinked)).toBe('');
     expect(detailLines({...linked, price: price()})).toEqual(['Seen 5 Nov']);
   });
 

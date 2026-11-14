@@ -4,7 +4,7 @@ Reads Aldi and Dunnes product pages (and Tesco's, while it is not paused, see be
 prices to basket's write-only ingest endpoint (`POST /api/ingest/prices`). tesco.ie, aldi.ie and dunnesstoresgrocery.com
 refuse the VPS, so this is how those three shops get prices (see [docs/decisions.md](../docs/decisions.md), "M2 decisions",
 "Price ingest decisions" and "Dunnes: the server cannot read it, the PC reader does").
-A product whose shop has not been read yet shows "Waiting for the next PC read" in basket.
+A product with a page in one of these shops that has not been read yet shows "Waiting for the next PC read" in basket.
 
 **Tesco is paused for now.** The reader skips Tesco entries (from the catalog or the URL file) with one log line per run, not
 an error, and reads Aldi and Dunnes as usual. To read Tesco again, add `'tesco'` back to `ENABLED_STORES` in `src/types.ts`.

@@ -124,6 +124,30 @@ public static partial class Stores
         return true;
     }
 
+    /// <summary>
+    /// The shop's own product id off a normalized product address: Aldi's and Dunnes' trailing number, Lidl's <c>p&lt;number&gt;</c>
+    /// and Tesco's <c>/products/&lt;id&gt;</c>. It is the <c>external_id</c> the catalog keys the product under, so it is how a
+    /// listing finds its catalog row. Null for an address that is not a product page of that shop.
+    /// </summary>
+    public static string? ProductId(Store store, string? url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var parsed))
+        {
+            return null;
+        }
+
+        var path = parsed.AbsolutePath.TrimEnd('/');
+        var match = store switch
+        {
+            Store.Lidl => LidlPath().Match(path),
+            Store.Aldi => AldiPath().Match(path),
+            Store.Tesco => TescoPath().Match(path),
+            Store.Dunnes => DunnesPath().Match(path),
+            _ => Match.Empty,
+        };
+        return match.Success ? match.Groups["id"].Value : null;
+    }
+
     /// <summary>Lidl's own product number, the key the offer pages list a product under (the "p11214436" in its address).</summary>
     public static string? LidlProductId(Uri url)
     {
@@ -134,10 +158,10 @@ public static partial class Stores
     [GeneratedRegex(@"^/p/[a-z0-9-]+/p(?<id>\d{4,12})$", RegexOptions.IgnoreCase)]
     private static partial Regex LidlPath();
 
-    [GeneratedRegex(@"^/product/[a-z0-9-]+-\d{6,}$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^/product/[a-z0-9-]+-(?<id>\d{6,})$", RegexOptions.IgnoreCase)]
     private static partial Regex AldiPath();
 
-    [GeneratedRegex(@"^/product/[a-z0-9-]+-\d{6,12}$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^/product/[a-z0-9-]+-(?<id>\d{6,12})$", RegexOptions.IgnoreCase)]
     private static partial Regex DunnesPath();
 
     [GeneratedRegex(@"^/(?:groceries|shop)/en-IE/products/(?<id>\d{4,12})$", RegexOptions.IgnoreCase)]

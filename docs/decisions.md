@@ -1807,3 +1807,45 @@ issue 128 and are used as they are.
   price states and the latest of several readings, and who may read (owner, member, fleet scopes, no credential).
   `AuthGuardTests` lists both routes as 401 when signed out. The frontend gets the typed client (`CatalogApi`, `catalog.model.ts`) and
   its spec; there is no page or route, so no screen baseline changes. Every product in the fixtures is invented.
+
+## Catalog 6/14: link to shelf (2026-11-14, issue 132 of epic 126)
+
+A shelf page (`store_listing`) and the catalog row of the same product (`store_product`) were two unrelated records. This issue joins
+them and lets the catalog feed the shelf's price history, so a sweep keeps Plan, By shop, Promotions, Scorecard and the Shelf cards current
+without a per-page read.
+
+- **The join key is the shop's own product id in the address.** `Stores.ProductId` reads it off a normalized address (Aldi and Dunnes: the
+  trailing number; Lidl: the number of `p<number>`; Tesco: `/products/<id>`), which is the `external_id` the catalog keys the product under. A
+  listing is linked to the `store_product` of the same shop and id and to nothing else: no name or barcode guessing, so a link is never a
+  match decision. A page whose catalog row does not exist yet stays unlinked and is linked the moment a sweep lists the product. The matcher
+  (`CandidateMatcher`) is not involved: it proposes which page is the shelf product's equivalent, this only says which catalog row a page is.
+- **Existing listings: migration `StoreListingCatalogLink`.** One idempotent `UPDATE` (data only, no schema change) fills
+  `store_product_id` for the unlinked listings whose address names a catalog row, with the same rules as `Stores.ProductId`
+  (`StoreListingCatalogLink.LinkSql`, which a test runs). It touches only `store_product_id`, so `confirmed_at`, the address and the
+  readings are untouched; with no catalog rows it updates nothing, and run again it changes nothing. The migration runs on deploy.
+- **Going forward: set on link.** `ProductEndpoints.PointListingAsync`, the one place a listing is created or pointed at a page, now sets the
+  link: a person pasting a page, a person confirming a proposal, and the fleet linking a page (`basket:catalog-add`) all go through it. A
+  changed address recomputes it, so an old product's link never survives a relink, and a page pointed at again picks up a catalog row that
+  has arrived since. `confirmed_at` semantics are unchanged: a fleet-linked page is linked to the catalog but stays unconfirmed, and a
+  sweep never confirms, relinks or changes the address of a page.
+- **The mirror lives in `CatalogRecorder`, so every caller gets it.** After the upsert, the recorder links the shop's unlinked listings whose
+  address names a product of the batch, then records each batch reading of every linked listing through `PriceRecorder.RecordAsync` as that
+  listing's observation for the Dublin day (`price_observation`, one row per listing per day). That is the same path the nightly Lidl job
+  and the price ingest use, so a day read both ways keeps the later reading and nothing downstream (Plan, By shop, Promotions, Scorecard,
+  Shelf) changed: they already read `price_observation`. The HTTP door (`POST /api/ingest/catalog`, token or fleet identity, existing
+  limiter and size caps) and the server's own sweeps (issues 129 and 130) call the one recorder; no new endpoint, scope or identity. Every
+  listing that is the product is fed, including two shelf products that point at one page.
+- **What is mirrored.** The price tuple, the title, the photo and the category, as a page read would: `PriceRecorder` keeps the last good
+  photo and category when a reading has none. A reading with no price at all that is in stock says nothing a shelf page can use and is not
+  mirrored (the price ingest refuses it the same way); a product that is out of stock is mirrored as unavailable. The catalog's own
+  history (`store_product_price`, write on change) is unaffected.
+- **Copy that depended on `ReadBy`.** The product row said "Waiting for the next PC read" for every PC-read shop with no reading, including a
+  shop where the product has no page at all, which nothing waits to read. It now says "No page linked yet" whenever there is no listing, and
+  keeps "Waiting for the next PC read" for a linked page of a PC-read shop. `ReadBy` itself is unchanged (Aldi stays `pc` until its
+  server-side sweep, issue 129, flips it).
+- **Not here.** No sweep, no reading of the catalog by the screens, no search or detail endpoint (issues 129, 130, 131, 133 and later).
+  Seeding a newly linked page's first observation from the catalog's latest price is not done: the next reading of the product does it.
+- **Tests.** `CatalogLinkTests` (address ids per shop, the migration statement on a populated, an empty and a repeated run, link on paste,
+  relink and fleet link, the mirror: replace within a day, a new row the next day, unlinked and other-shop pages untouched, no-price and
+  unavailable readings, `confirmed_at` untouched) and the price formatting specs. The existing plan, by-shop, promotion and scorecard tests
+  pass unchanged. Fixtures are invented products; no real data or token is in this public repository.

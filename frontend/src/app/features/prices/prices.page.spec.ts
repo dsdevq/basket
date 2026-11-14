@@ -143,7 +143,8 @@ describe('PricesPage', () => {
     expect(text).toContain('Seen 5 Nov');
     expect(text).toContain('€1.19');
     expect(text).toContain('Seen 4 Nov');
-    expect(text).toContain('Waiting for the next PC read');
+    expect(text).toContain('No page linked yet');
+    expect(text).not.toContain('Waiting for the next PC read');
     expect(text).not.toContain('unavailable');
     expect(text).toContain('Last paid: not yet connected');
   });

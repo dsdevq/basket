@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Basket.Api.Auth;
 using Basket.Api.Data;
 using Basket.Api.Matching;
+using Basket.Api.Prices.Catalog;
 using Microsoft.EntityFrameworkCore;
 
 namespace Basket.Api.Prices;
@@ -286,7 +287,8 @@ public static class ProductEndpoints
 
     /// <summary>
     /// Makes the product's listing in a shop point at <paramref name="url"/>, adding it when there is none. A different page
-    /// is a different product, so what the old one said (title, photo, category, readings) is forgotten.
+    /// is a different product, so what the old one said (title, photo, category, readings) is forgotten. The listing is linked to
+    /// the catalog row its address names, when the catalog has it (<see cref="CatalogLink"/>).
     /// </summary>
     internal static async Task<StoreListing> PointListingAsync(AppDbContext db, StoreListing? listing, Guid productId, Store shop, string url, DateTimeOffset now, CancellationToken ct)
     {
@@ -294,6 +296,7 @@ public static class ProductEndpoints
         {
             listing = new StoreListing { Id = Guid.NewGuid(), ProductId = productId, Store = shop, AddedAt = now, Url = url };
             db.StoreListings.Add(listing);
+            await CatalogLink.LinkAsync(db, listing, ct);
             return listing;
         }
 
@@ -308,6 +311,8 @@ public static class ProductEndpoints
             listing.Url = url;
         }
 
+        // Linked on every pointing, not only a change: a page pointed at again is picked up by a catalog row that has arrived since.
+        await CatalogLink.LinkAsync(db, listing, ct);
         return listing;
     }
 

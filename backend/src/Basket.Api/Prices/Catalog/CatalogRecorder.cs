@@ -10,9 +10,11 @@ public sealed record CatalogRecordResult(int Created, int Updated, int PriceRows
 /// <summary>
 /// The one way a product enters the combined catalog, whoever read it: the server's own sweeps call it in process, the ingest
 /// endpoint calls it for the PC reader. Upserts by <c>(store, external_id)</c>, stamps <c>last_seen_at</c>, and writes a
-/// <see cref="StoreProductPrice"/> row only when the price tuple differs from the latest one. Applies to the context; the caller saves.
+/// <see cref="StoreProductPrice"/> row only when the price tuple differs from the latest one. Every shelf page (<see cref="StoreListing"/>)
+/// that is the product is linked to it and gets the reading mirrored into <c>price_observation</c> through <see cref="PriceRecorder"/>,
+/// so a sweep feeds the Plan, By shop, Promotions and Scorecard like a page read does. Applies to the context; the caller saves.
 /// </summary>
-public sealed class CatalogRecorder(AppDbContext db)
+public sealed class CatalogRecorder(AppDbContext db, PriceRecorder prices)
 {
     /// <summary>
     /// Records <paramref name="readings"/> (all of <paramref name="store"/>) as seen at <paramref name="now"/>. A product seen
@@ -78,7 +80,72 @@ public sealed class CatalogRecorder(AppDbContext db)
             priceRows++;
         }
 
+        await MirrorToShelfAsync(store, readings, products, now, ct);
         return new CatalogRecordResult(created, updated, priceRows);
+    }
+
+    /// <summary>
+    /// Links the shop's unlinked pages whose address names a product of this batch, then records the batch's reading of every page
+    /// linked to one as that day's observation: the same row a page read writes, so a day read both ways keeps the later reading.
+    /// A reading with no price that is in stock says nothing a shelf page can use (the price ingest refuses it the same way) and is
+    /// not mirrored. A page's <c>confirmed_at</c> is not touched: only a person confirms a match.
+    /// </summary>
+    private async Task MirrorToShelfAsync(
+        Store store,
+        IReadOnlyList<CatalogReading> readings,
+        Dictionary<string, StoreProduct> products,
+        DateTimeOffset now,
+        CancellationToken ct)
+    {
+        var linked = new Dictionary<Guid, StoreListing>();
+        foreach (var listing in await db.StoreListings.Where(l => l.Store == store && l.StoreProductId == null).ToListAsync(ct))
+        {
+            if (Stores.ProductId(store, listing.Url) is { } id && products.TryGetValue(id, out var product))
+            {
+                listing.StoreProductId = product.Id;
+                linked[listing.Id] = listing;
+            }
+        }
+
+        var productIds = products.Values.Select(p => p.Id).ToList();
+        foreach (var listing in await db.StoreListings.Where(l => l.Store == store && l.StoreProductId != null && productIds.Contains(l.StoreProductId.Value)).ToListAsync(ct))
+        {
+            linked[listing.Id] = listing;
+        }
+
+        // A product listed twice in one call keeps its last reading, as the product row does.
+        var byProduct = new Dictionary<Guid, CatalogReading>();
+        foreach (var reading in readings)
+        {
+            byProduct[products[reading.ExternalId].Id] = reading;
+        }
+
+        foreach (var listing in linked.Values)
+        {
+            var reading = byProduct[listing.StoreProductId!.Value];
+            var price = reading.Price;
+            if (price.Price is null && price.LoyaltyPrice is null && price.InStock)
+            {
+                continue;
+            }
+
+            await prices.RecordAsync(
+                listing,
+                new PriceQuote(
+                    reading.Name,
+                    price.Price,
+                    price.WasPrice,
+                    price.LoyaltyPrice,
+                    price.LoyaltyScheme,
+                    price.PromoText,
+                    price.ValidFrom,
+                    price.ValidUntil,
+                    price.InStock,
+                    reading.ImageUrl,
+                    reading.Category),
+                now,
+                ct);
+        }
     }
 
     private static void Apply(StoreProduct product, CatalogReading reading, DateTimeOffset now)
