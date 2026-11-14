@@ -1139,7 +1139,8 @@ day. Builds on `LidlPlusConnectionService.AccessAsync`; the Lidl Plus offers (#1
   price, two products differing only by letter case, the job);
   `LidlPlusTicketsClientTests` feeds recorded answers (decimal commas and numbers, bad shapes, refusals, network error) to the real
   client. No test, and no build step, calls Lidl.
-- **Not verified live.** The receipts service address, the headers (`App`, `Operating-System`, `App-Version`) and the field names
+- **Not verified live.** (Superseded for one receipt's address, `App-Version` and lines by "Lidl Plus receipts: Lidl changed its
+  receipts service" below: a receipt is now read from `api/v3` and its lines from the printed HTML, not `itemsLine`.) The receipts service address, the headers (`App`, `Operating-System`, `App-Version`) and the field names
   (`tickets[].id`, `date`, `totalAmount`, `itemsLine[]` with `description`, `quantity`, `isWeight`, `currentUnitPrice`, `extendedAmount`
   or `originalAmount`) follow the community `lidl-plus` client, not an official Lidl document, and nothing here has been run against
   Lidl. Two readings to check against the first real receipts: whether `extendedAmount` is before or after a Lidl Plus coupon (basket
@@ -1680,8 +1681,9 @@ now follow the person to every device they sign in on, as in finance-sentry, ins
 - **Request.** `AppVersion` is now a `LidlPlusOptions` setting with a realistic default (`16.40.2`), not a literal: Lidl accepts a real
   release and turns a made-up one away, so it is raised in configuration when Lidl starts refusing again. A receipt is read from
   `api/v3/...`; the list stays on `api/v2/...`. v3 refuses a language longer than two characters (its 400 said `LanguageCode must be 2
-  characters or fewer`), so the default `Language` is `en` and is sent as `Accept-Language` as configured (a longer tag would be refused by Lidl). The language is sent in the header only: that is the one place basket sends one, but whether v3 reads
-  the header or wants it elsewhere is inferred from the error, not seen.
+  characters or fewer`), so the default `Language` is `en`, sent as `Accept-Language` exactly as configured (a longer tag would be
+  refused by Lidl). The language is sent in the header only: that is the one place basket sends one, but whether v3 reads the header
+  or wants it elsewhere is inferred from the error, not seen.
 - **Lines.** The v3 detail carries the day, `totalAmount` and the shop, but the purchased lines are only inside `htmlPrintedReceipt`, an
   HTML string (a `<pre>` of spans). `LidlPrintedReceipt` reads it with a tolerant reader (regex over the span tags, no HTML library):
   - an `article` span is a line: name from `data-art-description`, shelf price from `data-unit-price`, quantity from
