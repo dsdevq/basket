@@ -34,16 +34,16 @@ public static class ShopSearch
     public static async Task<ShopSearchResponse> RunAsync(IPageFetcher fetcher, string query, CancellationToken ct)
     {
         var page = await fetcher.GetAsync(new Uri($"https://{Store.Lidl.Host()}/q/search?q={Uri.EscapeDataString(query)}"), ct);
+        var results = page.Status == FetchStatus.Ok
+            ? LidlParser.ParseSearchTiles(page.Body!).DistinctBy(r => r.Url, StringComparer.Ordinal).Take(MaxResults).ToList()
+            : [];
         var lidl = page.Status switch
         {
+            FetchStatus.Ok when results.Count == 0 => new ShopSearchStatus("lidl", "Lidl", false, "Lidl's search page had no products, the page layout may have changed. Paste the product's link instead."),
             FetchStatus.Ok => new ShopSearchStatus("lidl", "Lidl", true, null),
             FetchStatus.Blocked => new ShopSearchStatus("lidl", "Lidl", false, "Lidl's site refused the search. Paste the product's link instead."),
             _ => new ShopSearchStatus("lidl", "Lidl", false, "Lidl's search could not be reached. Try again, or paste the product's link."),
         };
-
-        var results = page.Status == FetchStatus.Ok
-            ? LidlParser.ParseSearchTiles(page.Body!).DistinctBy(r => r.Url, StringComparer.Ordinal).Take(MaxResults).ToList()
-            : [];
 
         var others = Stores.All.Where(s => s != Store.Lidl).Select(s =>
             new ShopSearchStatus(s.Slug(), s.DisplayName(), false, $"{s.DisplayName()} cannot be searched from here. Paste a product link on the Prices tab."));

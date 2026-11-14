@@ -67,11 +67,13 @@ export interface ProductSearchData {
         <cmn-skeleton shape="section" />
       } @else if (response(); as found) {
         @if (!found.results.length) {
-          <cmn-empty-state
+          @if (anySearched()) {
+            <cmn-empty-state
             icon="Search"
             message="Nothing found"
-            subMessage="Try another name, or close this and paste the product's link."
-          />
+              subMessage="Try another name, or close this and paste the product's link."
+            />
+          }
         } @else {
           <div class="grid grid-cols-2 gap-cmn-3" aria-label="Results" role="group">
             @for (result of found.results; track result.url) {
@@ -129,6 +131,11 @@ export class ProductSearchSheetComponent {
     if (this.data.query.trim().length >= MIN_QUERY) {
       void this.search();
     }
+  }
+
+  /** An empty answer only means "nothing found" when at least one shop was actually searched. */
+  protected anySearched(): boolean {
+    return (this.response()?.stores ?? []).some(shop => shop.searched);
   }
 
   /** What the shops that were not searched, or could not be, have to say. */

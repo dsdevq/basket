@@ -59,12 +59,13 @@ public sealed class ShopSearchTests : IClassFixture<BasketFactory>
     }
 
     [Fact]
-    public async Task A_page_with_no_tiles_is_a_search_with_no_results()
+    public async Task A_page_with_no_tiles_is_a_failed_search_not_an_empty_result()
     {
         var response = await ShopSearch.RunAsync(new FakeFetcher().Serve(SearchUrl, "<html></html>"), "milk chocolate", default);
 
         response.Results.Should().BeEmpty();
-        response.Stores[0].Searched.Should().BeTrue();
+        response.Stores[0].Searched.Should().BeFalse();
+        response.Stores[0].Note.Should().Contain("page layout may have changed").And.Contain("Paste");
     }
 
     [Theory]

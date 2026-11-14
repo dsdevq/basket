@@ -21,6 +21,7 @@ const MESSAGES = {
   add: 'Could not add that. Try again.',
   duplicate: 'That product is already tracked.',
   search: 'Could not add that product. Try again.',
+  linkFailed: 'Added, but its shop page could not be linked. Link it from the Prices tab.',
   remove: 'Could not delete that product.',
   unlink: 'Could not remove that link.',
   candidates: 'Could not load the suggestions. Try again.',
@@ -80,7 +81,7 @@ export const PricesStore = signalStore(
             await api.link(product.id, result.store, result.url, result.imageUrl ?? undefined);
           } catch {
             // The product exists without its page; the person can link it from the Prices tab.
-            toast.error(MESSAGES.search);
+            toast.error(MESSAGES.linkFailed);
           }
           await this.load(true);
           return true;

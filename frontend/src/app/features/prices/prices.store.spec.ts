@@ -251,6 +251,8 @@ describe('PricesStore', () => {
 
     expect(await store.addFromSearch(RESULT)).toBe(true);
 
-    expect(toast.error).toHaveBeenCalledWith('Could not add that product. Try again.');
+    expect(toast.error).toHaveBeenCalledWith(
+      'Added, but its shop page could not be linked. Link it from the Prices tab.'
+    );
   });
 });
