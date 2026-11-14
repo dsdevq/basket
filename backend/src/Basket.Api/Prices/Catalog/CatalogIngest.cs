@@ -106,6 +106,29 @@ public sealed class CatalogIngest(AppDbContext db, CatalogRecorder recorder, Tim
     /// </summary>
     public async Task<CatalogCompleteResponse> CompleteAsync(Store store, int seen, DateTimeOffset startedAt, CancellationToken ct)
     {
+        var close = await CloseAsync(store, seen, startedAt, ct);
+        db.PricePullRuns.Add(new PricePullRun
+        {
+            Id = Guid.NewGuid(),
+            Store = store,
+            StartedAt = startedAt,
+            FinishedAt = clock.GetUtcNow(),
+            Outcome = close.Outcome,
+            Listings = close.Live,
+            Read = close.Touched,
+            Message = close.Message,
+        });
+        await db.SaveChangesAsync(ct);
+
+        return new CatalogCompleteResponse(store.Slug(), seen, close.PreviousLive, close.Discontinued, !close.Passes, close.Outcome.ToString());
+    }
+
+    /// <summary>
+    /// The delisting half of <see cref="CompleteAsync"/>, with the guard, for a caller that writes its own run row (the nightly
+    /// Aldi sweep, whose run row is the job's). Marks the products and returns what happened; the run row is the caller's.
+    /// </summary>
+    public async Task<CatalogClose> CloseAsync(Store store, int seen, DateTimeOffset startedAt, CancellationToken ct)
+    {
         var now = clock.GetUtcNow();
         var shop = db.StoreProducts.Where(p => p.Store == store);
         var previousLive = await shop.CountAsync(p => p.DiscontinuedAt == null && p.FirstSeenAt < startedAt, ct);
@@ -128,25 +151,16 @@ public sealed class CatalogIngest(AppDbContext db, CatalogRecorder recorder, Tim
         var outcome = passes ? PullOutcome.Ok
             : touched == 0 || (previousLive > 0 && seenKnown == 0) ? PullOutcome.Failed
             : PullOutcome.Partial;
-        db.PricePullRuns.Add(new PricePullRun
-        {
-            Id = Guid.NewGuid(),
-            Store = store,
-            StartedAt = startedAt,
-            FinishedAt = now,
-            Outcome = outcome,
-            Listings = live,
-            Read = touched,
-            Message = passes
-                ? (discontinued > 0 ? $"{discontinued} products were no longer listed and are marked discontinued." : null)
-                : PriceRecorder.Truncate(
-                    previousLive > 0
-                        ? $"The catalog sweep listed {seenKnown} of the {previousLive} known products (the reader counted {seen}); nothing was marked discontinued."
-                        : $"The catalog sweep listed {touched} products (the reader counted {seen}); nothing was marked discontinued.",
-                    500),
-        });
-        await db.SaveChangesAsync(ct);
-
-        return new CatalogCompleteResponse(store.Slug(), seen, previousLive, discontinued, !passes, outcome.ToString());
+        var message = passes
+            ? (discontinued > 0 ? $"{discontinued} products were no longer listed and are marked discontinued." : null)
+            : PriceRecorder.Truncate(
+                previousLive > 0
+                    ? $"The catalog sweep listed {seenKnown} of the {previousLive} known products (the reader counted {seen}); nothing was marked discontinued."
+                    : $"The catalog sweep listed {touched} products (the reader counted {seen}); nothing was marked discontinued.",
+                500);
+        return new CatalogClose(passes, previousLive, discontinued, live, touched, outcome, message);
     }
 }
+
+/// <summary>What closing a sweep did: whether the guard let it delist, and the numbers for the run row.</summary>
+public sealed record CatalogClose(bool Passes, int PreviousLive, int Discontinued, int Live, int Touched, PullOutcome Outcome, string? Message);

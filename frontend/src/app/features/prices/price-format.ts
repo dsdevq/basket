@@ -94,7 +94,7 @@ function unreadLine(entry: ProductStore): string {
     return 'No page linked yet';
   }
   if (entry.readBy === 'pc') {
-    // Tesco, Aldi and Dunnes block the server; the price of a linked page arrives when the PC next reads the shop.
+    // Tesco and Dunnes block the server; the price of a linked page arrives when the PC next reads the shop.
     return 'Waiting for the next PC read';
   }
   return entry.listing.error

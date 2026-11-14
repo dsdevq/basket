@@ -20,6 +20,9 @@ public interface IStorePriceSource
 {
     Store Store { get; }
 
+    /// <summary>The source reads the shop's whole catalog (not only linked pages), so the job runs it even with nothing linked yet.</summary>
+    bool SweepsCatalog => false;
+
     Task<StorePull> PullAsync(IReadOnlyList<ListingToCheck> listings, CancellationToken ct);
 }
 

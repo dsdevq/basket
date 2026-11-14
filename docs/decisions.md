@@ -1760,9 +1760,9 @@ door; no sweep, search, linking or screen is here (issues 129 to 140).
   known yet. On a first sweep (nothing known) a reader that counts more products than the server saw is never `Ok`, since the server's
   own count is the only evidence; once products are known, `seen` stays only the lower bound of the 90 percent guard, so one item the
   server refused (or a product repeated across batches) does not stop a healthy sweep from ever delisting anything.
-- **Which shops post.** The shops `Stores.ReadBy` calls `pc` (Aldi, Tesco, Dunnes today); Lidl is read by the server and gets
-  `store_not_ingested`. `ReadBy(Aldi)` stays `pc` here: the server-side Aldi sweep (issue 129) flips it together with the
-  sweep itself, so the page never says "nightly" for a shop nothing reads yet.
+- **Which shops post.** The shops `Stores.ReadBy` calls `pc` (Tesco and Dunnes today); Lidl and Aldi are read by the server and get
+  `store_not_ingested`. `ReadBy(Aldi)` was `pc` until the server-side Aldi sweep (issue 129, below) shipped with the flip, so the
+  page never said "nightly" for a shop nothing read.
 - **Tests.** Contract tests for both endpoints (`CatalogIngestTests`: admission, scopes, reason codes, limits, rate limit, write-on-change,
   the 90 percent guard and the run row), recorder tests against Postgres (`CatalogRecorderTests`, including the generated `tsvector`), and
   pure tests for the validation (`CatalogReadingTests`). Fixtures are invented products shaped like the scout's Aldi and Lidl records;
@@ -1929,7 +1929,7 @@ migration**.
   counts as old. An `Old price`, `Out of stock` or `Offer ended` row keeps its last figure and its date, drawn dimmed with a warning tag, and shows
   no card price, old price or promo. A row is one
   of: a usable price (no tag); `Old price`; `Out of stock`; `Offer not started` or `Offer ended` (the shelf's "from 12 Nov" / "ended");
-  `No price listed`; `Not read yet` (a linked page with no reading; "Waiting for the next PC read" for Aldi, Tesco and Dunnes);
+  `No price listed`; `Not read yet` (a linked page with no reading; "Waiting for the next PC read" for Tesco and Dunnes; Aldi is read nightly since issue 129);
   `No price read` (a shop known only from a receipt: no figure, just "Last paid €1.19 on 3 Nov", which is not a price today);
   `No page there` (nothing linked, nothing bought; the row is dimmed and cannot be chosen, and shows the suggested pages waiting for a
   yes or no on the Prices tab). "Last paid: not yet connected" is Settings' business and is not drawn here.
@@ -1960,3 +1960,56 @@ migration**.
   several shops, ticked line), the Shelf page spec (the button opens the sheet and adds nothing; All's on-list rule) and two
   end-to-end flows in `shelf-flow.spec.ts` (choose Tesco then move to Lidl, and a price older than three days). Every product in them
   is invented.
+
+## Catalog 3/14: the Aldi sweep (issue 129, epic 126)
+
+Owner direction, 2026-11-14: per-store catalog readers feed one combined catalog API. Aldi is read from the VPS, like Lidl.
+
+- **`asl.api.aldi.ie` is open to the server while `www.aldi.ie` is not.** The site answers the VPS with Akamai's "Access Denied"
+  (2026-11-05, above); its product API, on the host the site's own pages call, answers a plain request with an honest user agent.
+  So the server reads the API and still never touches `www.aldi.ie`, and it does not work round the site's block: the API is a
+  separate public host that serves anyone. Product addresses stay the `www.aldi.ie/product/<slug>-<sku>` pages (what a listing
+  links to and the shelf shows); they are built, never fetched.
+- **Terms note.** Aldi's terms are not an invitation to automated reading; the owner accepted that risk on the footing of 60 polite
+  requests a day for a two-person household (issue 129, "accept Aldi terms risk"). The budget is about 60 requests a day: the range in
+  pages of 60 (about 3,554 products), a fixed cap of 60 product-search pages a sweep, plus the one category tree request, which the cap does not count
+  (a constant, not a setting), 5 s apart (`MinRequestIntervalSeconds`, per host), honest user agent
+  (`basket-price-check/1.0 (a household app ...)`), one sweep a night, no retry. A sweep stops, it never goes round: a 403 or 429
+  (`FetchStatus.Blocked`) ends it at once, keeps what the earlier pages recorded, delists nothing and shows on the Prices page as
+  blocked. If the owner or Aldi withdraws the acceptance, the fix is to set the source off, not to change how it asks.
+- **What is read.** `GET https://asl.api.aldi.ie/commerce/v2/product-category-tree?serviceType=walk-in&servicePoint=D105` once, then
+  `GET https://asl.api.aldi.ie/commerce/v3/product-search?currency=EUR&serviceType=walk-in&limit=60&offset=0..&sort=relevance&servicePoint=D105`
+  until `meta.pagination.totalCount` (v2 for the tree, v3 for the search, both under `/commerce/`). The host, paths and the cap are constants in
+  `AldiCatalogSource`. **Verified:** the addresses and the response shapes are the ones the catalog scout recorded (2026-11-14) and
+  two live requests from the VPS confirmed; the repository's fixtures are invented values in that exact shape. The tree is
+  `{data:[{key,order,name,urlSlugText,children:[...]}]}`; a category's path is its names from the outermost, joined with " > ", keyed by `key`.
+  A tree that cannot be read for a reason other than a block does not stop the sweep: products are stored with no category. A page in another shape stops the sweep as `Failed`
+  with "not in the shape basket reads", writes and delists nothing. That includes a page with no `meta.pagination.totalCount` (a
+  missing total is never a finished sweep) and a sweep whose products so far all lack a readable price (a renamed `price.amount` would
+  otherwise write an empty price over every known one); once any product has been priced, a single unpriced product is still just unpriced.
+- **Field mapping.** `sku` is `external_id` (the zero-padded number, also the end of the page address, which is built from Aldi's own `urlSlugText`; a product without one is not stored); `brandName`; `sellingSize`
+  is `size_text`; inside the `price` object, `amount` / 100 is the price (Aldi sends whole cents), `comparison` / 100 is the unit price,
+  labelled with the text after the "/" of `comparisonDisplay` ("€5.96/1 KG" gives "1 KG"), and `wasPriceDisplay` ("€1.35", null when there is
+  no was price) is parsed and kept only when it is higher than the price; the first `assets` entry with `{width}` replaced by `300` is the
+  photo; the category is the tree's path for the product's deepest `categories` entry (`{id,name}`, `id` matching a tree `key`), null when
+  the tree knows none; `discontinued` products are not recorded. `notForSale` (true on every record; Aldi has no online shop) is ignored: a
+  listed product is in stock. Aldi has no loyalty price. The barcode is not in the API, so none is stored.
+- **One door, one matcher.** The sweep writes through the same `CatalogRecorder` as `POST /api/ingest/catalog` (write-on-change
+  prices, thinner readings never erase), on the same tables, so the fleet identity, the ingest token scopes and the matcher built
+  for issue 128 are reused unchanged; nothing was restarted. Each page is recorded as it arrives.
+- **Closing the sweep.** A sweep that reached `totalCount` is closed with the same 90 percent guard as the PC reader's
+  (`CatalogIngest.CloseAsync`, which `/complete` also uses): what Aldi no longer lists is marked `discontinued_at` only if the
+  sweep saw nearly all of what was known. A sweep that stopped early (refusal, error, request limit, shape change) is never closed.
+  The job writes the one `price_pull_run` row for Aldi (outcome, the reason in the message), as for Lidl.
+- **Linked products are priced from the sweep.** The nightly job runs the Aldi source even with nothing linked
+  (`IStorePriceSource.SweepsCatalog`); a linked listing is matched by the sku at the end of its address, not the slug, and priced from
+  the same read, so Aldi pages are never opened one by one. A listing the range no longer lists, or Aldi marks discontinued, says so
+  and keeps its last price.
+- **`ReadBy(Aldi)` is `nightly`.** The PC reader's work list takes only `pc` shops, so it stops reading Aldi by itself; `POST
+  /api/ingest/prices` and `/api/ingest/catalog` answer `store_not_ingested` for Aldi from now on. The Settings copy that still says the
+  PC sends "Tesco and Aldi" prices, and the PC reader's own Aldi parser, are left for a later change (a copy change moves screen baselines,
+  which only the Update screen baselines workflow regenerates).
+- **No migration.** The tables are issue 128's. Runs on the VPS only.
+- **Tests.** `AldiCatalogSourceTests` on invented pages (`Fixtures/aldi-category-tree.json`, `aldi-product-search.json`) with a fake fetcher:
+  request order and paging, field mapping, category paths, refusals (403 and 429 on the tree, 429 part way), the guard, the request limit,
+  a changed shape, linked products priced by sku. No test reaches Aldi; the repository holds no real catalog data.

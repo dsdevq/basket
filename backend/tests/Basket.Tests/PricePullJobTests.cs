@@ -17,9 +17,11 @@ public sealed class PricePullJobTests : IClassFixture<BasketFactory>
 
     public PricePullJobTests(BasketFactory factory) => _factory = factory;
 
-    private sealed class FakeSource(Store store, Func<IReadOnlyList<ListingToCheck>, StorePull> pull) : IStorePriceSource
+    private sealed class FakeSource(Store store, Func<IReadOnlyList<ListingToCheck>, StorePull> pull, bool sweepsCatalog = false) : IStorePriceSource
     {
         public Store Store => store;
+
+        public bool SweepsCatalog => sweepsCatalog;
 
         public int Calls { get; private set; }
 
@@ -105,6 +107,25 @@ public sealed class PricePullJobTests : IClassFixture<BasketFactory>
             runs.Should().HaveCount(2);
             runs.Should().OnlyContain(r => r.Outcome == PullOutcome.Ok && r.Listings == 1 && r.Read == 1);
             (await db.StoreListings.ToListAsync()).Should().OnlyContain(l => l.LastError == null && l.Title == "Shop title" && l.LastCheckedAt != null);
+            return 0;
+        });
+    }
+
+    [Fact]
+    public async Task A_source_that_sweeps_a_catalog_runs_with_nothing_linked_and_the_others_still_wait_for_a_link()
+    {
+        await SeedAsync(("milk", Store.Tesco));
+        At("2026-11-05T03:00:00Z");
+        var aldi = new FakeSource(Store.Aldi, _ => new StorePull(PullOutcome.Ok, null, new Dictionary<Guid, ListingPull>()), sweepsCatalog: true);
+        var lidl = new FakeSource(Store.Lidl, l => Priced(l, _ => Quote(1.29m)));
+
+        await Job(aldi, lidl).RunAsync(CancellationToken.None);
+
+        aldi.Calls.Should().Be(1);
+        lidl.Calls.Should().Be(0, "a source that reads only linked pages has nothing to do without links");
+        await _factory.WithDb(async db =>
+        {
+            (await db.PricePullRuns.SingleAsync()).Store.Should().Be(Store.Aldi);
             return 0;
         });
     }
