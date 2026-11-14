@@ -112,15 +112,22 @@ public sealed class CatalogIngest(AppDbContext db, CatalogRecorder recorder, Tim
         var seenKnown = await shop.CountAsync(p => p.DiscontinuedAt == null && p.FirstSeenAt < startedAt && p.LastSeenAt >= startedAt, ct);
         var touched = await shop.CountAsync(p => p.LastSeenAt >= startedAt, ct);
 
-        var passes = previousLive == 0
-            || (seen * 100L >= previousLive * (long)DiscontinueGuardPercent && seenKnown * 100L >= previousLive * (long)DiscontinueGuardPercent);
+        // A sweep that listed nothing never passes. With nothing known yet the server's own count is the only evidence, so a
+        // reader that counts more than the server saw is not trusted; once products are known, `seen` is only the lower bound
+        // of the 90 percent guard (a rejected or repeated item must not stop a healthy sweep from ever delisting anything).
+        var passes = touched > 0
+            && (previousLive == 0
+                ? seen <= touched
+                : seen * 100L >= previousLive * (long)DiscontinueGuardPercent && seenKnown * 100L >= previousLive * (long)DiscontinueGuardPercent);
         var discontinued = passes
             ? await shop.Where(p => p.DiscontinuedAt == null && p.LastSeenAt < startedAt)
                 .ExecuteUpdateAsync(s => s.SetProperty(p => p.DiscontinuedAt, now), ct)
             : 0;
 
         var live = await shop.CountAsync(p => p.DiscontinuedAt == null, ct);
-        var outcome = passes ? PullOutcome.Ok : seenKnown == 0 ? PullOutcome.Failed : PullOutcome.Partial;
+        var outcome = passes ? PullOutcome.Ok
+            : touched == 0 || (previousLive > 0 && seenKnown == 0) ? PullOutcome.Failed
+            : PullOutcome.Partial;
         db.PricePullRuns.Add(new PricePullRun
         {
             Id = Guid.NewGuid(),
@@ -133,7 +140,9 @@ public sealed class CatalogIngest(AppDbContext db, CatalogRecorder recorder, Tim
             Message = passes
                 ? (discontinued > 0 ? $"{discontinued} products were no longer listed and are marked discontinued." : null)
                 : PriceRecorder.Truncate(
-                    $"The catalog sweep listed {seenKnown} of the {previousLive} known products (the reader counted {seen}); nothing was marked discontinued.",
+                    previousLive > 0
+                        ? $"The catalog sweep listed {seenKnown} of the {previousLive} known products (the reader counted {seen}); nothing was marked discontinued."
+                        : $"The catalog sweep listed {touched} products (the reader counted {seen}); nothing was marked discontinued.",
                     500),
         });
         await db.SaveChangesAsync(ct);

@@ -460,6 +460,86 @@ public sealed class CatalogIngestTests : IClassFixture<CatalogIngestTests.RoomyF
     }
 
     [Fact]
+    public async Task A_first_sweep_that_listed_nothing_is_a_failed_run()
+    {
+        var reader = await ReaderAsync();
+        var started = _factory.Clock.GetUtcNow();
+
+        var response = await CompleteAsync(reader, "tesco", 0, started);
+
+        var body = await BodyAsync(response);
+        body.GetProperty("outcome").GetString().Should().Be("Failed");
+        body.GetProperty("guarded").GetBoolean().Should().BeTrue();
+        var run = await _factory.WithDb(db => db.PricePullRuns.SingleAsync());
+        (run.Outcome, run.Listings, run.Read).Should().Be((PullOutcome.Failed, 0, 0));
+        run.Message.Should().Contain("listed 0 products");
+    }
+
+    [Fact]
+    public async Task A_sweep_of_a_shop_whose_products_were_all_discontinued_that_lists_nothing_is_a_failed_run()
+    {
+        var reader = await ReaderAsync();
+        var started = await FirstSweepAsync(reader, 2);
+        await _factory.WithDb(async db =>
+        {
+            await db.StoreProducts.ExecuteUpdateAsync(s => s.SetProperty(p => p.DiscontinuedAt, started));
+            return 0;
+        });
+
+        var response = await CompleteAsync(reader, "tesco", 0, started);
+
+        (await BodyAsync(response)).GetProperty("outcome").GetString().Should().Be("Failed");
+    }
+
+    [Fact]
+    public async Task One_item_rejected_out_of_a_thousand_known_still_passes_the_guard_and_delists_only_the_unseen_one()
+    {
+        var reader = await ReaderAsync();
+        var first = _factory.Clock.GetUtcNow();
+        foreach (var chunk in Enumerable.Range(0, 1000).Chunk(CatalogIngest.MaxBatch))
+        {
+            (await PostAsync(reader, "tesco", chunk.Select(n => Tesco(n)).ToArray())).StatusCode.Should().Be(HttpStatusCode.OK);
+        }
+
+        (await CompleteAsync(reader, "tesco", 1000, first)).StatusCode.Should().Be(HttpStatusCode.OK);
+        _factory.Clock.Advance(TimeSpan.FromHours(1));
+        var started = _factory.Clock.GetUtcNow();
+
+        // The reader parses all 1000 and counts 1000, but one of them (the last) is refused with no_name, so the server saw 999.
+        foreach (var chunk in Enumerable.Range(0, 999).Chunk(CatalogIngest.MaxBatch))
+        {
+            await PostAsync(reader, "tesco", chunk.Select(n => Tesco(n)).ToArray());
+        }
+
+        var rejected = await PostAsync(reader, "tesco", Tesco(999, name: " "));
+        rejected.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity);
+        var response = await CompleteAsync(reader, "tesco", 1000, started);
+
+        var body = await BodyAsync(response);
+        body.GetProperty("guarded").GetBoolean().Should().BeFalse();
+        body.GetProperty("outcome").GetString().Should().Be("Ok");
+        body.GetProperty("discontinued").GetInt32().Should().Be(1);
+        (await _factory.WithDb(db => db.StoreProducts.Where(p => p.DiscontinuedAt != null).Select(p => p.ExternalId).SingleAsync())).Should().Be("254300999");
+    }
+
+    [Fact]
+    public async Task A_first_sweep_whose_reader_counts_more_than_the_server_saw_is_not_recorded_as_healthy()
+    {
+        var reader = await ReaderAsync();
+        var started = _factory.Clock.GetUtcNow();
+        await PostAsync(reader, "tesco", Tesco(1), Tesco(2));
+
+        var response = await CompleteAsync(reader, "tesco", 50, started);
+
+        var body = await BodyAsync(response);
+        body.GetProperty("guarded").GetBoolean().Should().BeTrue();
+        body.GetProperty("outcome").GetString().Should().Be("Partial");
+        var run = await _factory.WithDb(db => db.PricePullRuns.SingleAsync());
+        (run.Outcome, run.Read).Should().Be((PullOutcome.Partial, 2));
+        run.Message.Should().Contain("counted 50");
+    }
+
+    [Fact]
     public async Task A_reader_that_claims_more_than_it_posted_cannot_get_the_rest_delisted()
     {
         var reader = await ReaderAsync();

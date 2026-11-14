@@ -1716,7 +1716,10 @@ door; no sweep, search, linking or screen is here (issues 129 to 140).
   missed ones, and a reader that claims more than it posted cannot get the rest delisted). `startedAt` must be within the last 24 hours
   and no more than 5 minutes ahead, so a skewed PC clock cannot make everything look unseen. A product listed again comes back. Each
   closed sweep writes one `price_pull_run` row (`Ok`; `Partial` or `Failed` with the reason in the message when the guard held), which the
-  Prices page already reads; an individual batch writes none.
+  Prices page already reads; an individual batch writes none. A sweep that listed no products is `Failed` even on a shop with nothing
+  known yet. On a first sweep (nothing known) a reader that counts more products than the server saw is never `Ok`, since the server's
+  own count is the only evidence; once products are known, `seen` stays only the lower bound of the 90 percent guard, so one item the
+  server refused (or a product repeated across batches) does not stop a healthy sweep from ever delisting anything.
 - **Which shops post.** The shops `Stores.ReadBy` calls `pc` (Aldi, Tesco, Dunnes today); Lidl is read by the server and gets
   `store_not_ingested`. `ReadBy(Aldi)` stays `pc` here: the server-side Aldi sweep (issue 129) flips it together with the
   sweep itself, so the page never says "nightly" for a shop nothing reads yet.
