@@ -1872,7 +1872,8 @@ migration**.
 - **Stale or missing is flagged, never guessed.** Staleness is the Plan's and Promotions' window, 3 days (`STALE_AFTER_DAYS`, the same
   number as `PromotionBuilder.StaleAfterDays`): a reading from the 3rd day back counts, the 4th is "Old price". The shelf answer has no
   server clock, so the age is the reading's `observedOn` against today's Dublin day, worked out on the phone; a day that cannot be read
-  counts as old. A flagged row keeps its figure and its date dimmed with a warning tag, and shows no promo or old price. A row is one
+  counts as old. An `Old price`, `Out of stock` or `Offer ended` row keeps its last figure and its date, drawn dimmed with a warning tag, and shows
+  no card price, old price or promo. A row is one
   of: a usable price (no tag); `Old price`; `Out of stock`; `Offer not started` or `Offer ended` (the shelf's "from 12 Nov" / "ended");
   `No price listed`; `Not read yet` (a linked page with no reading; "Waiting for the next PC read" for Aldi, Tesco and Dunnes);
   `No price read` (a shop known only from a receipt: no figure, just "Last paid €1.19 on 3 Nov", which is not a price today);
