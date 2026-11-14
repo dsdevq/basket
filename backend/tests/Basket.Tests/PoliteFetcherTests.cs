@@ -1,4 +1,6 @@
+using System.IO.Compression;
 using System.Net;
+using System.Text;
 using Basket.Api.Prices;
 using Basket.Api.Prices.Fetching;
 using Basket.Tests.Support;
@@ -44,6 +46,33 @@ public sealed class PoliteFetcherTests
         result.Status.Should().Be(FetchStatus.Ok);
         result.Body.Should().Be("<html>ok</html>");
         handler.Requests.Single().Headers.UserAgent.ToString().Should().StartWith("basket-price-check/");
+    }
+
+    [Fact]
+    public async Task A_gzipped_sitemap_file_is_unpacked_into_text()
+    {
+        var packed = new MemoryStream();
+        using (var gzip = new GZipStream(packed, CompressionLevel.Fastest, leaveOpen: true))
+        {
+            gzip.Write(Encoding.UTF8.GetBytes("<urlset><url><loc>https://www.lidl.ie/c/food-drink/s1</loc></url></urlset>"));
+        }
+
+        var (fetcher, _, _) = Create(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(packed.ToArray()) });
+
+        var result = await fetcher.GetAsync(new Uri("https://www.lidl.ie/static/pages_en-IE_ie.xml.gz"), CancellationToken.None);
+
+        result.Status.Should().Be(FetchStatus.Ok);
+        result.Body.Should().Contain("<loc>https://www.lidl.ie/c/food-drink/s1</loc>");
+    }
+
+    [Fact]
+    public async Task A_gz_address_that_is_not_gzip_is_a_failure_not_an_exception()
+    {
+        var (fetcher, _, _) = Create(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("plain text") });
+
+        var result = await fetcher.GetAsync(new Uri("https://www.lidl.ie/static/pages_en-IE_ie.xml.gz"), CancellationToken.None);
+
+        result.Status.Should().Be(FetchStatus.Failed);
     }
 
     [Theory]

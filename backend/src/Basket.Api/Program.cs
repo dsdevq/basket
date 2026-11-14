@@ -90,6 +90,8 @@ builder.Services.AddScoped<LidlReceiptsJob>();
 builder.Services.AddScoped<PriceIngest>();
 builder.Services.AddScoped<CatalogRecorder>();
 builder.Services.AddScoped<CatalogIngest>();
+builder.Services.AddScoped<ICatalogSweep, LidlCatalogSweep>();
+builder.Services.AddScoped<CatalogSweepJob>();
 builder.Services.AddBasketAuth(builder.Configuration);
 builder.Services.Configure<SecurityOptions>(builder.Configuration.GetSection(SecurityOptions.Section));
 builder.Services.AddHostedService<OwnerBootstrap>();
@@ -218,6 +220,7 @@ if (builder.Configuration.GetValue("Hangfire:Enabled", true))
 {
     InviteCleanupJob.Schedule(app.Services.GetRequiredService<IRecurringJobManager>());
     PricePullJob.Schedule(app.Services.GetRequiredService<IRecurringJobManager>());
+    CatalogSweepJob.Schedule(app.Services.GetRequiredService<IRecurringJobManager>());
     LidlReceiptsJob.Schedule(app.Services.GetRequiredService<IRecurringJobManager>());
 }
 
