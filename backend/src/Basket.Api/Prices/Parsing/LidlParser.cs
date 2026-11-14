@@ -33,31 +33,6 @@ public static partial class LidlParser
     }
 
     /// <summary>
-    /// What a Lidl search page lists: a tile per product with its name, its address and its photo, in the order Lidl ranks them.
-    /// A tile without a usable address or name is skipped. No price is read here; the nightly job prices a product once it is linked.
-    /// </summary>
-    public static IReadOnlyList<ShopSearchResult> ParseSearchTiles(string html)
-    {
-        var results = new List<ShopSearchResult>();
-        foreach (var tile in PageData.GridTiles(html))
-        {
-            var path = PageData.String(tile, "canonicalUrl") ?? PageData.String(tile, "canonicalPath");
-            var title = PageData.Clean(PageData.String(tile, "fullTitle") ?? PageData.String(tile, "title"));
-            if (title is null
-                || path is null
-                || !path.StartsWith('/')
-                || !Stores.TryNormalizeProductUrl(Store.Lidl, "https://" + Store.Lidl.Host() + path, out var url))
-            {
-                continue;
-            }
-
-            results.Add(new ShopSearchResult(Store.Lidl.Slug(), url.ToString(), title, TileImage(tile)));
-        }
-
-        return results;
-    }
-
-    /// <summary>
     /// Every product tile of a category listing page as a catalog item, priced or not: Lidl lists its whole range online but
     /// shows a regular price on only part of it, so a tile with no price is a product without one, never an error. A tile
     /// with no product number or no address is still returned, without that field, so the caller can count it as unusable. The barcode is not on tiles; it comes from the product page

@@ -8,7 +8,7 @@ import { localDay, runDaily, summarize, type DailyDeps } from '../src/schedule.t
 const CONFIG = { origin: 'https://basket.example', auth: { kind: 'token', token: 'bsk_x' } } as unknown as Config;
 const PASSING: CheckStep[] = [{ name: 'basket', ok: true, detail: 'accepts the token' }];
 
-const aldi: StoreReport = { store: 'aldi', planned: 4, read: 4, unreadable: [], posted: { batches: 1, accepted: 4, rejected: [] } };
+const tesco: StoreReport = { store: 'tesco', planned: 4, read: 4, unreadable: [], posted: { batches: 1, accepted: 4, rejected: [] } };
 const dunnes: StoreReport = {
   store: 'dunnes',
   planned: 3,
@@ -35,7 +35,7 @@ function day(overrides: Partial<DailyDeps> = {}) {
     },
     read: async () => {
       calls.push('read');
-      return { code: 0, reports: [aldi] };
+      return { code: 0, reports: [tesco] };
     },
     ...overrides,
   };
@@ -47,7 +47,7 @@ test('a clean day: checks, reads, stamps the day, one line, exit 0', async () =>
   assert.equal(await runDaily(deps), 0);
   assert.deepEqual(calls, ['check', 'read']);
   assert.deepEqual(stamps, ['2026-11-14']);
-  assert.deepEqual(lines, ['read: aldi 4/4 read, 4 accepted (reader exit 0)']);
+  assert.deepEqual(lines, ['read: tesco 4/4 read, 4 accepted (reader exit 0)']);
 });
 
 test('already read today: nothing is checked or read, one line, exit 0', async () => {
@@ -96,11 +96,11 @@ test('a missing setting is a failure with the reason', async () => {
 });
 
 test('a blocked store is a normal outcome: exit 0, stamped, the block is in the line', async () => {
-  const { deps, lines, stamps } = day({ read: async () => ({ code: 2, reports: [aldi, dunnes] }) });
+  const { deps, lines, stamps } = day({ read: async () => ({ code: 2, reports: [tesco, dunnes] }) });
   assert.equal(await runDaily(deps), 0);
   assert.deepEqual(stamps, ['2026-11-14']);
   assert.equal(lines.length, 1);
-  assert.match(lines[0] ?? '', /aldi 4\/4 read, 4 accepted; dunnes blocked \(challenge page "Just a moment\.\.\."; 2 not asked\), 0\/3 read, 0 accepted \(reader exit 2\)/);
+  assert.match(lines[0] ?? '', /tesco 4\/4 read, 4 accepted; dunnes blocked \(challenge page "Just a moment\.\.\."; 2 not asked\), 0\/3 read, 0 accepted \(reader exit 2\)/);
 });
 
 test('the reader failing outright (exit 1) is a failure and leaves the day open for a retry', async () => {
@@ -112,9 +112,9 @@ test('the reader failing outright (exit 1) is a failure and leaves the day open 
 
 test('summarize: unreadable, rejected and failed posts are all named', () => {
   const text = summarize([
-    { ...aldi, read: 3, unreadable: [{ url: 'u', why: 'w' }], posted: { batches: 1, accepted: 2, rejected: [{ url: 'u', reason: null }], error: 'HTTP 429' } },
+    { ...tesco, read: 3, unreadable: [{ url: 'u', why: 'w' }], posted: { batches: 1, accepted: 2, rejected: [{ url: 'u', reason: null }], error: 'HTTP 429' } },
   ]);
-  assert.equal(text, 'aldi 3/4 read, 2 accepted, 1 unreadable, 1 rejected, post failed: HTTP 429');
+  assert.equal(text, 'tesco 3/4 read, 2 accepted, 1 unreadable, 1 rejected, post failed: HTTP 429');
   assert.equal(summarize([]), 'nothing to read');
 });
 

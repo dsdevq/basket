@@ -26,7 +26,7 @@ export function localDay(date: Date): string {
   return `${date.getFullYear()}-${two(date.getMonth() + 1)}-${two(date.getDate())}`;
 }
 
-/** Each store's outcome in a few words: "aldi 4/4 read, 4 accepted", "dunnes blocked (challenge page; 2 not asked)". */
+/** Each store's outcome in a few words: "tesco 4/4 read, 4 accepted", "dunnes blocked (challenge page; 2 not asked)". */
 export function summarize(reports: StoreReport[]): string {
   if (reports.length === 0) {
     return 'nothing to read';

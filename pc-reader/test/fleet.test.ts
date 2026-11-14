@@ -95,7 +95,7 @@ const catalogBody = {
       id: 'p1',
       name: 'Milk',
       stores: [
-        { store: 'aldi', readBy: 'pc', listing: { url: 'https://www.aldi.ie/product/clonbawn-protein-milk-000000000000422541?x=1' } },
+        { store: 'aldi', readBy: 'nightly', listing: { url: 'https://www.aldi.ie/product/clonbawn-protein-milk-000000000000422541?x=1' } },
         { store: 'tesco', readBy: 'pc', listing: null },
         { store: 'lidl', readBy: 'nightly', listing: { url: 'https://www.lidl.ie/p/milk/p1' } },
       ],
@@ -106,7 +106,7 @@ const catalogBody = {
       stores: [
         { store: 'dunnes', readBy: 'pc', listing: { url: 'https://www.dunnesstoresgrocery.com/product/dunnes-stores-swede-100317581' } },
         { store: 'tesco', readBy: 'pc', listing: { url: 'https://evil.example/groceries/en-IE/products/254317390' } },
-        { store: 'aldi', readBy: 'pc', listing: { url: 'https://www.aldi.ie/product/clonbawn-protein-milk-000000000000422541' } },
+        { store: 'aldi', readBy: 'pc', listing: { url: 'https://www.aldi.ie/product/clonbawn-protein-milk-000000000000422541' } }, // not a PC store any more, even if a server said so
       ],
     },
   ],
@@ -123,7 +123,6 @@ test('catalog: GET /api/products with the fleet bearer; only PC-read, linked, we
   assert.equal(calls[0]?.url, 'https://basket.example.com/api/products');
   assert.equal((calls[0]?.init.headers as Record<string, string>)['authorization'], 'Bearer jwt-1');
   assert.deepEqual(items, [
-    { store: 'aldi', url: 'https://www.aldi.ie/product/clonbawn-protein-milk-000000000000422541' },
     { store: 'dunnes', url: 'https://www.dunnesstoresgrocery.com/product/dunnes-stores-swede-100317581' },
   ]);
   assert.equal(skipped, 1);
@@ -137,7 +136,7 @@ test('catalog: a refusal, a bad body or a token failure is an error', async () =
 });
 
 const fromFile: WorkItem[] = [{ store: 'tesco', url: 'https://www.tesco.ie/groceries/en-IE/products/254317390' }];
-const fromCatalog: WorkItem[] = [{ store: 'aldi', url: 'https://www.aldi.ie/product/x-000000000000422541' }];
+const fromCatalog: WorkItem[] = [{ store: 'dunnes', url: 'https://www.dunnesstoresgrocery.com/product/x-100317581' }];
 
 test('work list: the catalog wins and the file is not read; an empty catalog is an answer, not a failure', async () => {
   const logs: string[] = [];

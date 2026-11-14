@@ -5,6 +5,7 @@ using Basket.Api.Prices.Fetching;
 using Basket.Tests.Support;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
@@ -102,6 +103,43 @@ public sealed class LidlCatalogSweepTests : IClassFixture<BasketFactory>
             prices.Single(p => p.ExternalId == "90000002").x.LoyaltyPrice.Should().Be(1.19m);
             return 0;
         });
+    }
+
+    [Fact]
+    public async Task A_linked_lidl_page_takes_its_price_from_the_sweep_and_its_own_page_is_never_opened_for_it()
+    {
+        await CleanAsync();
+        var listingId = Guid.NewGuid();
+        var (_, _) = await _factory.OwnerAsync();
+        await _factory.WithDb(async db =>
+        {
+            var owner = await db.Users.Select(u => u.Id).FirstAsync();
+            var product = new Product { Id = Guid.NewGuid(), Name = "Butter", AddedAt = _clock.GetUtcNow(), AddedByUserId = owner };
+            db.Products.Add(product);
+            db.StoreListings.Add(new StoreListing { Id = listingId, ProductId = product.Id, Store = Store.Lidl, Url = ButterPage, AddedAt = _clock.GetUtcNow() });
+            await db.SaveChangesAsync();
+            return 0;
+        });
+        var fetcher = Shop(withBarcodes: false);
+
+        await SweepAsync(fetcher, barcodeCap: 0);
+
+        fetcher.Requested.Should().NotContain(ButterPage, "the sweep's listing tile already carries the price");
+        await _factory.WithDb(async db =>
+        {
+            (await db.StoreListings.SingleAsync(l => l.Id == listingId)).StoreProductId.Should().NotBeNull();
+            (await db.PriceObservations.SingleAsync(o => o.ListingId == listingId)).Price.Should().Be(2.49m);
+            return 0;
+        });
+    }
+
+    [Fact]
+    public void No_price_pull_source_reads_lidl_product_pages_any_more()
+    {
+        using var scope = _factory.Services.CreateScope();
+
+        scope.ServiceProvider.GetServices<Basket.Api.Prices.Sources.IStorePriceSource>().Select(s => s.Store)
+            .Should().BeEquivalentTo([Store.Aldi], "Lidl's prices come from the catalog sweep");
     }
 
     [Fact]

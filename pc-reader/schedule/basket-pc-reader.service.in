@@ -1,5 +1,5 @@
 [Unit]
-Description=Read Aldi and Dunnes prices into basket (once a day, see pc-reader/README.md)
+Description=Read Dunnes prices into basket (once a day, see pc-reader/README.md)
 
 [Service]
 Type=oneshot
