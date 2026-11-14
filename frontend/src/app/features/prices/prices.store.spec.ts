@@ -3,7 +3,7 @@ import {TestBed} from '@angular/core/testing';
 import {ToastService} from '@lifekit-hq/ui';
 
 import {PricesApi} from './prices.api';
-import type {Product} from './prices.model';
+import type {Product, SearchResult} from './prices.model';
 import {PricesStore} from './prices.store';
 
 const PRODUCT: Product = {id: 'p1', name: 'Milk', stores: []};
@@ -18,6 +18,13 @@ function setup(api: Partial<PricesApi>) {
   });
   return {store: TestBed.inject(PricesStore), toast};
 }
+
+const RESULT: SearchResult = {
+  store: 'lidl',
+  url: 'https://www.lidl.ie/p/oatly-oat-barista-drink/p11407098',
+  title: 'OATLY Oat Barista Drink',
+  imageUrl: 'https://www.lidl.ie/assets/oat.png',
+};
 
 describe('PricesStore', () => {
   afterEach(() => {
@@ -209,5 +216,43 @@ describe('PricesStore', () => {
       expect(await store.confirm(PRODUCT, CANDIDATE)).toBe(false);
       expect(toast.error).toHaveBeenCalledTimes(1);
     });
+  });
+
+  it('adds a tapped search result once and links its page and photo', async () => {
+    const add = vi.fn().mockResolvedValue({id: 'p9', name: RESULT.title, stores: []});
+    const link = vi.fn().mockResolvedValue({});
+    const all = vi.fn().mockResolvedValue({products: [], stores: []});
+    const {store} = setup({add, link, all});
+
+    expect(await store.addFromSearch(RESULT)).toBe(true);
+
+    expect(add).toHaveBeenCalledWith('OATLY Oat Barista Drink');
+    expect(link).toHaveBeenCalledWith('p9', 'lidl', RESULT.url, RESULT.imageUrl);
+    expect(all).toHaveBeenCalled();
+    expect(store.adding()).toBe(false);
+  });
+
+  it('says so when a tapped result is already tracked, and links nothing', async () => {
+    const add = vi.fn().mockRejectedValue(new HttpErrorResponse({status: 409}));
+    const link = vi.fn();
+    const {store, toast} = setup({add, link});
+
+    expect(await store.addFromSearch(RESULT)).toBe(false);
+
+    expect(link).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith('That product is already tracked.');
+  });
+
+  it('keeps the product and tells the person when its page could not be linked', async () => {
+    const add = vi.fn().mockResolvedValue({id: 'p9', name: RESULT.title, stores: []});
+    const link = vi.fn().mockRejectedValue(new HttpErrorResponse({status: 500}));
+    const all = vi.fn().mockResolvedValue({products: [], stores: []});
+    const {store, toast} = setup({add, link, all});
+
+    expect(await store.addFromSearch(RESULT)).toBe(true);
+
+    expect(toast.error).toHaveBeenCalledWith(
+      'Added, but its shop page could not be linked. Link it from the Prices tab.'
+    );
   });
 });

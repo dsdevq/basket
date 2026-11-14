@@ -2,7 +2,14 @@ import {HttpClient} from '@angular/common/http';
 import {inject, Injectable} from '@angular/core';
 import {firstValueFrom} from 'rxjs';
 
-import type {Candidate, Listing, PricesResponse, Product, StoreId} from './prices.model';
+import type {
+  Candidate,
+  Listing,
+  PricesResponse,
+  Product,
+  SearchResponse,
+  StoreId,
+} from './prices.model';
 
 @Injectable({providedIn: 'root'})
 export class PricesApi {
@@ -20,8 +27,16 @@ export class PricesApi {
     return firstValueFrom(this.http.delete<void>(`/api/products/${id}`));
   }
 
-  public link(id: string, store: StoreId, url: string): Promise<Listing> {
-    return firstValueFrom(this.http.put<Listing>(`/api/products/${id}/stores/${store}`, {url}));
+  public link(id: string, store: StoreId, url: string, imageUrl?: string): Promise<Listing> {
+    return firstValueFrom(
+      this.http.put<Listing>(`/api/products/${id}/stores/${store}`, {url, imageUrl})
+    );
+  }
+
+  public search(query: string): Promise<SearchResponse> {
+    return firstValueFrom(
+      this.http.get<SearchResponse>('/api/products/search', {params: {q: query}})
+    );
   }
 
   public unlink(id: string, store: StoreId): Promise<void> {

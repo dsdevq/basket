@@ -1551,6 +1551,39 @@ finds out what those two stores will give a browser on this PC.
   manual `npm run profile` warm-up; no one did it on his behalf. Issues 135 and 136 therefore have no endpoint facts yet; they wait on
   a profile either store will serve, then one `npm run probe` run.
 
+## Add a product by searching a shop (#31)
+- **Borrowed pattern, named:** the add-item search with photos of Bring! and the Tesco app. Type a name, see the shop's products as
+  tiles with their pictures, tap the right one; the picture is what settles which product is meant. The tiles are the Shelf's own
+  tile (`cmn-selectable-card`, photo, name), so no interaction is invented. Paste-a-link stays as it was.
+- **Where it lives.** A Search button beside Add in the Prices tab's add bar opens a bottom sheet. Whatever was typed in the add box
+  is the first search (once it is two letters or more); the sheet searches on the Search button or Enter, not on each keystroke, so
+  the shop is asked once per search. Tapping a result adds the product and closes the sheet.
+- **Only Lidl can be searched, and the answer says so.** `GET /api/products/search?q=` (a signed-in person only, no fleet scope)
+  reads `https://www.lidl.ie/q/search?q=...` with the same polite fetcher as the nightly pull (honest user agent, one request at a
+  time per site, a refusal reported and never worked around) and returns up to 12 results `{store, url, title, imageUrl}` taken
+  from the page's product tiles, plus one status per shop. Lidl's robots.txt disallows only `/q/search?id=*`; a `?q=` search is
+  not covered. tesco.ie, aldi.ie and the Dunnes grocery site refuse the VPS (see their sections), so the server never requests
+  them: they come back `searched: false` with a note, and the sheet shows the notes and "paste the product's link" rather than
+  silence. If the PC reader later posts search results for them, the existing `POST /api/products/{id}/candidates` is where they go.
+  A Lidl refusal or outage is the same answer with `searched: false` for Lidl and no results. So is a 200 page that yields no
+  product tiles: a real search for a nonsense term still returns 200 with fallback/suggested tiles and no confirmable no-results
+  marker, so an empty tile list can only mean the page layout changed. It is reported as a failed search with a note pointing at
+  paste-a-link, never as "Nothing found". The sheet has no empty state of its own: when a search returns no results it shows the shops' notes.
+- **Photos bypass the service worker.** The shops' pictures are cross-origin, and once the service worker controls the page (every
+  returning visit) it fetches them itself under the `connect-src 'self'` of its own CSP, fails, and answers 504, so the sheet showed
+  letters. The sheet loads each picture with `?ngsw-bypass=true`, so the browser fetches it directly under `img-src`. The CSP is
+  not widened. The Shelf's own photos have the same fault and are left as they were.
+- **Tapping adds the product once.** The client adds the product named as the shop names it (cut to 120 characters) with
+  `POST /api/products`, then links the tapped page and photo with `PUT /api/products/{id}/stores/lidl`. That second call is made by
+  a person, so it is a confirmed match (`confirmed_at`), as a pasted link already is, and Lidl's nightly read prices it from then on.
+  A name already on the shelf is refused with the usual "already tracked" message and nothing is linked. If the link fails after the
+  product was added, the product stays and the person is told; it can be linked from the Prices tab.
+- **The other shops' candidates.** The new product is an ordinary product, so the PC reader's candidate posts and the barcode route
+  match against it as for any other; this change adds no matching of its own and runs no model.
+- **No migration.** Nothing new is stored; the product, the listing and the photo address use the existing tables and columns.
+- **Screens.** The Prices screen gains the Search button in its add bar and a longer empty-state line, so its Linux baseline changes.
+  It is re-rendered by the "Update screen baselines" workflow on this branch, not committed from a local run. The sheet is not a route.
+
 ## Seeded typical section order per chain, the fallback of walk order (2026-11-14, issue #42, epic #25)
 
 Owner's words: "in lidl all the products are almost in the same position - what i mean is that first of all there is fruit section
