@@ -1,4 +1,5 @@
 using Basket.Api.Data;
+using Basket.Api.Matching;
 using Basket.Api.Prices.Ingest;
 using Microsoft.EntityFrameworkCore;
 
@@ -18,9 +19,9 @@ public sealed record CatalogCompleteResponse(string Store, int Seen, int Previou
 /// The HTTP door of the combined catalog, beside <see cref="PriceIngest"/> and written the same way: each product stands
 /// alone, a bad one is rejected with a stable reason and the others are kept. The shop is one value for the whole batch.
 /// Products are dated by the server's clock, never the poster's, and written through <see cref="CatalogRecorder"/>, the same
-/// path the server's own sweeps use. A sweep is closed by <see cref="CompleteAsync"/>.
+/// path the server's own sweeps use. A sweep is closed by <see cref="CloseAsync"/>, which then hands the shop to <see cref="ServerCandidates"/>.
 /// </summary>
-public sealed class CatalogIngest(AppDbContext db, CatalogRecorder recorder, TimeProvider clock)
+public sealed class CatalogIngest(AppDbContext db, CatalogRecorder recorder, TimeProvider clock, ServerCandidates? candidates = null)
 {
     public const int MaxBatch = PriceIngest.MaxBatch;
 
@@ -158,6 +159,14 @@ public sealed class CatalogIngest(AppDbContext db, CatalogRecorder recorder, Tim
                     ? $"The catalog sweep listed {seenKnown} of the {previousLive} known products (the reader counted {seen}); nothing was marked discontinued."
                     : $"The catalog sweep listed {touched} products (the reader counted {seen}); nothing was marked discontinued.",
                 500);
+
+        if (touched > 0 && candidates is not null)
+        {
+            // The sweep brought rows the shelf may have been waiting for: look for the equivalents of every product with an open gap
+            // in this shop. Best effort inside (a failure is logged, never raised), so a closed sweep stays closed.
+            await candidates.RunForStoreAsync(store, ct);
+        }
+
         return new CatalogClose(passes, previousLive, discontinued, live, touched, outcome, message);
     }
 }

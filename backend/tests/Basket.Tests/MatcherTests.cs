@@ -145,3 +145,136 @@ public class CandidateMatcherTests
         }
     }
 }
+
+/// <summary>
+/// The brand-agnostic comparison and the category second opinion. Own-label products are the case: each shop sells its own
+/// whole milk, and the same kind of product under two shops' labels is what a shopper swaps. Synthetic names throughout.
+/// </summary>
+public class GenericMatcherTests
+{
+    private static MatchVerdict? Verdict(string product, string title, string? productCategory = null, string? category = null) =>
+        CandidateMatcher.Evaluate(new ProductFacts(product, null, productCategory), new CandidateFacts(title, null, category));
+
+    [Fact]
+    public void The_same_kind_of_product_under_two_shops_labels_matches_below_a_name_match()
+    {
+        var verdict = Verdict("Tesco whole milk 2L", "Milbona whole milk 2 litres")!;
+
+        verdict.Basis.Should().Be(MatchBasis.Generic);
+        verdict.Score.Should().Be(45);
+        Verdict("Whole milk 2L", "Fresh whole milk 2 litres")!.Score.Should().BeGreaterThan(verdict.Score, "a name and size match outranks a look-alike");
+    }
+
+    [Theory]
+    [InlineData("Dunnes Stores Simply Better mature cheddar 200g", "Specially Selected mature cheddar 200g")]
+    [InlineData("Everyday Essentials plain flour 1kg", "Tesco plain flour 1000 g")]
+    [InlineData("Aldi Ferndale butter 250g", "Lidl Milbona butter 250g")]
+    public void Own_label_phrases_are_left_out_whole(string product, string title) =>
+        Verdict(product, title)!.Basis.Should().Be(MatchBasis.Generic);
+
+    [Fact]
+    public void A_manufacturers_brand_is_never_left_out()
+    {
+        Verdict("Heinz baked beans 400g", "Branston baked beans 400g").Should().BeNull();
+        Verdict("Tesco baked beans 400g", "Branston baked beans 400g")!.Basis.Should().Be(MatchBasis.Generic, "the shelf name carries only a shop's label, so any brand of the same beans may be offered");
+    }
+
+    [Fact]
+    public void Different_generic_names_do_not_match_however_alike_the_labels()
+    {
+        Verdict("Tesco whole milk 2L", "Milbona skimmed milk 2L").Should().BeNull();
+        Verdict("Tesco brown bread 800g", "Milbona white bread 800g").Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("Tesco whole milk 2L", "Milbona whole milk 1L")]
+    [InlineData("Tesco whole milk", "Milbona whole milk 2L")]
+    [InlineData("Tesco whole milk 2L", "Milbona whole milk")]
+    public void The_generic_comparison_needs_both_sizes_stated_and_equal(string product, string title) =>
+        Verdict(product, title).Should().BeNull();
+
+    // The "6 x 330 ml is not 330 ml" rules: a multipack is not one bottle, whatever the labels and the words say.
+    [Theory]
+    [InlineData("Tesco cola 6 x 330ml", "Lidl cola 330ml")]
+    [InlineData("Tesco cola 330ml", "Lidl cola 6x330 ml")]
+    [InlineData("Tesco cola 6 x 330ml", "Lidl cola 1980ml")]
+    [InlineData("Tesco cola 6 x 330ml", "Lidl cola 4 x 330ml")]
+    [InlineData("Tesco cola 6 x 330ml", "Lidl cola 6 x 500ml")]
+    [InlineData("Tesco cola 330ml", "Lidl cola 6 pack")]
+    public void A_multipack_is_never_a_single_item_or_another_multipack(string product, string title) =>
+        Verdict(product, title).Should().BeNull();
+
+    [Fact]
+    public void The_same_multipack_written_two_ways_matches()
+    {
+        Verdict("Tesco cola 6 x 330ml", "Lidl cola 6x330 ml")!.Basis.Should().Be(MatchBasis.Generic);
+        Verdict("Cola 6 x 330ml", "Fresh cola 6 x 33cl")!.Basis.Should().Be(MatchBasis.NameAndSize);
+    }
+
+    [Fact]
+    public void A_size_given_apart_from_the_name_is_used_and_compared_as_if_the_name_stated_it()
+    {
+        var product = new ProductFacts("Grated mozzarella 250g", null);
+
+        CandidateMatcher.Evaluate(product, new CandidateFacts("Greenfield grated mozzarella", null, null, new ProductSize(SizeUnit.Mass, 250, 1)))!
+            .Basis.Should().Be(MatchBasis.NameAndSize);
+        CandidateMatcher.Evaluate(product, new CandidateFacts("Greenfield grated mozzarella", null, null, new ProductSize(SizeUnit.Mass, 500, 1))).Should().BeNull();
+        CandidateMatcher.Evaluate(new ProductFacts("Grated mozzarella", null, null, new ProductSize(SizeUnit.Mass, 250, 1)), new CandidateFacts("Grated mozzarella 250g", null))!
+            .Basis.Should().Be(MatchBasis.NameAndSize);
+    }
+
+    [Fact]
+    public void A_barcode_still_decides_before_any_name_or_label()
+    {
+        const string code = "4006381333931";
+        CandidateMatcher.Evaluate(new ProductFacts("Tesco whole milk 2L", code), new CandidateFacts("Something else", "04006381333931", "Frozen"))
+            .Should().Be(new MatchVerdict(MatchBasis.Barcode, 100));
+    }
+
+    // ---- category agreement -----------------------------------------------------------------------------------
+
+    [Fact]
+    public void Categories_that_share_a_word_agree_and_add_to_the_score()
+    {
+        var plain = Verdict("Whole milk 2L", "Fresh whole milk 2 litres")!;
+        var agreeing = Verdict("Whole milk 2L", "Fresh whole milk 2 litres", "Chilled Food > Milk", "Fresh Food > Dairy > Milk")!;
+
+        agreeing.Basis.Should().Be(MatchBasis.NameAndSize);
+        agreeing.Score.Should().Be(plain.Score + CandidateMatcher.CategoryBonus);
+        Verdict("Tesco whole milk 2L", "Milbona whole milk 2L", "Milk", "Dairy > Milk")!.Score.Should().Be(45 + CandidateMatcher.CategoryBonus);
+    }
+
+    [Fact]
+    public void Disagreeing_categories_reject_the_loose_matches_but_not_a_name_and_size_one()
+    {
+        Verdict("Whole milk 2L", "Fresh whole milk 2 litres", "Milk", "Household > Cleaning")!.Basis.Should().Be(MatchBasis.NameAndSize);
+        Verdict("Tesco whole milk 2L", "Milbona whole milk 2L", "Milk", "Household > Cleaning").Should().BeNull();
+        Verdict("Whole milk", "Whole milk 2L", "Milk", "Household > Cleaning").Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData(null, "Dairy > Milk")]
+    [InlineData("Dairy > Milk", null)]
+    [InlineData("", "Dairy > Milk")]
+    [InlineData("Fresh Food", "Dairy > Milk")] // nothing but filler words: no opinion either way
+    public void A_missing_category_changes_nothing(string? product, string? candidate)
+    {
+        Verdict("Tesco whole milk 2L", "Milbona whole milk 2L", product, candidate)!.Score.Should().Be(45);
+        Verdict("Whole milk", "Whole milk 2L", product, candidate)!.Basis.Should().Be(MatchBasis.NameOnly);
+    }
+
+    [Fact]
+    public void Plurals_and_accents_do_not_hide_a_category_agreement() =>
+        Verdict("Whole milk 2L", "Whole milk 2L", "Crème > Eggs", "Creme > Egg")!.Score.Should().Be(90 + CandidateMatcher.CategoryBonus);
+
+    // ---- narrowing the catalog -----------------------------------------------------------------------------------
+
+    [Theory]
+    [InlineData("Avonmore Whole Milk 2L", new[] { "avonmore", "milk" })]
+    [InlineData("Tesco Whole Milk 2L", new[] { "whole", "milk" })]
+    [InlineData("Milk 2L", new[] { "milk" })]
+    [InlineData("Tesco 2L", new string[0])]
+    [InlineData("Free range eggs, pack of 12", new[] { "free", "egg" })]
+    public void The_key_words_are_the_first_and_last_generic_word(string name, string[] expected) =>
+        CandidateMatcher.KeyWords(name).Should().Equal(expected);
+}

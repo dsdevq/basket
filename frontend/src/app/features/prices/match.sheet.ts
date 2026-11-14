@@ -24,6 +24,8 @@ function basisText(basis: MatchBasis): string {
       return 'Same barcode';
     case 'name_size':
       return 'Same name and size';
+    case 'generic':
+      return 'Same kind and size, other label';
     default:
       return 'Close name, size not stated';
   }
