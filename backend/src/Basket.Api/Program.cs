@@ -93,6 +93,7 @@ builder.Services.AddScoped<CatalogRecorder>();
 builder.Services.AddScoped<CatalogIngest>();
 builder.Services.AddScoped<LidlCatalogSweep>();
 builder.Services.AddScoped<LidlCatalogJob>();
+builder.Services.AddScoped<ServerCandidates>();
 builder.Services.AddBasketAuth(builder.Configuration);
 builder.Services.Configure<SecurityOptions>(builder.Configuration.GetSection(SecurityOptions.Section));
 builder.Services.AddHostedService<OwnerBootstrap>();

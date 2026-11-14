@@ -93,11 +93,11 @@ public static class MatchEndpoints
 
         var facts = new ProductFacts(product.Name, product.Barcode);
         var all = await db.MatchCandidates.Where(c => c.ProductId == id && c.Store == store).ToDictionaryAsync(c => c.Url, StringComparer.Ordinal, ct);
-        var existing = all.Where(c => c.Value.Status == CandidateStatus.Proposed).ToDictionary(c => c.Key, c => c.Value, StringComparer.Ordinal);
         var now = clock.GetUtcNow();
         var outcomes = new List<ProposeOutcome>(results.Count);
         var seen = new HashSet<string>(StringComparer.Ordinal);
-        var passed = new List<(MatchCandidate Row, bool IsNew, int OutcomeIndex)>();
+        var passed = new List<Proposal>();
+        var passedAt = new Dictionary<string, int>(StringComparer.Ordinal);
 
         foreach (var result in results)
         {
@@ -135,33 +135,16 @@ public static class MatchEndpoints
                 continue;
             }
 
-            var isNew = known is null;
-            var row = known ?? new MatchCandidate { Id = Guid.NewGuid(), ProductId = id, Store = store, Url = url, ProposedAt = now, Status = CandidateStatus.Proposed };
-            row.Title = title;
-            row.Barcode = Gtin.TryNormalize(result.Barcode, out var code) ? code : row.Barcode;
-            row.Basis = verdict.Basis;
-            row.Score = verdict.Score;
-            passed.Add((row, isNew, outcomes.Count));
+            passed.Add(new Proposal(url, title, result.Barcode, verdict));
+            passedAt[url] = outcomes.Count;
             outcomes.Add(new ProposeOutcome(url, "proposed"));
         }
 
-        // The open proposals for this shop are the best few of what was already open and what just passed.
-        var open = existing.Values.Concat(passed.Where(p => p.IsNew).Select(p => p.Row)).ToList();
-        var keep = open.OrderByDescending(c => c.Score).ThenBy(c => c.ProposedAt).ThenBy(c => c.Url, StringComparer.Ordinal)
-            .Take(MaxProposalsPerStore).ToHashSet();
-        foreach (var (row, isNew, index) in passed)
+        foreach (var url in CandidateBook.Apply(db, id, store, all, passed, now))
         {
-            if (!keep.Contains(row))
-            {
-                outcomes[index] = outcomes[index] with { Outcome = "outranked" };
-            }
-            else if (isNew)
-            {
-                db.MatchCandidates.Add(row);
-            }
+            outcomes[passedAt[url]] = outcomes[passedAt[url]] with { Outcome = "outranked" };
         }
 
-        db.MatchCandidates.RemoveRange(existing.Values.Where(c => !keep.Contains(c)));
         try
         {
             await db.SaveChangesAsync(ct);
@@ -179,7 +162,7 @@ public static class MatchEndpoints
     /// A person says an open proposal is the product's equivalent in that shop: the shop's listing now points at it and is
     /// confirmed (the same as pasting the page), and the shop's other open proposals are settled. Rejected rows stay.
     /// </summary>
-    private static async Task<IResult> Confirm(Guid id, Guid candidateId, AppDbContext db, TimeProvider clock, CancellationToken ct)
+    private static async Task<IResult> Confirm(Guid id, Guid candidateId, AppDbContext db, ServerCandidates candidates, TimeProvider clock, CancellationToken ct)
     {
         var candidate = await db.MatchCandidates.SingleOrDefaultAsync(c => c.Id == candidateId && c.ProductId == id && c.Status == CandidateStatus.Proposed, ct);
         if (candidate is null)
@@ -193,6 +176,8 @@ public static class MatchEndpoints
         listing.ConfirmedAt = now;
         await db.MatchCandidates.Where(c => c.ProductId == id && c.Store == candidate.Store && c.Status == CandidateStatus.Proposed).ExecuteDeleteAsync(ct);
         await db.SaveChangesAsync(ct);
+        // A confirmed page tells the product its barcode, size and category: look again at the shops it still has no page in.
+        await candidates.RunForProductAsync(id, ct);
         return Results.Ok(new ListingResponse(listing.Url, listing.Title, listing.LastCheckedAt, listing.LastError, listing.Category, listing.ImageUrl, true));
     }
 

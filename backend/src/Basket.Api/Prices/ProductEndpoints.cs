@@ -135,6 +135,7 @@ public static class ProductEndpoints
         AddProductRequest request,
         HttpContext http,
         AppDbContext db,
+        ServerCandidates candidates,
         TimeProvider clock,
         CancellationToken ct)
     {
@@ -192,6 +193,9 @@ public static class ProductEndpoints
             return MatchEndpoints.BarcodeExists();
         }
 
+        // A new product may already have equivalents in the catalog; look now rather than at the next sweep. Never fails the add.
+        await candidates.RunForProductAsync(product.Id, ct);
+
         var connected = await db.LidlPlusConnections.AnyAsync(ct);
         var created = new ProductResponse(
             product.Id,
@@ -235,6 +239,7 @@ public static class ProductEndpoints
         LinkStoreRequest request,
         HttpContext http,
         AppDbContext db,
+        ServerCandidates candidates,
         TimeProvider clock,
         CancellationToken ct)
     {
@@ -282,6 +287,12 @@ public static class ProductEndpoints
         }
 
         await db.SaveChangesAsync(ct);
+        if (byPerson)
+        {
+            // A confirmed page tells the product its barcode, size and category: look again at the shops it still has no page in.
+            await candidates.RunForProductAsync(id, ct);
+        }
+
         return Results.Ok(new ListingResponse(listing.Url, listing.Title, listing.LastCheckedAt, listing.LastError, listing.Category, listing.ImageUrl, listing.ConfirmedAt is not null));
     }
 
