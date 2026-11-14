@@ -4,8 +4,8 @@ namespace Basket.Api.Plan;
 
 /// <summary>
 /// The cheapest two shops that together price every open line, with what each one is bought at. <see cref="Groups"/> are the shops
-/// in the fixed order (Lidl, Aldi, Tesco, Dunnes) with their lines, dated prices and subtotals, the same shape as the By shop
-/// split. <see cref="Total"/> adds one pack of each line at the shop with the lower unit price, a card price or a multi-buy counted.
+/// in the fixed order (Lidl, Aldi, Tesco, Dunnes) with their lines in walk order, dated prices and subtotals, the same shape as the
+/// By shop split. <see cref="Total"/> adds one pack of each line at the shop with the lower unit price, a card price or a multi-buy counted.
 /// </summary>
 public sealed record PlanPairSplit(
     decimal Total,
@@ -31,7 +31,7 @@ public static class PairSplitBuilder
             return null;
         }
 
-        var shops = Stores.All.Select(s => (Slug: s.Slug(), Name: s.DisplayName())).ToList();
+        var shops = Stores.All.ToList();
         PlanPairSplit? cheapest = null;
         for (var first = 0; first < shops.Count; first++)
         {
@@ -48,13 +48,13 @@ public static class PairSplitBuilder
         return cheapest;
     }
 
-    private static PlanPairSplit? Pair(IReadOnlyList<PlanItem> items, (string Slug, string Name) first, (string Slug, string Name) second)
+    private static PlanPairSplit? Pair(IReadOnlyList<PlanItem> items, Store first, Store second)
     {
-        var lines = new Dictionary<string, List<ByShopLine>> { [first.Slug] = [], [second.Slug] = [] };
+        var lines = new Dictionary<Store, List<ByShopLine>> { [first] = [], [second] = [] };
         foreach (var item in items)
         {
-            var at = new[] { first.Slug, second.Slug }
-                .Select(slug => (Slug: slug, Entry: ByShopBuilder.Priced(item, slug)))
+            var at = new[] { first, second }
+                .Select(shop => (Shop: shop, Entry: ByShopBuilder.Priced(item, shop.Slug())))
                 .Where(c => c.Entry is not null)
                 .ToList();
             if (at.Count == 0)
@@ -70,12 +70,12 @@ public static class PairSplitBuilder
             // The lower unit price wins; on a tie the first shop in the fixed order, which `at` keeps.
             var pick = at.MinBy(c => c.Entry!.Offer!.Rank);
             var line = ByShopBuilder.Line(item, pick.Entry!);
-            lines[pick.Slug].Add(line);
+            lines[pick.Shop].Add(line);
         }
 
         var groups = new[] { first, second }
-            .Where(shop => lines[shop.Slug].Count > 0)
-            .Select(shop => new ByShopGroup(shop.Slug, shop.Name, lines[shop.Slug].Sum(l => l.Price), lines[shop.Slug]))
+            .Where(shop => lines[shop].Count > 0)
+            .Select(shop => ByShopBuilder.Group(shop, lines[shop]))
             .ToList();
         var all = groups.SelectMany(g => g.Lines).ToList();
         return new PlanPairSplit(

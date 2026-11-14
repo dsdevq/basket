@@ -33,9 +33,10 @@ public sealed class PlanTests : IClassFixture<BasketFactory>
             return product;
         }
 
-        public void Read(Product product, Store store, Action<PriceObservation> reading, DateOnly? observedOn = null, string? title = null)
+        public void Read(Product product, Store store, Action<PriceObservation> reading, DateOnly? observedOn = null, string? title = null, string? category = null)
         {
             var listing = Link(product, store, title);
+            listing.Category = category;
             var observation = new PriceObservation { Id = Guid.NewGuid(), ListingId = listing.Id, ObservedOn = observedOn ?? Today, InStock = true };
             reading(observation);
             _latest[listing.Id] = observation;
@@ -414,6 +415,33 @@ public sealed class PlanTests : IClassFixture<BasketFactory>
         tesco.Total.Should().Be(1.00m);
         split.Total.Should().Be(6.00m, "the card price counts: milk at Tesco 1.00, eggs and butter at Aldi 5.00");
         split.OldestSeenOn.Should().Be(Today.AddDays(-2));
+    }
+
+    [Fact]
+    public void Each_shop_of_the_pair_lists_its_lines_in_the_order_that_shop_is_walked()
+    {
+        var shelf = new Shelf();
+        var cola = shelf.Product("Cola 2L");
+        var peas = shelf.Product("Frozen peas");
+        var apples = shelf.Product("Apples");
+        var bleach = shelf.Product("Bleach");
+        foreach (var product in new[] { cola, peas, apples, bleach })
+        {
+            shelf.Line(product);
+        }
+
+        shelf.Read(cola, Store.Lidl, o => o.Price = 1.50m, category: "Drinks > Soft Drinks");
+        shelf.Read(peas, Store.Lidl, o => o.Price = 1.00m, category: "Frozen Food > Peas");
+        shelf.Read(apples, Store.Lidl, o => o.Price = 1.20m, category: "Fresh Food > Fruit");
+        shelf.Read(bleach, Store.Tesco, o => o.Price = 1.10m);
+
+        var split = shelf.Build().Coverage.Split;
+
+        split.Should().NotBeNull();
+        split!.Groups.Select(g => g.Store).Should().Equal("lidl", "tesco");
+        split.Groups.Single(g => g.Store == "lidl").Lines.Select(l => (l.Text, l.Section))
+            .Should().Equal(("Apples", "Fruit & veg"), ("Frozen peas", "Frozen"), ("Cola 2L", "Drinks"));
+        split.Groups.Single(g => g.Store == "tesco").Lines.Select(l => l.Section).Should().Equal("Other");
     }
 
     [Fact]

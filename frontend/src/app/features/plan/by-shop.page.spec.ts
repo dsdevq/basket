@@ -105,6 +105,22 @@ const section = (host: HTMLElement, heading: string): HTMLElement | undefined =>
     squash(s.textContent).startsWith(heading)
   );
 
+/** One shop's walk, section by section: each header ("Lidl · Fruit & veg") with its rows, and the shop total on the first. */
+const walk = (
+  host: HTMLElement,
+  chain: string
+): {header: string; rows: string[]; total: string}[] =>
+  [...host.querySelectorAll<HTMLElement>('cmn-list-section')]
+    .map(s => {
+      const total = squash(s.querySelector('[data-testid="shop-total"]')?.textContent);
+      return {
+        header: squash(s.querySelector('h2')?.textContent).replace(total, '').trim(),
+        rows: [...s.querySelectorAll('cmn-list-item-row')].map(r => squash(r.textContent)),
+        total,
+      };
+    })
+    .filter(s => s.header.startsWith(`${chain} · `));
+
 const rows = (card: HTMLElement | undefined): string[] =>
   [...(card?.querySelectorAll('cmn-list-item-row') ?? [])].map(r => squash(r.textContent));
 
@@ -153,13 +169,56 @@ describe('ByShopPage', () => {
   it('shows the split shop by shop with dated prices and the line it cannot place', async () => {
     const {host} = await render(RESPONSE);
 
-    const lidl = rows(section(host, 'Split: buy at Lidl · €0.99'));
-    expect(lidl[0]).toContain('Seen 5 Nov · Lidl Plus price · €0.50/l');
-    expect(lidl[0]).toContain('€0.99');
-    expect(rows(section(host, 'Split: buy at Aldi · €2.91'))[0]).toContain('Seen 6 Nov');
+    const lidl = walk(host, 'Lidl');
+    expect(lidl[0].total).toBe('Shop total €0.99');
+    expect(lidl[0].rows[0]).toContain('Seen 5 Nov · Lidl Plus price · €0.50/l');
+    expect(lidl[0].rows[0]).toContain('€0.99');
+    expect(walk(host, 'Aldi')[0].rows[0]).toContain('Seen 6 Nov');
     const unplaced = squash(section(host, 'Split: no best shop')?.textContent);
     expect(unplaced).toContain('Free-range eggs, a dozen');
     expect(unplaced).toContain('No price');
+  });
+
+  it("lists a shop's lines under a header per section, in the order the API sends them", async () => {
+    const lidl = (itemId: string, text: string, aisle: string, price: number) =>
+      bought({itemId, text, section: aisle, price});
+    const sectioned = basket({
+      lineCount: 5,
+      split: {
+        total: 8.4,
+        complete: true,
+        versusCheapest: null,
+        unplaced: [],
+        groups: [
+          {
+            store: 'lidl',
+            storeName: 'Lidl',
+            total: 8.4,
+            lines: [
+              lidl('a', 'Apples', 'Fruit & veg', 1.2),
+              lidl('b', 'Bananas', 'Fruit & veg', 0.9),
+              lidl('c', 'Chicken fillets', 'Meat & fish', 4),
+              lidl('d', 'Cola 2L', 'Drinks', 1.5),
+              lidl('e', 'Candles', 'Other', 0.8),
+            ],
+          },
+        ],
+      },
+    });
+    const {host} = await render(sectioned);
+
+    const sections = walk(host, 'Lidl');
+    expect(sections.map(s => s.header)).toEqual([
+      'Lidl · Fruit & veg',
+      'Lidl · Meat & fish',
+      'Lidl · Drinks',
+      'Lidl · Other',
+    ]);
+    expect(sections.map(s => s.total)).toEqual(['Shop total €8.40', '', '', '']);
+    expect(sections[0].rows).toHaveLength(2);
+    expect(sections[0].rows[0]).toContain('Apples');
+    expect(sections[0].rows[1]).toContain('Bananas');
+    expect(sections[2].rows[0]).toContain('Cola 2L');
   });
 
   it('marks the cheapest complete shop', async () => {

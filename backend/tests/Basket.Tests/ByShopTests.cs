@@ -3,6 +3,7 @@ using System.Text.Json;
 using Basket.Api.Data;
 using Basket.Api.Plan;
 using Basket.Api.Prices;
+using Basket.Api.Walk;
 using Basket.Tests.Support;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
@@ -45,6 +46,10 @@ public sealed class ByShopTests : IClassFixture<BasketFactory>
             _lines.Add(line);
             return line;
         }
+
+        /// <summary>Files the line's page at <paramref name="store"/> under a shop breadcrumb, as the price job reads it.</summary>
+        public void Categorise(ListItem line, Store store, string category) =>
+            _listings.Single(l => l.ProductId == line.ProductId && l.Store == store).Category = category;
 
         public ListItem FreeText(string text)
         {
@@ -155,6 +160,49 @@ public sealed class ByShopTests : IClassFixture<BasketFactory>
         split.Groups.Single(g => g.Store == "aldi").Lines.Single().ObservedOn.Should().Be(Today);
         split.Total.Should().Be(3.40m);
         split.VersusCheapest.Should().Be(-0.10m, "the split is 3.40 and the cheapest single shop (Lidl, tied with Aldi) is 3.50");
+    }
+
+    [Fact]
+    public void A_shops_lines_come_in_the_order_that_shop_is_walked_and_name_their_section()
+    {
+        var shelf = new Shelf();
+        var cola = shelf.Line("Cola 2L", (Store.Lidl, 1.50m, "Cola 2L"));
+        var chicken = shelf.Line("Chicken fillets", (Store.Lidl, 4.00m, "Chicken fillets"));
+        var candles = shelf.Line("Candles", (Store.Lidl, 2.00m, "Candles"));
+        var apples = shelf.Line("Apples", (Store.Lidl, 1.20m, "Apples"));
+        var bananas = shelf.Line("Bananas", (Store.Lidl, 0.90m, "Bananas"));
+        shelf.Categorise(cola, Store.Lidl, "Food & Drink > Drinks");
+        shelf.Categorise(chicken, Store.Lidl, "Food & Drink > Meat & Poultry");
+        shelf.Categorise(apples, Store.Lidl, "Food & Drink > Fruit & Vegetables > Fruit");
+        shelf.Categorise(bananas, Store.Lidl, "Food & Drink > Fruit & Vegetables > Fruit");
+
+        var lidl = shelf.Build().Split.Groups.Single();
+
+        lidl.Lines.Select(l => (l.Text, l.Section)).Should().Equal(
+            ("Apples", "Fruit & veg"),
+            ("Bananas", "Fruit & veg"),
+            ("Chicken fillets", "Meat & fish"),
+            ("Cola 2L", "Drinks"),
+            ("Candles", SeededSectionOrder.Other));
+        lidl.Total.Should().Be(9.60m, "sorting the lines does not change what they cost");
+    }
+
+    [Fact]
+    public void Each_chain_is_walked_in_its_own_seeded_order()
+    {
+        var shelf = new Shelf();
+        foreach (var store in new[] { Store.Lidl, Store.Tesco })
+        {
+            var peas = shelf.Line($"Frozen peas {store}", (store, 1.00m, "Frozen peas"));
+            var water = shelf.Line($"Spring water {store}", (store, 0.50m, "Spring water"));
+            shelf.Categorise(peas, store, "Frozen Food > Peas");
+            shelf.Categorise(water, store, "Drinks > Water");
+        }
+
+        var groups = shelf.Build().Split.Groups;
+
+        groups.Single(g => g.Store == "lidl").Lines.Select(l => l.Text).Should().Equal("Frozen peas Lidl", "Spring water Lidl");
+        groups.Single(g => g.Store == "tesco").Lines.Select(l => l.Text).Should().Equal("Spring water Tesco", "Frozen peas Tesco");
     }
 
     [Fact]

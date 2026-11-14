@@ -1,5 +1,5 @@
 import {basket, bought, shop} from './by-shop-fixtures';
-import {lineDetail, orderedShops, storeDetail, verdict} from './by-shop-format';
+import {lineDetail, orderedShops, storeDetail, verdict, walkSections} from './by-shop-format';
 import {missingTag} from './plan-format';
 
 const SPLIT = {total: 0, complete: false, versusCheapest: null, groups: [], unplaced: []};
@@ -100,6 +100,27 @@ describe('storeDetail', () => {
       '1 of 1 line · oldest price 4 Nov · 1 offer included'
     );
     expect(storeDetail(shop(), 2)).toBe('0 of 2 lines');
+  });
+});
+
+describe('walkSections', () => {
+  it("cuts a shop's lines into runs of one section, keeping the order they came in", () => {
+    const sections = walkSections([
+      bought({itemId: 'a', section: 'Fruit & veg'}),
+      bought({itemId: 'b', section: 'Fruit & veg'}),
+      bought({itemId: 'c', section: 'Drinks'}),
+      bought({itemId: 'd', section: 'Other'}),
+    ]);
+
+    expect(sections.map(s => [s.section, s.lines.map(l => l.itemId)])).toEqual([
+      ['Fruit & veg', ['a', 'b']],
+      ['Drinks', ['c']],
+      ['Other', ['d']],
+    ]);
+  });
+
+  it('has no sections for no lines', () => {
+    expect(walkSections([])).toEqual([]);
   });
 });
 
