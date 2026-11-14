@@ -1139,7 +1139,9 @@ day. Builds on `LidlPlusConnectionService.AccessAsync`; the Lidl Plus offers (#1
   price, two products differing only by letter case, the job);
   `LidlPlusTicketsClientTests` feeds recorded answers (decimal commas and numbers, bad shapes, refusals, network error) to the real
   client. No test, and no build step, calls Lidl.
-- **Not verified live.** The receipts service address, the headers (`App`, `Operating-System`, `App-Version`) and the field names
+- **Not verified live.** (Superseded for a receipt's address, `App-Version`, language and lines by "Lidl Plus receipts: Lidl changed
+  its receipts service" below: a receipt is now read from `api/v3` and its lines from the printed HTML, not `itemsLine`, and the paid
+  price nets a coupon.) The receipts service address, the headers (`App`, `Operating-System`, `App-Version`) and the field names
   (`tickets[].id`, `date`, `totalAmount`, `itemsLine[]` with `description`, `quantity`, `isWeight`, `currentUnitPrice`, `extendedAmount`
   or `originalAmount`) follow the community `lidl-plus` client, not an official Lidl document, and nothing here has been run against
   Lidl. Two readings to check against the first real receipts: whether `extendedAmount` is before or after a Lidl Plus coupon (basket
@@ -1670,6 +1672,43 @@ now follow the person to every device they sign in on, as in finance-sentry, ins
   person deleting their row) and the two verbs in the anonymous-401 list. Frontend: `preferences.provider.spec.ts` (nothing asked
   while signed out, load after sign-in, clear on sign-out, a fresh read for the next person) and `e2e/appearance-sync.spec.ts` (the
   account's theme wins after sign-in and is what Settings shows; choosing a mode in Settings is `PATCH`ed).
+
+## Lidl Plus receipts: Lidl changed its receipts service (2026-11-14, issue #26, epic M8 - the pull works again)
+
+- **What broke.** With the household sign-in connected and accepted, the nightly pull still filed nothing. Real requests on 2026-11-14
+  showed three changes on Lidl's side (the list, 264 receipts, was fine): the `App-Version` header basket sent (`999.99.9`) now makes
+  Lidl reset the HTTP/2 stream, so every call ended as `lidl_unavailable`; a receipt on `api/v2/{country}/tickets/{id}` answers 400
+  with an empty body; and the working `api/v3/{country}/tickets/{id}` has no item array any more.
+- **Request.** `AppVersion` is now a `LidlPlusOptions` setting with a realistic default (`16.40.2`), not a literal: Lidl accepts a real
+  release and turns a made-up one away, so it is raised in configuration when Lidl starts refusing again. A receipt is read from
+  `api/v3/...`; the list stays on `api/v2/...`. v3 refuses a language longer than two characters (its 400 said `LanguageCode must be 2
+  characters or fewer`), so the default `Language` is `en`, sent as `Accept-Language` exactly as configured (a longer tag would be
+  refused by Lidl). The language is sent in the header only: that is the one place basket sends one, but whether v3 reads the header
+  or wants it elsewhere is inferred from the error, not seen.
+- **Lines.** The v3 detail carries the day, `totalAmount` and the shop, but the purchased lines are only inside `htmlPrintedReceipt`, an
+  HTML string (a `<pre>` of spans). `LidlPrintedReceipt` reads it with a tolerant reader (regex over the span tags, no HTML library):
+  - an `article` span is a line: name from `data-art-description`, shelf price from `data-unit-price`, quantity from
+    `data-art-quantity` (else 1). A second `article` span with the same `data-art-id` whose text is `N x price` is that line's detail
+    (it can supply the quantity, and is never a second line); a repeated article without that text is a second scan and a second line,
+    which the importer already folds into one product;
+  - a `discount` span takes its amount (the number closing its text, `-0.30`, `-0,30` or `0.30-`) off the line printed just before it;
+    one with no line before it, after a line that could not be read, or with no readable amount (a percentage) is left out;
+  - the line's amount is `unit price x quantity` less its discounts, so the paid price is the shelf price after a coupon. It is computed
+    from the attributes, not read from the printed text, because the text is a formatted receipt line whose number could be either
+    a unit price or a line total. A fractional quantity is a weight in kilos (`IsWeight`), and then the unit price is a kilo's;
+  - decimal commas and points are both read; a line without a name or a readable price, or with a quantity of zero, is skipped and
+    the rest of the receipt is still read. The currency span is not read: basket is euro-only.
+- **Unchanged.** A receipt still becomes a closed trip on its print date, lines are matched to products by name, the paid price is kept
+  with its day, a filed receipt is never opened again, and the pauses and limits are the same. `LidlReceipt` is the same model; the total is
+  `totalAmount`.
+- **A receipt with no readable line is `skipped`, not filed empty.** Because a filed receipt is never opened again, an empty trip would
+  hide a future change of the print for good. Left unread it is logged and tried again on the next pull, and it does not use up the
+  pull's limit. The price of that safety is one extra request a night for a receipt that is truly empty (none seen).
+- **Tests.** Synthetic only: the repository is public, so the fixtures are built from the masked structure of the print with invented
+  products, and no real receipt, article, token or store address is committed. `LidlPrintedReceiptTests` covers the quantity pair,
+  weights, discounts, decimal commas and unreadable lines; `LidlPlusTicketsClientTests` covers the v3 address, the headers and the
+  receipt as a whole. Nothing was run against Lidl; the first real pull after the deploy is the live check.
+- **No migration, no new setting to set.** `LidlPlus:AppVersion` and `LidlPlus:Language` are optional overrides of their defaults.
 
 ## Catalog 2/14: the catalog tables and the catalog ingest (2026-11-14, issue 128 of epic 126)
 

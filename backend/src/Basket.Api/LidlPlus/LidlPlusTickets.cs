@@ -49,8 +49,9 @@ public interface ILidlPlusTickets
 
 /// <summary>
 /// Reads the receipts list and one receipt from Lidl Plus's receipts service, the way the app does (a bearer access token and the
-/// app's own headers). Nothing here logs a body, a header or an exception message: every failure is reduced to an outcome. Amounts
-/// arrive as numbers or as text with a decimal comma; both are read.
+/// app's own headers). Nothing here logs a body, a header or an exception message: every failure is reduced to an outcome. The list
+/// is the v2 service; one receipt is the v3 one, whose purchased lines are only in its printed HTML (<see cref="LidlPrintedReceipt"/>).
+/// Amounts arrive as numbers or as text with a decimal comma; both are read.
 /// </summary>
 public sealed class LidlPlusTicketsClient(HttpClient http, IOptions<LidlPlusOptions> options) : ILidlPlusTickets
 {
@@ -87,7 +88,7 @@ public sealed class LidlPlusTicketsClient(HttpClient http, IOptions<LidlPlusOpti
 
     public async Task<LidlReceiptResult> GetAsync(string accessToken, string id, CancellationToken ct)
     {
-        var (body, lidlStopped) = await GetBodyAsync($"api/v2/{Country}/tickets/{Uri.EscapeDataString(id)}", accessToken, ct);
+        var (body, lidlStopped) = await GetBodyAsync($"api/v3/{Country}/tickets/{Uri.EscapeDataString(id)}", accessToken, ct);
         if (body is null)
         {
             return lidlStopped ? LidlReceiptResult.Unavailable : LidlReceiptResult.Unreadable;
@@ -110,29 +111,17 @@ public sealed class LidlPlusTicketsClient(HttpClient http, IOptions<LidlPlusOpti
     {
         if (root.ValueKind != JsonValueKind.Object
             || !DateTimeOffset.TryParse(Text(root, "date"), CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var date)
-            || !root.TryGetProperty("itemsLine", out var itemsLine)
-            || itemsLine.ValueKind != JsonValueKind.Array)
+            || Text(root, "htmlPrintedReceipt") is not { } printed)
         {
             return LidlReceiptResult.Unreadable;
         }
 
-        var lines = new List<LidlReceiptLine>();
-        foreach (var line in itemsLine.EnumerateArray())
-        {
-            if (line.ValueKind != JsonValueKind.Object || Text(line, "description") is not { } description)
-            {
-                continue;
-            }
-
-            lines.Add(new LidlReceiptLine(
-                description,
-                Amount(line, "quantity") ?? 1m,
-                line.TryGetProperty("isWeight", out var weight) && weight.ValueKind == JsonValueKind.True,
-                Amount(line, "currentUnitPrice"),
-                Amount(line, "extendedAmount") ?? Amount(line, "originalAmount")));
-        }
-
-        return new LidlReceiptResult(LidlTicketsOutcome.Ok, new LidlReceipt(id, date, Amount(root, "totalAmount"), lines));
+        // A receipt with no readable line is not filed empty: if Lidl changed the print again, every receipt would be filed
+        // without lines for good (a filed receipt is never opened again). Left unread, it is tried again on the next pull.
+        var lines = LidlPrintedReceipt.ReadLines(printed);
+        return lines.Count == 0
+            ? LidlReceiptResult.Unreadable
+            : new LidlReceiptResult(LidlTicketsOutcome.Ok, new LidlReceipt(id, date, Amount(root, "totalAmount"), lines));
     }
 
     /// <summary>
@@ -147,7 +136,7 @@ public sealed class LidlPlusTicketsClient(HttpClient http, IOptions<LidlPlusOpti
         request.Headers.TryAddWithoutValidation("Accept-Language", settings.Language);
         request.Headers.TryAddWithoutValidation("App", "com.lidl.eapp");
         request.Headers.TryAddWithoutValidation("Operating-System", "iOS");
-        request.Headers.TryAddWithoutValidation("App-Version", "999.99.9");
+        request.Headers.TryAddWithoutValidation("App-Version", settings.AppVersion);
 
         try
         {
@@ -184,20 +173,6 @@ public sealed class LidlPlusTicketsClient(HttpClient http, IOptions<LidlPlusOpti
             return value.TryGetDecimal(out var number) ? number : null;
         }
 
-        if (value.ValueKind != JsonValueKind.String || value.GetString() is not { } text)
-        {
-            return null;
-        }
-
-        text = text.Trim();
-        if (text.Contains(',', StringComparison.Ordinal))
-        {
-            // A comma is the decimal mark; a dot beside it is a thousands separator.
-            text = text.Replace(".", string.Empty, StringComparison.Ordinal).Replace(',', '.');
-        }
-
-        return decimal.TryParse(text, NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var parsed)
-            ? parsed
-            : null;
+        return value.ValueKind == JsonValueKind.String ? LidlNumbers.Parse(value.GetString()) : null;
     }
 }
