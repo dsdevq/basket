@@ -1724,11 +1724,6 @@ door; no sweep, search, linking or screen is here (issues 129 to 140).
 - **Which shops post.** The shops `Stores.ReadBy` calls `pc` (Aldi, Tesco, Dunnes today); Lidl is read by the server and gets
   `store_not_ingested`. `ReadBy(Aldi)` stays `pc` here: the server-side Aldi sweep (issue 129) flips it together with the
   sweep itself, so the page never says "nightly" for a shop nothing reads yet.
-- **Aldi's terms, accepted knowingly.** Aldi's terms of use (clause 7.1.1) forbid systematic or automated data collection without
-  written approval. The pc-reader already reads Aldi pages, and the catalog sweep (issue 129) makes that more systematic: 60 polite requests
-  a day (the JSON host `asl.api.aldi.ie`, honest user agent, 5 s apart, stop on 403 or 429), for a two-person household, no
-  redistribution. The risk is accepted for a two-person household. The 2026-11-05 ruling "aldi.ie refuses the VPS" stands for
-  `www.aldi.ie`; the API host answered a plain request from the VPS when the scout checked on 2026-11-14, which is why the Aldi sweep moves to the server.
 - **Tests.** Contract tests for both endpoints (`CatalogIngestTests`: admission, scopes, reason codes, limits, rate limit, write-on-change,
   the 90 percent guard and the run row), recorder tests against Postgres (`CatalogRecorderTests`, including the generated `tsvector`), and
   pure tests for the validation (`CatalogReadingTests`). Fixtures are invented products shaped like the scout's Aldi and Lidl records;
