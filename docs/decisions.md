@@ -1565,7 +1565,8 @@ another. So i get predictable list by what is closest to me."
   floor plan; the order learned from trips (#43) replaces it for a store once that store has enough trips.
 - **The unit is the product's category.** A product's section comes from the shop-page breadcrumb kept on its listing (#41), read
   from the innermost part outward, so "Fresh Food > Milk" is Dairy & eggs and not Fruit & veg. A product with no category, or one
-  no section claims, is in Other and sorts last. Matching is by plain keywords, fixed in code.
+  no section claims, is in Other and sorts last. Matching is by plain keywords, fixed in code, and a keyword counts only as a whole
+  word (with an optional plural), so "tea" is not found in "steak".
 - **Where it can be read.** `GET /api/walk/seeded` (signed-in people only) returns the sections of each chain in order, read-only.
   The basket is not re-sorted yet: showing the basket in walk order is #44, which applies the learned order where there is one and
   this one where there is not.
