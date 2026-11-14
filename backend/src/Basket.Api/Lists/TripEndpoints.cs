@@ -39,7 +39,7 @@ public static class TripEndpoints
             }).ToListAsync(ct);
         return trips.Select(trip => new TripResponse(
             trip.Id,
-            trip.ClosedAt,
+            trip.ClosedAt!.Value,
             trip.Source,
             trip.Total,
             rows.Where(r => r.TripId == trip.Id).Select(r => r.Item)
@@ -47,12 +47,14 @@ public static class TripEndpoints
     }
 
     /// <summary>
-    /// Files the ticked items as a new trip and takes them off the list; what is not ticked stays for the next shop
-    /// (AnyList and OurGroceries do the same). One transaction: the trip exists exactly when the items left the list.
+    /// Closes the open trip: the items ticked since the last one are in it already (each tick recorded one), so closing dates it,
+    /// takes the ticked items off the list and starts nothing new; the next tick opens the next trip. What is not ticked stays for
+    /// the next shop (AnyList and OurGroceries do the same). One transaction: the trip is closed exactly when the items left the list.
     /// </summary>
     private static async Task<IResult> CloseTrip(AppDbContext db, TimeProvider clock, CancellationToken ct)
     {
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await OpenTrips.LockAsync(db, ct);
 
         var ticked = await db.ListItems.Where(i => i.IsChecked).OrderBy(i => i.CheckedAt).ToListAsync(ct);
         if (ticked.Count == 0)
@@ -60,9 +62,14 @@ public static class TripEndpoints
             return Results.Json(new { error = "nothing_ticked", message = "Tick what you bought first." }, statusCode: 409);
         }
 
-        var trip = new Trip { Id = Guid.NewGuid(), ClosedAt = clock.GetUtcNow() };
-        db.Trips.Add(trip);
-        db.TripItems.AddRange(ticked.Select(i => new TripItem
+        // The open trip is the record of the ticked lines. Make it say exactly that: a record whose line is gone is dropped, and
+        // a ticked line with none (ticked before trips were recorded) is added, bought at the shop it was picked from.
+        var trip = await OpenTrips.GetOrStartAsync(db, ct);
+        var recorded = await db.TripItems.Where(i => i.TripId == trip.Id).ToListAsync(ct);
+        var tickedIds = ticked.Select(i => i.Id).ToHashSet();
+        db.TripItems.RemoveRange(recorded.Where(r => r.ListItemId is not { } line || !tickedIds.Contains(line)));
+        var known = recorded.Select(r => r.ListItemId).OfType<Guid>().ToHashSet();
+        db.TripItems.AddRange(ticked.Where(i => !known.Contains(i.Id)).Select(i => new TripItem
         {
             Id = Guid.NewGuid(),
             TripId = trip.Id,
@@ -72,14 +79,16 @@ public static class TripEndpoints
             ProductId = i.ProductId,
             // A shop only means something with its product (the add endpoint refuses one without).
             Store = i.ProductId is null ? null : i.Store,
+            BoughtStore = i.ProductId is null ? null : i.Store,
+            ListItemId = i.Id,
         }));
+        trip.ClosedAt = clock.GetUtcNow();
         await db.SaveChangesAsync(ct);
 
-        // A second device closing at the same moment, or someone unticking an item, makes the delete touch fewer
-        // rows than were copied. Then nothing is filed: the trip rolls back and the caller re-reads the list.
-        var ids = ticked.Select(i => i.Id).ToList();
-        var removed = await db.ListItems.Where(i => ids.Contains(i.Id) && i.IsChecked).ExecuteDeleteAsync(ct);
-        if (removed != ids.Count)
+        // Someone un-ticking an item behind the lock (nothing does today) makes the delete touch fewer rows than were filed.
+        // Then nothing is closed: the trip rolls back and the caller re-reads the list.
+        var removed = await db.ListItems.Where(i => tickedIds.Contains(i.Id) && i.IsChecked).ExecuteDeleteAsync(ct);
+        if (removed != tickedIds.Count)
         {
             await transaction.RollbackAsync(ct);
             return Results.Json(new { error = "list_changed", message = "The list just changed. Look again and retry." }, statusCode: 409);
@@ -94,7 +103,7 @@ public static class TripEndpoints
     /// <summary>Newest first, <see cref="PageSize"/> at a time. <c>before</c> is the <c>closedAt</c> of the last trip already shown.</summary>
     private static async Task<IResult> GetTrips(DateTimeOffset? before, AppDbContext db, CancellationToken ct)
     {
-        var query = db.Trips.AsNoTracking();
+        var query = db.Trips.AsNoTracking().Closed();
         if (before is { } cursor)
         {
             query = query.Where(t => t.ClosedAt < cursor);
@@ -118,7 +127,7 @@ public static class TripEndpoints
         TimeProvider clock,
         CancellationToken ct)
     {
-        var items = await db.TripItems.AsNoTracking().Where(i => i.TripId == id)
+        var items = await db.TripItems.AsNoTracking().Where(i => i.TripId == id && db.Trips.Any(t => t.Id == id && t.ClosedAt != null))
             .OrderBy(i => i.CheckedAt).ThenBy(i => i.Text)
             .Select(i => new { i.Text, i.ProductId, i.Store })
             .ToListAsync(ct);
