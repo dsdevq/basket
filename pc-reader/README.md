@@ -161,16 +161,17 @@ automation, and the reader never handles your credentials: you type them into Ch
 using your personal Chrome with an Allow click is your call, not something the reader does. If a Chrome crash leaves the
 profile locked, run `npm run profile` again and close Chrome normally.
 
-## Dunnes: not yet checked against a live page
+## Dunnes: read from the page's server-rendered state
 
-Dunnes' grocery shop, dunnesstoresgrocery.com, answers the VPS and a plain request from the author's PC alike with
-Cloudflare's "Just a moment..." challenge (2026-11-08, HTTP 403, `cf-mitigated: challenge`), so no real Dunnes product page
-has been read. The parser follows the page's schema.org JSON-LD offer, as Tesco's does, and is tested on hand-written
-fixtures only (plus the recorded challenge page, which must stop the shop). It posts the price, name, stock, photo address and category (the page's breadcrumb); the
-was price and promo text are not posted until a live page shows where they can be read safely. Dunnes has no card price in
-basket. Whether Cloudflare serves the reader's Chrome profile is not known: the first run stops on a refusal and reports
-it as in "A blocked run". Nothing is built to get past it; `npm run profile` and its manual step below are written for
-Tesco and are not a Dunnes workaround. `npm start -- --store dunnes` runs only Dunnes.
+Dunnes' grocery shop, dunnesstoresgrocery.com (a Mi9 Retail storefront), publishes no schema.org Product JSON-LD, so the reader
+takes the product from the Redux state the server renders into the page (`window.__PRELOADED_STATE__.product`), and only when its
+`sku` is the number at the end of the address. It posts the price, name, stock (`available`), photo address and category, and a
+promotion that is not for a loyalty card as promo text with its dates. The was price is not posted: no recorded page shows one.
+Dunnes has no card price in basket. The parser is checked on pages recorded from the Wayback Machine (2025-09-07 and 2026-11-04),
+not on a live one: Cloudflare challenges Dunnes (HTTP 403) for the reader's profile, and the first run that gets through will say
+whether the live page still has this shape. A refusal stops the shop and is reported as in "A blocked run". Nothing is built to get
+past it; `npm run profile` and its manual step below are written for Tesco and are not a Dunnes workaround. `npm start -- --store dunnes`
+runs only Dunnes.
 
 ## Develop
 
