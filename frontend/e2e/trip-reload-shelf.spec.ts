@@ -15,6 +15,8 @@ test('a reloaded Shelf line is marked on the list and tapping its tile adds no s
   const items: Record<string, unknown>[] = [];
   let posts = 0;
   await page.route('**/api/list', route => route.fulfill({json: {items}}));
+  // No closed-trip habits: the list's "Usually bought" suggestions are rows too, and this spec counts the list's own lines.
+  await page.route('**/api/trips/habits', route => route.fulfill({json: {products: []}}));
   await page.route('**/api/list/items', route => {
     posts++;
     return route.fulfill({status: 500, json: {error: 'unexpected'}});
