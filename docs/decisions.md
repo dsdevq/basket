@@ -1768,6 +1768,60 @@ door; no sweep, search, linking or screen is here (issues 129 to 140).
   pure tests for the validation (`CatalogReadingTests`). Fixtures are invented products shaped like the scout's Aldi and Lidl records;
   no real catalog data and no tokens are in this public repository.
 
+## Catalog 4/14: the Lidl catalog sweep (2026-11-14, issue 130 of epic 126)
+
+Owner's direction, 2026-11-14: per-store catalog readers feed one combined catalog API. This is Lidl's reader, the server-side one.
+lidl.ie is a showcase, not a shop: it lists its whole range (about 1,440 products, about 690 of them food) but shows an everyday price on
+only part of it (the catalog scout measured 56 percent of listed tiles with a regular price, the rest with only a Lidl Plus price or none).
+So this sweep reads the range; the paid price keeps coming from the Lidl Plus receipts, and the week's offers from the three offer pages.
+
+- **Reused, not rebuilt.** No new door, table, identity or matcher. The sweep runs on the VPS and calls `CatalogRecorder` in process (the
+  same write path `POST /api/ingest/catalog` ends in for the PC reader), validates each tile with `CatalogReading.TryCreate` (so barcode,
+  size and photo go through the matcher's `Gtin` and `ProductSize` and `ImageUrls` exactly as a posted product does), and closes through
+  `CatalogIngest.CompleteAsync` (the 90 percent discontinued guard and the `price_pull_run` row every shop has). No fleet token is used: the
+  token is for readers outside the server, and `Stores.ReadBy(Lidl)` stays `nightly`, so the ingest door still answers Lidl with
+  `store_not_ingested`. No migration: the tables are the ones from issue 128.
+- **What it reads.** `LidlParser.ParseCatalogTiles` reads the product tiles of a category listing page with the tile reader the offer pages
+  already use (`erpNumber`, title, brand, price, Lidl Plus price, dates, photo), plus the pack text (`price.packaging.text`, the size) and
+  `keyfacts.wonCategoryPrimary` as the category path, without its shared root "Worlds of need". A tile with no price is a product stored
+  without one; it is not an error and writes no price row. A tile with no product number or no address is still returned, unusable, so the sweep counts it. The product number is `erpNumber` only, and the
+  barcode is `gtin13` only (a string or a list of strings).
+  A tile that fails validation but names its product has that product's last-seen time refreshed (nothing else is written), so a product
+  Lidl still lists is not delisted for one bad tile; it is counted and logged as unusable.
+- **Which pages.** Listing pages are walked by `?offset=` in steps of 12 (offset 0 is the plain address) until a page brings no product not
+  already listed by that category (a page that only repeats the category's own products, or is empty after the first; a product another
+  category listed first still counts as new here, so a category that begins with shared products is walked on), with a hard cap of 120 pages a category (a fixed ceiling, not a setting). The categories are the food pages of the page
+  sitemap only: `/static/sitemap.xml` (the index robots.txt names) lists the sitemaps, the one whose file name starts with `pages` lists
+  the `/c/<slug>/s<id>` category pages, and a page is food when its hyphenated slug contains a word of a fixed list in `LidlParser` as a whole word
+  ("fresh-fruit-and-vegetables", not "garden-furniture"). A product is stored once however many categories list it. A `.xml.gz` sitemap is
+  a file, not a transfer encoding, so `PoliteFetcher` unpacks an address that ends in `.gz` (bounded at 20 MB unpacked).
+- **A sweep that missed something delists nothing.** A listing page or sitemap that is down, a first page of a category that shows no
+  product, or a page where no tile names a product and none repeats (a changed layout reads the same as a failed page), or a category still listing new products at the 120-page ceiling makes the
+  sweep incomplete. It is not closed through `CatalogIngest.CompleteAsync`: its `price_pull_run` row is `Partial` (`Failed` when it read
+  nothing) with the reason, and no product is marked discontinued, however small the gap (the 90 percent guard only catches large ones).
+  The products it did read are still stored. Only a sweep that walked every category to its end is closed and may delist.
+- **Barcodes.** Tiles carry no GTIN; the product page's JSON-LD does (`gtin13`, a list with one entry per variant). After the sweep,
+  the product pages of products with no stored barcode are opened, at most `Prices:LidlBarcodePagesPerNight` (200) a night, and the first
+  valid GTIN is stored (as GTIN-14, through `CatalogRecorder`, which never lets a thinner reading erase one). A first sweep therefore takes about four nights to fill the food range (about 690 products); afterwards only products new to the catalog are opened.
+  The candidates are in product-number order but start at a place that moves on by the cap each UTC day (wrapping round), so products
+  whose page is gone, down or without a valid GTIN are skipped and tried again on a later night without ever holding the whole cap (no
+  column records the attempt, because there is no migration). A malformed barcode is never stored.
+- **Never the search API.** `/q/api/search` (what the site's script calls) answers 401 without a token the page injects; it is not used and
+  not worked around, and neither is anything that needs a login.
+- **A refusal ends it.** A 403, 429 or access-denied page (`FetchStatus.Blocked`) stops the sweep at once; the products read so far stay,
+  nothing is marked discontinued, and one `price_pull_run` row with outcome `Blocked` records it. A listing page that is merely down ends
+  that category only and makes the sweep incomplete (above). Nothing is retried.
+- **When.** `LidlCatalogJob`, a Hangfire job of its own at 03:30 Europe/Dublin, half an hour after the price pull, so the two never share the
+  shop's politeness gap. A failure of the sweep is recorded as a `Failed` run and leaves the nightly price pull untouched. Another shop's
+  sweep (issue 129) is its own task and registers itself.
+- **Kept as they are.** The three offer pages and `LidlPriceSource`'s per-listing read: the shelf's listings still get their daily
+  `price_observation` row from them. Mirroring catalog readings into linked listings is the link-to-shelf issue's (132), not this one.
+- **Tests.** Parser tests on synthetic pages (`LidlCatalogParserTests`: tiles priced and unpriced, the sitemap, the food filter, the
+  GTIN), sweep tests against Postgres with a fake fetcher (`LidlCatalogSweepTests`: the offsets walked, the barcode cap and the
+  skip of products that already have one, the daily rotation of the cap, write-on-change on a repeat sweep, a refusal, an unreadable
+  sitemap, and the incomplete sweeps that delist nothing) and gzip tests for the fetcher. The fixtures are invented products and invented ids shaped like lidl.ie's pages; no real catalog data and no tokens
+  are in this public repository, and no test reaches a shop.
+
 ## Catalog 5/14: catalog search and detail (2026-11-14, issue 131 of epic 126)
 
 The read side of the combined catalog that issue 128 put in the database: `GET /api/catalog/search` and `GET /api/catalog/{id}`. No
