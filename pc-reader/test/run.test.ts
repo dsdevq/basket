@@ -45,7 +45,8 @@ function harness(pages: (item: string) => Page | Error, postOutcome?: (readings:
 
 const aldiPage: Page = { status: 200, html: fixture('aldi-product-page.html') };
 const tescoPage: Page = { status: 200, html: fixture('tesco-product-page-plain.html') };
-const dunnesPage: Page = { status: 200, html: fixture('dunnes-product-page.html') };
+/** The recorded Dunnes page, with the product's sku made the number at the end of the address asked for (the parser reads only the page's own product). */
+const dunnesPageFor = (url: string): Page => ({ status: 200, html: fixture('dunnes-product-page.html').replace('"sku": "100836186"', `"sku": "${/(\d+)$/.exec(url)?.[1]}"`) });
 const challenged: Page = { status: 403, html: fixture('cloudflare-just-a-moment.html') };
 const denied: Page = { status: 200, html: fixture('akamai-access-denied.html') };
 
@@ -126,15 +127,15 @@ test('per-reading refusals are reported against their URL', async () => {
 });
 
 test('dunnes: pages are 5 seconds apart, the reading has the same shape as the others, and a challenge stops the store at once', async () => {
-  const ok = harness(() => dunnesPage);
+  const ok = harness((url) => dunnesPageFor(url));
   const [report] = await runAll([dunnes(1), dunnes(2), dunnes(3)], ok.deps);
   const gaps = ok.loads.slice(1).map((l, i) => l.at - (ok.loads[i]?.at ?? 0));
   assert.ok(gaps.every((gap) => gap >= 5_000), `gaps ${gaps}`);
   assert.equal(report?.store, 'dunnes');
   assert.equal(report?.read, 3);
-  assert.deepEqual(ok.posts[0]?.[0], { store: 'dunnes', url: dunnes(1).url, title: 'Dunnes Stores Irish Whole Milk 2L', price: 2.2, inStock: true, category: 'Dairy & Eggs > Milk' });
+  assert.deepEqual(ok.posts[0]?.[0], { store: 'dunnes', url: dunnes(1).url, title: 'Dunnes Stores Gold Kiwi 4pk', price: 3, inStock: true, category: 'Fresh Fruit > Tropical & Exotic Fruit > Kiwi', imageUrl: 'https://images.cdn.dunnesstoresgrocery.com/cell/100836186_1.jpg' });
 
-  const refused = harness((url) => (url.includes('item-1') ? dunnesPage : challenged));
+  const refused = harness((url) => (url.includes('item-1') ? dunnesPageFor(url) : challenged));
   const reports = await runAll([dunnes(1), dunnes(2), dunnes(3), tesco(5555)], refused.deps);
   const d = reports.find((r) => r.store === 'dunnes');
   assert.equal(refused.loads.filter((l) => l.url.includes('dunnes')).length, 2, 'the challenged URL is asked once, the one after it not at all');
@@ -145,7 +146,7 @@ test('dunnes: pages are 5 seconds apart, the reading has the same shape as the o
 });
 
 test('tesco is paused by default: its entries are skipped with one log line, aldi and dunnes are still read', async () => {
-  const { deps, loads, posts } = harness((url) => (url.includes('aldi') ? aldiPage : url.includes('dunnes') ? dunnesPage : tescoPage));
+  const { deps, loads, posts } = harness((url) => (url.includes('aldi') ? aldiPage : url.includes('dunnes') ? dunnesPageFor(url) : tescoPage));
   const lines: string[] = [];
   deps.log = (line) => lines.push(line);
   const reports = await run([aldi(1), tesco(1111), tesco(2222), dunnes(1), tesco(3333)], deps, 0);

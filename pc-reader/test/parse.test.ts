@@ -7,7 +7,8 @@ import { fixture } from './support.ts';
 
 const ALDI = 'https://www.aldi.ie/product/clonbawn-protein-milk-000000000000422541';
 const TESCO = 'https://www.tesco.ie/groceries/en-IE/products/254317390';
-const DUNNES = 'https://www.dunnesstoresgrocery.com/product/dunnes-stores-irish-whole-milk-2l-id-100317001';
+const AUSSIE = 'https://www.dunnesstoresgrocery.com/product/aussie-mighty-mega-shampoo-400ml-gently-cleansing-shampoo-for-soft-and-shiny-hair-id-100326494';
+const DUNNES = 'https://www.dunnesstoresgrocery.com/product/dunnes-stores-gold-kiwi-4pk-id-100836186';
 
 function reading(result: ParseResult) {
   assert.equal(result.kind, 'reading', JSON.stringify(result));
@@ -96,14 +97,74 @@ test('tesco: offers in a div and list carousel or the footer do not leak into th
   assert.deepEqual(r, { store: 'tesco', url: TESCO, title: 'Tesco Brown Bread 800G', price: 1.65, inStock: true });
 });
 
-test('dunnes: the price, title and stock come from the JSON-LD offer, and the old price and carousel in the text are not read', () => {
-  const r = reading(readPage('dunnes', DUNNES, { status: 200, html: fixture('dunnes-product-page.html') }));
-  assert.deepEqual(r, { store: 'dunnes', url: DUNNES, title: 'Dunnes Stores Irish Whole Milk 2L', price: 2.2, inStock: true, category: 'Dairy & Eggs > Milk' });
+const dunnesPage = (html: string, url = DUNNES) => readPage('dunnes', url, { status: 200, html });
+
+test('dunnes: the recorded page gives its price, title, stock, category and photo from the server-rendered state, with no JSON-LD Product on it', () => {
+  const html = fixture('dunnes-product-page.html');
+  assert.equal(html.includes('"@type": "Product"'), false);
+  assert.deepEqual(reading(dunnesPage(html)), {
+    store: 'dunnes',
+    url: DUNNES,
+    title: 'Dunnes Stores Gold Kiwi 4pk',
+    price: 3,
+    inStock: true,
+    category: 'Fresh Fruit > Tropical & Exotic Fruit > Kiwi',
+    imageUrl: 'https://images.cdn.dunnesstoresgrocery.com/cell/100836186_1.jpg',
+  });
+});
+
+test('dunnes: a promotion becomes the promo text and its local dates, and the price stays the shelf price', () => {
+  assert.deepEqual(reading(dunnesPage(fixture('dunnes-product-page-promo.html'), AUSSIE)), {
+    store: 'dunnes',
+    url: AUSSIE,
+    title: 'Aussie Mighty Mega Shampoo 400ml. Gently Cleansing Shampoo for Soft and Shiny Hair',
+    price: 10,
+    inStock: true,
+    category: 'Toiletries > Hair Care & Styling > Shampoo',
+    imageUrl: 'https://images.cdn.dunnesstoresgrocery.com/cell/100326494_1.jpg',
+    promoText: 'Buy 2 for €14',
+    validFrom: '2026-10-21',
+    validUntil: '2026-11-24',
+  });
+});
+
+test('dunnes: a promotion for a loyalty card is not posted, and neither is one on a page without a price', () => {
+  const loyalty = fixture('dunnes-product-page-promo.html').replace('"loyaltyBased": false', '"loyaltyBased": true');
+  assert.equal('promoText' in reading(dunnesPage(loyalty, AUSSIE)), false);
+});
+
+test('dunnes: a product whose sku is not the address\'s number is unreadable and posts nothing', () => {
+  const html = fixture('dunnes-product-page.html');
+  const other = 'https://www.dunnesstoresgrocery.com/product/dunnes-stores-swede-100317581';
+  assert.deepEqual(dunnesPage(html, other), { kind: 'unreadable', why: 'no price on the page' });
+  assert.deepEqual(dunnesPage(html.replace('"sku": "100836186"', '"sku": "100836187"')), { kind: 'unreadable', why: 'no price on the page' });
+});
+
+test('dunnes: a page without the state script is unreadable, even with the microdata price on it', () => {
+  const html = fixture('dunnes-product-page.html');
+  assert.match(html, /<meta itemprop="price" content="€3.00" \/>/);
+  const bare = html.replace(/<script> window\.__PRELOADED_STATE__.*?<\/script>/s, '');
+  assert.notEqual(bare, html);
+  assert.deepEqual(dunnesPage(bare), { kind: 'unreadable', why: 'no price on the page' });
+  assert.deepEqual(dunnesPage(html.replace('__PRELOADED_STATE__={', '__PRELOADED_STATE__=[{').replace('}}; window.__NONCE__', '}}]; window.__NONCE__')), { kind: 'unreadable', why: 'no price on the page' });
+  assert.deepEqual(dunnesPage(html.replace('"price": "€3.00", "wasPrice"', '"price": "", "wasPrice"')), { kind: 'unreadable', why: 'no price on the page' });
 });
 
 test('dunnes: a sold-out product without a price is a valid out-of-stock reading', () => {
-  const r = reading(readPage('dunnes', DUNNES, { status: 200, html: fixture('dunnes-product-page-sold-out.html') }));
-  assert.deepEqual(r, { store: 'dunnes', url: DUNNES, title: 'Dunnes Stores Swede', inStock: false });
+  const soldOut = fixture('dunnes-product-page.html').replace('"price": "€3.00", "wasPrice"', '"price": "", "wasPrice"').replace('"available": true', '"available": false');
+  assert.deepEqual(reading(dunnesPage(soldOut)), {
+    store: 'dunnes',
+    url: DUNNES,
+    title: 'Dunnes Stores Gold Kiwi 4pk',
+    inStock: false,
+    category: 'Fresh Fruit > Tropical & Exotic Fruit > Kiwi',
+    imageUrl: 'https://images.cdn.dunnesstoresgrocery.com/cell/100836186_1.jpg',
+  });
+});
+
+test('dunnes: a brace or quote inside a string of the state does not end the object early', () => {
+  const html = fixture('dunnes-product-page.html').replace('"name": "Dunnes Stores Gold Kiwi 4pk"', '"name": "Kiwi } \\" { 4pk"');
+  assert.equal(reading(dunnesPage(html)).title, 'Kiwi } " { 4pk');
 });
 
 test('dunnes: Cloudflare\'s "Just a moment..." challenge, with or without its 403, stops the store', () => {
@@ -113,11 +174,6 @@ test('dunnes: Cloudflare\'s "Just a moment..." challenge, with or without its 40
   const renamed = challenge.replace('Just a moment...', 'Performing security verification');
   assert.match(detectBlock({ status: 200, html: renamed }) ?? '', /challenge/);
   assert.match(detectBlock({ status: 200, html: '<title>Dunnes</title><script src="https://challenges.cloudflare.com/x.js"></script>' }) ?? '', /challenge/);
-});
-
-test('dunnes: the category comes from the breadcrumb nav, and the carousel list is not mistaken for it', () => {
-  const r = reading(readPage('dunnes', DUNNES, { status: 200, html: fixture('dunnes-product-page.html') }));
-  assert.equal(r.category, 'Dairy & Eggs > Milk');
 });
 
 test('a page with no breadcrumb has no category, and an absent one is left out of the reading', () => {
@@ -131,8 +187,8 @@ test('a breadcrumb that is only the front page and the product leaves no categor
   assert.equal('category' in r, false);
 });
 
-test('tesco and dunnes: the photo is the JSON-LD image, else og:image, and only a plain https address', () => {
-  for (const [store, url, file] of [['tesco', TESCO, 'tesco-product-page.html'], ['dunnes', DUNNES, 'dunnes-product-page.html']] as const) {
+test('tesco: the photo is the JSON-LD image, else og:image, and only a plain https address', () => {
+  for (const [store, url, file] of [['tesco', TESCO, 'tesco-product-page.html']] as const) {
     const html = fixture(file);
     const read = (page: string) => reading(readPage(store, url, { status: 200, html: page })).imageUrl;
     assert.equal(read(html), undefined);
@@ -152,8 +208,11 @@ test('tesco and dunnes: the photo is the JSON-LD image, else og:image, and only 
   }
 });
 
-test('dunnes: a sold-out reading still carries its photo', () => {
-  const html = fixture('dunnes-product-page-sold-out.html').replace('</head>', '<meta property="og:image" content="https://img.example.ie/swede.jpg"></head>');
-  const r = reading(readPage('dunnes', DUNNES, { status: 200, html }));
-  assert.deepEqual(r, { store: 'dunnes', url: DUNNES, title: 'Dunnes Stores Swede', inStock: false, imageUrl: 'https://img.example.ie/swede.jpg' });
+test('dunnes: the photo is the state\'s image, else og:image, and only a plain https address', () => {
+  const html = fixture('dunnes-product-page.html');
+  const noImage = html.replace('"image": {', '"photos": {');
+  assert.notEqual(noImage, html);
+  assert.equal(reading(dunnesPage(noImage)).imageUrl, 'https://images.cdn.dunnesstoresgrocery.com/cell/100836186_1.jpg');
+  assert.equal(reading(dunnesPage(noImage.replace('content="https://images.cdn.dunnesstoresgrocery.com/cell/100836186_1.jpg"', 'content="http://img.example.ie/p.jpg"'))).imageUrl, undefined);
+  assert.equal(reading(dunnesPage(html.replace('"default": "https://images.cdn.dunnesstoresgrocery.com/cell/100836186_1.jpg"', '"default": "http://img.example.ie/p.jpg"'))).imageUrl, 'https://images.cdn.dunnesstoresgrocery.com/cell/100836186_1.jpg');
 });
