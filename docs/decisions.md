@@ -1554,6 +1554,9 @@ finds out what those two stores will give a browser on this PC.
   a profile either store will serve, then one `npm run probe` run.
 
 ## Add a product by searching a shop (#31)
+> Superseded by "Catalog 8/14: add to shelf by catalog search" below: the sheet searches the catalog, not Lidl's live search page. The
+> borrowed pattern, the sheet's place in the add bar and the photo rule still stand; the "only Lidl can be searched" and "two calls" parts do not.
+
 - **Borrowed pattern, named:** the add-item search with photos of Bring! and the Tesco app. Type a name, see the shop's products as
   tiles with their pictures, tap the right one; the picture is what settles which product is meant. The tiles are the Shelf's own
   tile (`cmn-selectable-card`, photo, name), so no interaction is invented. Paste-a-link stays as it was.
@@ -2119,3 +2122,53 @@ lifekit-common). Frontend only: no endpoint, schema or migration changes.
   `text-cmn-lg`.
 - **Baselines.** The screen baselines were drawn with 4.8.0, so they are redrawn by the **Update screen baselines** workflow on the
   adopting branch, never locally.
+
+## Catalog 8/14: add to shelf by catalog search (2026-11-15, issue 134 of epic 126, re-scope of issue 31)
+
+The Search button in the Prices tab's add bar now searches the combined catalog (`GET /api/catalog/search`, issue 131) instead of Lidl's
+live search page, so all four shops answer, with their photos, and a tap puts the product on the shelf with everything the catalog row knows.
+
+- **Borrowed pattern, named, unchanged:** the add-item search with photos of Bring! and the Tesco app. The sheet is the same bottom sheet;
+  its results are the compare sheet's rows (photo, name, shop tag, price) in one list, because four shops of tiles with a shop name, a size and
+  a price do not fit two columns at 390 px. A shop selector (`cmn-segmented`, All / Lidl / Aldi / Tesco / Dunnes, as on the Shelf) narrows the
+  search with the endpoint's `store` parameter. What was typed in the add box is the first search; the sheet searches on the button or Enter.
+  A search with no match says so and points at the add box and the Prices tab's paste-a-link, which is unchanged. The photos still load with
+  `ngsw-bypass`.
+- **Reuse, nothing new at any door.** The catalog the sheet searches still arrives only through the existing ingest door
+  (`POST /api/ingest/catalog`, the ingest token or the fleet identity) and the server's own sweeps; this change adds no route to it.
+  The add is the existing `POST /api/products`: it takes an optional `catalogId` beside `name` and `barcode`.
+- **One call, the existing door.** `POST /api/products` takes an optional `catalogId` beside `name` and `barcode`; it is the same route, policy
+  (`basket:catalog-add`, a person or the fleet identity) and handler as every add, so there is no new endpoint, scope, token or identity. The
+  old two-call flow (add, then link) could leave a product without its page; this one saves the product and its page together.
+- **What the product is made from.** The name is the row's brand and name (the brand is put in front unless the name already says it:
+  "Milbona" + "Milbona Greek Yoghurt" stays as is), because the matcher compares a catalog row under brand and name together; a `name` in the
+  request wins. The barcode is the row's (a request `barcode` wins; a row barcode that is not a valid GTIN is ignored, not a refusal). The row's
+  address, shop name, photo and category become the product's page in that shop (`store_listing`), linked to the row itself
+  (`store_product_id`). A person's tap is a confirmed match (`confirmed_at`), as a pasted link is; when the fleet adds from the catalog the page is
+  linked but stays unconfirmed, as every fleet link does, and the product is recorded against the owner (see "Fleet identity on the machine endpoints").
+- **First price at once.** The row's latest catalog price is written as the page's observation for the day the sweep last listed the product
+  (not today), through `PriceRecorder`, the same path a sweep's mirror uses, with the same rule (a reading with no price that is in stock says
+  nothing and writes nothing). So the new tile is priced immediately and the Plan can use it; the next sweep keeps it current. This replaces
+  "Seeding a newly linked page's first observation ... is not done" of Catalog 6/14 for this path only.
+- **The matcher is item 7's, not a second one.** After the save, `ServerCandidates.RunForProductAsync` runs, as for every added product. The
+  confirmed page tells it the product's barcode, size and category, so the other three shops get an exact-barcode page linked (unconfirmed) or
+  up to five proposals for the match sheet; nothing about candidates changed.
+- **Refusals, all before anything is written.** An unknown id is 404 `catalog_not_found`. A row the shops no longer list is 409
+  `catalog_discontinued` (search never offers one; this is a race). A name already on the shelf, or the row's page already on a shelf product
+  under another name, is 409 `product_exists`, so a second tap or a second phone never makes a copy. A barcode another product has is 409
+  `barcode_exists`. A row whose address does not normalize is 409 `catalog_page_invalid`. The sheet shows the server's message for a 409.
+- **Left in place.** `GET /api/products/search` (the live Lidl search) and its parser stay in the backend, unused by the app now; retiring them
+  belongs to issue 140 (retire per-listing reads). The frontend no longer has a client for it.
+- **No migration.** Product, listing and observation use their existing columns.
+- **Screens.** The sheet is not a route, so no screen baseline changes; the baselines are only ever rewritten by the Update screen baselines
+  workflow.
+- **Tests.** `AddFromCatalogTests` (name, barcode, page, photo, category, confirmed and linked, first price, the other shops filled by item 7,
+  brand not repeated, a request name wins, no barcode or price, second tap, name taken, barcode taken, unknown and discontinued rows, the fleet),
+  `PricesStore` and `ProductSearchSheetComponent` specs (search, shop filter, tap adds and closes, stays open on failure, nothing found, error),
+  and `catalog-format` specs. Fixtures are invented products, ids and addresses; no real data or token is in this public repository.
+
+## Tesco and Dunnes catalog sweeps: closed as not doable (2026-11-15, issues 135 and 136 of epic 126)
+
+The server-side catalog sweeps for Tesco (issue 135) and Dunnes (issue 136) are closed as not doable. Tesco: Akamai answered HTTP 403 on
+`robots.txt` itself to an automation-driven browser, even on the owner-warmed profile and headless, on 2026-11-15. Dunnes: Cloudflare answers
+403 to the reader profile. Both shops stay unread: no further attempts, and no evasion is built.

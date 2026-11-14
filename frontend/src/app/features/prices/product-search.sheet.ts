@@ -1,4 +1,3 @@
-import {NgOptimizedImage} from '@angular/common';
 import {ChangeDetectionStrategy, Component, inject, signal} from '@angular/core';
 import {FormControl, FormGroup, ReactiveFormsModule} from '@angular/forms';
 import {
@@ -7,16 +6,31 @@ import {
   CMN_DRAWER_DATA,
   CmnDrawerRef,
   InputComponent,
-  SelectableCardComponent,
+  ListItemRowComponent,
+  ListSectionComponent,
+  SegmentedComponent,
+  type SegmentedOption,
   SkeletonComponent,
+  TagComponent,
 } from '@lifekit-hq/ui';
 
-import {PricesApi} from './prices.api';
-import type {SearchResponse, SearchResult} from './prices.model';
+import {CatalogApi} from '../catalog/catalog.api';
+import type {CatalogItem, CatalogSearchResponse} from '../catalog/catalog.model';
+import {catalogDetail, catalogPrice} from '../catalog/catalog-format';
+import {ListPhotoComponent} from '../list/list-photo.component';
+import {STORE_NAMES} from './price-format';
+import type {StoreId} from './prices.model';
 import {PricesStore} from './prices.store';
 
 /** The server refuses a search shorter than this. */
 const MIN_QUERY = 2;
+
+type ShopFilter = 'all' | StoreId;
+
+const SHOP_OPTIONS: readonly SegmentedOption[] = [
+  {value: 'all', label: 'All'},
+  ...(Object.entries(STORE_NAMES) as [StoreId, string][]).map(([value, label]) => ({value, label})),
+];
 
 export interface ProductSearchData {
   /** What was already typed in the add box; it becomes the first search. */
@@ -24,20 +38,24 @@ export interface ProductSearchData {
 }
 
 /**
- * Bottom sheet: search a shop by name and tap the right product, with its photo. It is the add-item search of Bring! and the
- * Tesco app, where the picture settles which product you mean. Only the shops the server can search show results; the others
- * are named with a way in (paste a link), so nothing is silently missing.
+ * Bottom sheet: search the combined store catalog by name and tap the right product, with its photo, shop and price. It is the
+ * add-item search of Bring! and the Tesco app, where the picture settles which product you mean. Tapping a row puts the product on
+ * the shelf, named and barcoded from the row and linked to that shop's page; the server then looks for the other shops' equivalents.
+ * A shop's pictures are its own, so each row says which shop it is.
  */
 @Component({
   selector: 'bk-product-search-sheet',
   imports: [
-    NgOptimizedImage,
     ReactiveFormsModule,
     AlertComponent,
     ButtonComponent,
     InputComponent,
-    SelectableCardComponent,
+    ListItemRowComponent,
+    ListPhotoComponent,
+    ListSectionComponent,
+    SegmentedComponent,
     SkeletonComponent,
+    TagComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -55,67 +73,63 @@ export interface ProductSearchData {
           >Search</cmn-button
         >
       </form>
+      <cmn-segmented
+        [options]="shops"
+        [value]="shop()"
+        (valueChange)="selectShop($event)"
+        label="Shop"
+      />
       @if (failed()) {
         <cmn-alert title="The search did not work. Try again." variant="error" />
-      }
-      @for (note of notes(); track note) {
-        <p class="text-cmn-xs text-text-secondary">{{ note }}</p>
       }
       @if (searching()) {
         <cmn-skeleton shape="section" />
       } @else if (response(); as found) {
-        @if (found.results.length) {
-          <div class="grid grid-cols-2 gap-cmn-3" aria-label="Results" role="group">
-            @for (result of found.results; track result.url) {
-              <cmn-selectable-card
-                [disabled]="store.adding()"
-                (clicked)="pick(result)"
-                class="block h-full"
-                orientation="vertical"
+        @if (found.items.length) {
+          <cmn-list-section heading="Tap the one you buy" card>
+            @for (item of found.items; track item.id) {
+              <cmn-list-item-row
+                [label]="item.name"
+                [sublabel]="detail(item)"
+                [action]="!store.adding()"
+                (activated)="pick(item)"
+                class="[&_.truncate]:overflow-visible [&_.truncate]:whitespace-pre-line [&_.truncate]:break-words"
               >
-                <div leading>
-                  @if (result.imageUrl && !broken().has(result.url)) {
-                    <img
-                      [ngSrc]="photo(result.imageUrl)"
-                      (error)="markBroken(result.url)"
-                      class="size-28 rounded-cmn-md bg-surface-raised object-contain"
-                      alt=""
-                      width="112"
-                      height="112"
-                      referrerpolicy="no-referrer"
-                    />
-                  } @else {
-                    <div
-                      class="flex size-28 items-center justify-center rounded-cmn-md bg-surface-raised text-cmn-3xl font-semibold text-text-secondary"
-                      aria-hidden="true"
-                    >
-                      {{ result.title.charAt(0).toUpperCase() }}
-                    </div>
-                  }
-                </div>
-                <span class="line-clamp-3 break-words text-cmn-sm font-medium text-text-primary">{{
-                  result.title
+                <bk-list-photo [name]="item.name" [src]="photo(item.imageUrl)" avatar />
+                <cmn-tag variant="neutral" meta>{{ item.storeName }}</cmn-tag>
+                <span amount class="text-cmn-sm font-semibold text-text-primary">{{
+                  price(item)
                 }}</span>
-              </cmn-selectable-card>
+              </cmn-list-item-row>
             }
-          </div>
+          </cmn-list-section>
+        } @else {
+          <p class="text-cmn-sm text-text-secondary">
+            Nothing found for “{{ found.query }}”. Try another word, or type the name in the add box
+            and link its page from the Prices tab.
+          </p>
         }
       }
     </div>
   `,
 })
 export class ProductSearchSheetComponent {
-  private readonly api = inject(PricesApi);
+  private readonly api = inject(CatalogApi);
   private readonly data = inject<ProductSearchData>(CMN_DRAWER_DATA);
+  /** Counts searches; an answer that is no longer the latest is dropped, so a slow one never overwrites a newer one. */
+  private searches = 0;
   protected readonly ref = inject<CmnDrawerRef<boolean>>(CmnDrawerRef);
   protected readonly store = inject(PricesStore);
 
+  protected readonly shops: SegmentedOption[] = [...SHOP_OPTIONS];
   protected readonly query = new FormControl(this.data.query, {nonNullable: true});
   protected readonly form = new FormGroup({query: this.query});
+  protected readonly shop = signal<ShopFilter>('all');
   protected readonly searching = signal(false);
   protected readonly failed = signal(false);
-  protected readonly response = signal<SearchResponse | null>(null);
-  protected readonly broken = signal<ReadonlySet<string>>(new Set());
+  protected readonly response = signal<CatalogSearchResponse | null>(null);
+  protected readonly detail = catalogDetail;
+  protected readonly price = catalogPrice;
 
   constructor() {
     if (this.data.query.trim().length >= MIN_QUERY) {
@@ -123,26 +137,35 @@ export class ProductSearchSheetComponent {
     }
   }
 
-  /** What the shops that were not searched, or could not be, have to say. */
-  protected notes(): string[] {
-    return (this.response()?.stores ?? [])
-      .filter(shop => !shop.searched && shop.note)
-      .map(shop => shop.note as string);
+  protected selectShop(value: string): void {
+    this.shop.set(value as ShopFilter);
+    if (this.response() || this.query.value.trim().length >= MIN_QUERY) {
+      void this.search();
+    }
   }
 
   protected async search(): Promise<void> {
     const value = this.query.value.trim();
-    if (value.length < MIN_QUERY || this.searching()) {
+    if (value.length < MIN_QUERY) {
       return;
     }
+    const seen = ++this.searches;
+    const shop = this.shop();
     this.searching.set(true);
     this.failed.set(false);
     try {
-      this.response.set(await this.api.search(value));
+      const found = await this.api.search(value, shop === 'all' ? undefined : shop);
+      if (seen === this.searches) {
+        this.response.set(found);
+      }
     } catch {
-      this.failed.set(true);
+      if (seen === this.searches) {
+        this.failed.set(true);
+      }
     } finally {
-      this.searching.set(false);
+      if (seen === this.searches) {
+        this.searching.set(false);
+      }
     }
   }
 
@@ -150,16 +173,15 @@ export class ProductSearchSheetComponent {
    * The shops' photos are cross-origin. The service worker would fetch them itself, under
    * its own connect-src 'self', and answer 504; ngsw-bypass lets the browser load them directly.
    */
-  protected photo(src: string): string {
-    return `${src}${src.includes('?') ? '&' : '?'}ngsw-bypass=true`;
+  protected photo(src: string | null): string | null {
+    return src ? `${src}${src.includes('?') ? '&' : '?'}ngsw-bypass=true` : null;
   }
 
-  protected markBroken(url: string): void {
-    this.broken.update(set => new Set(set).add(url));
-  }
-
-  protected async pick(result: SearchResult): Promise<void> {
-    if (await this.store.addFromSearch(result)) {
+  protected async pick(item: CatalogItem): Promise<void> {
+    if (this.store.adding()) {
+      return;
+    }
+    if (await this.store.addFromCatalog(item)) {
       this.ref.close(true);
     }
   }

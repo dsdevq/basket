@@ -2,8 +2,9 @@ import {HttpErrorResponse} from '@angular/common/http';
 import {TestBed} from '@angular/core/testing';
 import {ToastService} from '@lifekit-hq/ui';
 
+import type {CatalogItem} from '../catalog/catalog.model';
 import {PricesApi} from './prices.api';
-import type {Product, SearchResult} from './prices.model';
+import type {Product} from './prices.model';
 import {PricesStore} from './prices.store';
 
 const PRODUCT: Product = {id: 'p1', name: 'Milk', stores: []};
@@ -19,11 +20,19 @@ function setup(api: Partial<PricesApi>) {
   return {store: TestBed.inject(PricesStore), toast};
 }
 
-const RESULT: SearchResult = {
+const ITEM: CatalogItem = {
+  id: 'c1',
   store: 'lidl',
-  url: 'https://www.lidl.ie/p/oatly-oat-barista-drink/p11407098',
-  title: 'OATLY Oat Barista Drink',
-  imageUrl: 'https://www.lidl.ie/assets/oat.png',
+  storeName: 'Lidl',
+  name: 'Oat Barista Drink',
+  brand: 'Oatly',
+  sizeText: '1 L',
+  unitPrice: null,
+  unitPriceBasis: null,
+  imageUrl: 'https://images.example.test/oat.png',
+  url: 'https://www.lidl.ie/p/oat-barista-drink/p00000001',
+  price: null,
+  lastSeenAt: '2026-11-14T03:00:00+00:00',
 };
 
 describe('PricesStore', () => {
@@ -218,41 +227,41 @@ describe('PricesStore', () => {
     });
   });
 
-  it('adds a tapped search result once and links its page and photo', async () => {
-    const add = vi.fn().mockResolvedValue({id: 'p9', name: RESULT.title, stores: []});
-    const link = vi.fn().mockResolvedValue({});
+  it('adds a tapped catalog row with one call and reloads the shelf', async () => {
+    const addFromCatalog = vi
+      .fn()
+      .mockResolvedValue({id: 'p9', name: 'Oatly Oat Barista Drink', stores: []});
     const all = vi.fn().mockResolvedValue({products: [], stores: []});
-    const {store} = setup({add, link, all});
+    const {store} = setup({addFromCatalog, all});
 
-    expect(await store.addFromSearch(RESULT)).toBe(true);
+    expect(await store.addFromCatalog(ITEM)).toBe(true);
 
-    expect(add).toHaveBeenCalledWith('OATLY Oat Barista Drink');
-    expect(link).toHaveBeenCalledWith('p9', 'lidl', RESULT.url, RESULT.imageUrl);
+    expect(addFromCatalog).toHaveBeenCalledWith('c1');
     expect(all).toHaveBeenCalled();
     expect(store.adding()).toBe(false);
   });
 
-  it('says so when a tapped result is already tracked, and links nothing', async () => {
-    const add = vi.fn().mockRejectedValue(new HttpErrorResponse({status: 409}));
-    const link = vi.fn();
-    const {store, toast} = setup({add, link});
+  it('says why when the server refuses a tapped row', async () => {
+    const addFromCatalog = vi.fn().mockRejectedValue(
+      new HttpErrorResponse({
+        status: 409,
+        error: {error: 'product_exists', message: 'That product is already tracked.'},
+      })
+    );
+    const {store, toast} = setup({addFromCatalog});
 
-    expect(await store.addFromSearch(RESULT)).toBe(false);
+    expect(await store.addFromCatalog(ITEM)).toBe(false);
 
-    expect(link).not.toHaveBeenCalled();
     expect(toast.error).toHaveBeenCalledWith('That product is already tracked.');
+    expect(store.adding()).toBe(false);
   });
 
-  it('keeps the product and tells the person when its page could not be linked', async () => {
-    const add = vi.fn().mockResolvedValue({id: 'p9', name: RESULT.title, stores: []});
-    const link = vi.fn().mockRejectedValue(new HttpErrorResponse({status: 500}));
-    const all = vi.fn().mockResolvedValue({products: [], stores: []});
-    const {store, toast} = setup({add, link, all});
+  it('gives the generic message for any other failure', async () => {
+    const addFromCatalog = vi.fn().mockRejectedValue(new HttpErrorResponse({status: 500}));
+    const {store, toast} = setup({addFromCatalog});
 
-    expect(await store.addFromSearch(RESULT)).toBe(true);
+    expect(await store.addFromCatalog(ITEM)).toBe(false);
 
-    expect(toast.error).toHaveBeenCalledWith(
-      'Added, but its shop page could not be linked. Link it from the Prices tab.'
-    );
+    expect(toast.error).toHaveBeenCalledWith('Could not add that product. Try again.');
   });
 });

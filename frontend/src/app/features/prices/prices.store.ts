@@ -3,8 +3,9 @@ import {ToastService} from '@lifekit-hq/ui';
 import {patchState, signalStore, withMethods, withState} from '@ngrx/signals';
 
 import {HttpStatus, statusOf} from '../../core/http-status';
+import type {CatalogItem} from '../catalog/catalog.model';
 import {PricesApi} from './prices.api';
-import type {Candidate, Product, SearchResult, StoreId, StoreStatus} from './prices.model';
+import type {Candidate, Product, StoreId, StoreStatus} from './prices.model';
 
 interface PricesState {
   readonly products: readonly Product[];
@@ -13,15 +14,11 @@ interface PricesState {
   readonly adding: boolean;
 }
 
-/** The longest product name the server keeps. */
-const MAX_NAME = 120;
-
 const MESSAGES = {
   load: 'Could not load the prices. Try again.',
   add: 'Could not add that. Try again.',
   duplicate: 'That product is already tracked.',
-  search: 'Could not add that product. Try again.',
-  linkFailed: 'Added, but its shop page could not be linked. Link it from the Prices tab.',
+  catalog: 'Could not add that product. Try again.',
   remove: 'Could not delete that product.',
   unlink: 'Could not remove that link.',
   candidates: 'Could not load the suggestions. Try again.',
@@ -70,24 +67,21 @@ export const PricesStore = signalStore(
       },
 
       /**
-       * A tapped search result: the product is added once, named as the shop names it, and the shop's page and photo are
-       * linked as a page a person chose. Returns whether the product is now on the shelf.
+       * A tapped catalog row: one call, so the product is never added without its page. The server names the product from the row,
+       * takes its barcode, links the row's page and photo in its shop as the person's choice, and looks for the other shops' pages.
+       * Returns whether the product is now on the shelf.
        */
-      async addFromSearch(result: SearchResult): Promise<boolean> {
+      async addFromCatalog(item: CatalogItem): Promise<boolean> {
         patchState(store, {adding: true});
         try {
-          const product = await api.add(result.title.slice(0, MAX_NAME));
-          try {
-            await api.link(product.id, result.store, result.url, result.imageUrl ?? undefined);
-          } catch {
-            // The product exists without its page; the person can link it from the Prices tab.
-            toast.error(MESSAGES.linkFailed);
-          }
+          await api.addFromCatalog(item.id);
           await this.load(true);
           return true;
         } catch (error) {
+          // A refusal (already tracked, no longer listed, barcode taken) says why in the server's words.
+          const message = (error as {error?: {message?: string}} | null)?.error?.message;
           toast.error(
-            statusOf(error) === HttpStatus.conflict ? MESSAGES.duplicate : MESSAGES.search
+            statusOf(error) === HttpStatus.conflict && message ? message : MESSAGES.catalog
           );
           return false;
         } finally {
