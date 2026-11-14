@@ -60,7 +60,7 @@ public static partial class LidlParser
     /// <summary>
     /// Every product tile of a category listing page as a catalog item, priced or not: Lidl lists its whole range online but
     /// shows a regular price on only part of it, so a tile with no price is a product without one, never an error. A tile
-    /// with no product number or no address is skipped. The barcode is not on tiles; it comes from the product page
+    /// with no product number or no address is still returned, without that field, so the caller can count it as unusable. The barcode is not on tiles; it comes from the product page
     /// (<see cref="ParseGtin"/>).
     /// </summary>
     public static IReadOnlyList<CatalogItem> ParseCatalogTiles(string html)
@@ -134,8 +134,8 @@ public static partial class LidlParser
     ];
 
     /// <summary>
-    /// The listing pages (<c>/c/&lt;slug&gt;/s&lt;id&gt;</c>) of a pages sitemap whose slug names food or drink, i.e. contains one of
-    /// one of <see cref="FoodWords"/> as a whole word of its hyphenated name. Query and fragment are dropped; each page once.
+    /// The listing pages (<c>/c/&lt;slug&gt;/s&lt;id&gt;</c>) of a pages sitemap whose slug names food or drink, i.e. contains one
+    /// of <see cref="FoodWords"/> as a whole word of its hyphenated name. Query and fragment are dropped; each page once.
     /// </summary>
     public static IReadOnlyList<Uri> FoodCategoryPages(string sitemapXml)
     {
