@@ -39,7 +39,8 @@ public sealed class LidlCatalogSweepTests : IClassFixture<BasketFactory>
             .Serve(Root + "?offset=24", Fixtures.Read("lidl-catalog-page-empty.html"))
             .Serve(FruitVeg, Fixtures.Read("lidl-catalog-page-2.html"))
             .Serve(FruitVeg + "?offset=12", Fixtures.Read("lidl-catalog-page-empty.html"))
-            .Serve(Chilled, Fixtures.Read("lidl-catalog-page-2.html"));
+            .Serve(Chilled, Fixtures.Read("lidl-catalog-page-2.html"))
+            .Serve(Chilled + "?offset=12", Fixtures.Read("lidl-catalog-page-empty.html"));
         if (withBarcodes)
         {
             fetcher.Serve(ButterPage, Fixtures.Read("lidl-product-page-gtin.html"))
@@ -114,8 +115,8 @@ public sealed class LidlCatalogSweepTests : IClassFixture<BasketFactory>
         fetcher.Requested.Should().Equal(
             Index, PagesSitemap,
             Root, Root + "?offset=12", Root + "?offset=24",
-            FruitVeg, // nothing it lists is new, so its second page is not asked for
-            Chilled,
+            FruitVeg, FruitVeg + "?offset=12", // the second page is empty: past the last page
+            Chilled, Chilled + "?offset=12",
             ButterPage, BiscuitsPage, TeaPage, LentilsPage);
         fetcher.Requested.Should().NotContain(u => u.Contains("/q/api/search"));
         fetcher.Requested.Should().NotContain(u => u.Contains("garden") || u.Contains("power-tools") || u.Contains("example.com"));
@@ -282,6 +283,47 @@ public sealed class LidlCatalogSweepTests : IClassFixture<BasketFactory>
                 Fixtures.Read("lidl-catalog-page-2.html").Replace("erpNumber&quot;: &quot;90000003&quot;", "erpNumber&quot;: &quot;&quot;")
                     .Replace("erpNumber&quot;: &quot;90000004&quot;", "erpNumber&quot;: &quot;&quot;")),
             "no usable products");
+
+    [Fact]
+    public async Task A_category_whose_first_page_only_repeats_another_category_is_still_walked_to_its_end()
+    {
+        await CleanAsync();
+        var fetcher = Shop().Serve(
+            Chilled + "?offset=12",
+            Fixtures.Read("lidl-catalog-page-2.html").Replace("90000003", "90000005").Replace("90000004", "90000006"))
+            .Serve(Chilled + "?offset=24", Fixtures.Read("lidl-catalog-page-empty.html"));
+
+        await SweepAsync(fetcher);
+
+        (await ProductsAsync()).Select(p => p.ExternalId).Should().Contain(["90000005", "90000006"]);
+        fetcher.Requested.Should().Contain(Chilled + "?offset=24");
+    }
+
+    [Fact]
+    public async Task A_tile_that_fails_validation_but_names_its_product_keeps_that_product_listed()
+    {
+        await CleanAsync();
+        await SweepAsync(Shop());
+        _clock.Advance(TimeSpan.FromDays(1));
+        var page = Fixtures.Read("lidl-catalog-page-1.html")
+            .Replace("&quot;fullTitle&quot;: &quot;DAIRYFIELD Unsalted Butter 250g&quot;", "&quot;fullTitle&quot;: &quot;&quot;")
+            .Replace("&quot;title&quot;: &quot;Unsalted Butter 250g&quot;", "&quot;title&quot;: &quot;&quot;");
+        page.Should().NotContain("Unsalted Butter", "the butter tile must really have no name left");
+
+        await SweepAsync(Shop().Serve(Root, page));
+
+        await _factory.WithDb(async db =>
+        {
+            var butter = await db.StoreProducts.SingleAsync(p => p.Store == Store.Lidl && p.ExternalId == "90000001");
+            butter.DiscontinuedAt.Should().BeNull();
+            butter.LastSeenAt.Should().BeOnOrAfter(_clock.GetUtcNow(), "it is still listed, only this night's tile was unusable");
+            butter.Name.Should().Be("DAIRYFIELD Unsalted Butter 250g", "an unusable tile writes no field");
+            var run = await db.PricePullRuns.Where(r => r.Store == Store.Lidl).OrderByDescending(r => r.StartedAt).FirstAsync();
+            run.Outcome.Should().Be(PullOutcome.Ok);
+            run.Read.Should().Be(4);
+            return 0;
+        });
+    }
 
     [Fact]
     public async Task A_category_that_never_ends_is_cut_at_the_ceiling_and_delists_nothing()

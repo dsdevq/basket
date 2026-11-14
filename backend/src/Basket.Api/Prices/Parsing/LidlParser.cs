@@ -68,8 +68,7 @@ public static partial class LidlParser
         var items = new List<CatalogItem>();
         foreach (var tile in PageData.GridTiles(html))
         {
-            var id = PageData.String(tile, "erpNumber")
-                ?? (tile.TryGetProperty("productId", out var number) && number.ValueKind == JsonValueKind.Number ? number.GetRawText() : null);
+            var id = PageData.String(tile, "erpNumber");
             var path = PageData.String(tile, "canonicalUrl") ?? PageData.String(tile, "canonicalPath");
             var quote = TileQuote(tile);
             items.Add(new CatalogItem(
@@ -163,7 +162,7 @@ public static partial class LidlParser
 
     /// <summary>
     /// The barcode of a Lidl product page: the first valid GTIN of the JSON-LD <c>gtin13</c> (Lidl writes a list, one per pack
-    /// variant), else <c>gtin</c>. Null when the page has none or only malformed ones; a wrong barcode is never stored.
+    /// variant). Null when the page has none or only malformed ones; a wrong barcode is never stored.
     /// </summary>
     public static string? ParseGtin(string html)
     {
@@ -172,26 +171,17 @@ public static partial class LidlParser
             return null;
         }
 
-        foreach (var key in new[] { "gtin13", "gtin" })
+        if (!product.TryGetProperty("gtin13", out var value))
         {
-            if (!product.TryGetProperty(key, out var value))
-            {
-                continue;
-            }
+            return null;
+        }
 
-            var candidates = value.ValueKind == JsonValueKind.Array ? value.EnumerateArray().ToArray() : [value];
-            foreach (var candidate in candidates)
+        var candidates = value.ValueKind == JsonValueKind.Array ? value.EnumerateArray().ToArray() : [value];
+        foreach (var candidate in candidates)
+        {
+            if (candidate.ValueKind == JsonValueKind.String && Gtin.TryNormalize(candidate.GetString(), out var gtin))
             {
-                var text = candidate.ValueKind switch
-                {
-                    JsonValueKind.String => candidate.GetString(),
-                    JsonValueKind.Number => candidate.GetRawText(),
-                    _ => null,
-                };
-                if (Gtin.TryNormalize(text, out var gtin))
-                {
-                    return gtin;
-                }
+                return gtin;
             }
         }
 

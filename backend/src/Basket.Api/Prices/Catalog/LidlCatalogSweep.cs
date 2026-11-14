@@ -44,6 +44,7 @@ public sealed class LidlCatalogSweep(
         var note = discovery.Note;
 
         var rejected = 0;
+        var unreadable = new HashSet<string>(StringComparer.Ordinal);
         foreach (var category in discovery.Pages)
         {
             if (refused)
@@ -52,6 +53,7 @@ public sealed class LidlCatalogSweep(
             }
 
             var walked = false;
+            var listed = new HashSet<string>(StringComparer.Ordinal);
             for (var page = 0; page < MaxPagesPerCategory; page++)
             {
                 var result = await fetcher.GetAsync(page == 0 ? category : new Uri($"{category}?offset={page * PageSize}"), ct);
@@ -81,14 +83,26 @@ public sealed class LidlCatalogSweep(
                 }
 
                 var fresh = new List<CatalogReading>();
-                var repeated = 0;
+                var newHere = 0;
+                var repeatedHere = 0;
                 foreach (var item in tiles)
                 {
-                    if (item.ExternalId is { } id && readings.ContainsKey(id))
+                    if (item.ExternalId is { Length: > 0 } id)
                     {
-                        repeated++;
+                        if (!listed.Add(id))
+                        {
+                            repeatedHere++;
+                            continue;
+                        }
+
+                        newHere++;
+                        if (readings.ContainsKey(id))
+                        {
+                            continue;
+                        }
                     }
-                    else if (CatalogReading.TryCreate(Store.Lidl, item, out var reading, out _))
+
+                    if (CatalogReading.TryCreate(Store.Lidl, item, out var reading, out _))
                     {
                         readings[reading!.ExternalId] = reading;
                         fresh.Add(reading);
@@ -96,12 +110,16 @@ public sealed class LidlCatalogSweep(
                     else
                     {
                         rejected++;
+                        if (item.ExternalId is { Length: > 0 } rejectedId)
+                        {
+                            unreadable.Add(rejectedId);
+                        }
                     }
                 }
 
-                if (fresh.Count == 0)
+                if (newHere == 0)
                 {
-                    walked = repeated > 0; // past the last page: it only repeats what was seen; a page of unusable tiles is a failed read
+                    walked = repeatedHere > 0; // past the last page: it only repeats what this category already listed; tiles with no product number are a failed read
                     if (!walked)
                     {
                         note ??= $"A Lidl listing page showed no usable products ({category.AbsolutePath}).";
@@ -139,7 +157,11 @@ public sealed class LidlCatalogSweep(
         }
         else
         {
-            var closed = await ingest.CompleteAsync(Store.Lidl, readings.Count, started, ct);
+            unreadable.ExceptWith(readings.Keys);
+            var stillListed = await db.StoreProducts
+                .Where(p => p.Store == Store.Lidl && unreadable.Contains(p.ExternalId))
+                .ExecuteUpdateAsync(s => s.SetProperty(p => p.LastSeenAt, clock.GetUtcNow()), ct);
+            var closed = await ingest.CompleteAsync(Store.Lidl, readings.Count + stillListed, started, ct);
             log.LogInformation("Lidl catalog sweep: {Seen} products, {Outcome}", closed.Seen, closed.Outcome);
         }
 

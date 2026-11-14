@@ -1784,9 +1784,13 @@ So this sweep reads the range; the paid price keeps coming from the Lidl Plus re
 - **What it reads.** `LidlParser.ParseCatalogTiles` reads the product tiles of a category listing page with the tile reader the offer pages
   already use (`erpNumber`, title, brand, price, Lidl Plus price, dates, photo), plus the pack text (`price.packaging.text`, the size) and
   `keyfacts.wonCategoryPrimary` as the category path, without its shared root "Worlds of need". A tile with no price is a product stored
-  without one; it is not an error and writes no price row. A tile with no product number or no address is still returned, unusable, so the sweep counts it.
+  without one; it is not an error and writes no price row. A tile with no product number or no address is still returned, unusable, so the sweep counts it. The product number is `erpNumber` only, and the
+  barcode is `gtin13` only (a string or a list of strings).
+  A tile that fails validation but names its product has that product's last-seen time refreshed (nothing else is written), so a product
+  Lidl still lists is not delisted for one bad tile; it is counted and logged as unusable.
 - **Which pages.** Listing pages are walked by `?offset=` in steps of 12 (offset 0 is the plain address) until a page brings no product not
-  already seen (a page that only repeats products, or is empty after the first), with a hard cap of 120 pages a category (a fixed ceiling, not a setting). The categories are the food pages of the page
+  already listed by that category (a page that only repeats the category's own products, or is empty after the first; a product another
+  category listed first still counts as new here, so a category that begins with shared products is walked on), with a hard cap of 120 pages a category (a fixed ceiling, not a setting). The categories are the food pages of the page
   sitemap only: `/static/sitemap.xml` (the index robots.txt names) lists the sitemaps, the one whose file name starts with `pages` lists
   the `/c/<slug>/s<id>` category pages, and a page is food when its hyphenated slug contains a word of a fixed list in `LidlParser` as a whole word
   ("fresh-fruit-and-vegetables", not "garden-furniture"). A product is stored once however many categories list it. A `.xml.gz` sitemap is

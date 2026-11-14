@@ -86,4 +86,22 @@ public sealed class LidlCatalogParserTests
     {
         LidlParser.ParseGtin(Fixtures.Read(fixture)).Should().BeNull();
     }
+
+    [Theory]
+    [InlineData("\"gtin\":\"4000000000013\"")]
+    [InlineData("\"gtin13\":4000000000013")]
+    public void Only_a_gtin13_string_or_list_is_a_barcode(string field)
+    {
+        var html = $"<html><head><script type=\"application/ld+json\">{{\"@type\":\"Product\",{field},\"name\":\"x\"}}</script></head></html>";
+
+        LidlParser.ParseGtin(html).Should().BeNull();
+    }
+
+    [Fact]
+    public void A_tile_with_only_a_numeric_product_id_is_not_given_that_as_its_product_number()
+    {
+        var html = Fixtures.Read("lidl-catalog-page-2.html").Replace("erpNumber&quot;: &quot;90000003&quot;, ", "");
+
+        LidlParser.ParseCatalogTiles(html).Select(i => i.ExternalId).Should().NotContain("90000003");
+    }
 }
