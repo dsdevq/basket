@@ -56,6 +56,21 @@ public sealed class CatalogReadingTests
     }
 
     [Theory]
+    [InlineData("12345678901 g")]
+    [InlineData("20000000 kg")]
+    [InlineData("1234567890123456789012345678901234567890 g")]
+    public void A_size_too_large_for_the_column_is_dropped_and_the_product_is_kept(string size)
+    {
+        Read(Item(i => i with { SizeText = size })).Size.Should().BeNull();
+        Read(Item(i => i with { SizeText = null, Name = $"Rice {size}" })).Size.Should().BeNull();
+    }
+
+    [Fact]
+    public void A_size_too_large_in_the_size_text_leaves_a_readable_size_in_the_name_to_be_used() =>
+        Read(Item(i => i with { SizeText = "12345678901 g", Name = "Rice 500 g" })).Size
+            .Should().Be(new ProductSize(SizeUnit.Mass, 500m, 1));
+
+    [Theory]
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]

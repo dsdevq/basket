@@ -234,6 +234,24 @@ public sealed class CatalogIngestTests : IClassFixture<CatalogIngestTests.RoomyF
     }
 
     [Fact]
+    public async Task A_size_too_large_for_the_column_costs_the_product_its_size_and_not_the_batch()
+    {
+        var reader = await ReaderAsync();
+
+        var response = await PostAsync(
+            reader,
+            "tesco",
+            Tesco(1),
+            new { externalId = "254300002", url = "https://www.tesco.ie/groceries/en-IE/products/254300002", name = "Rice", sizeText = "12345678901 g", price = 2.15m },
+            new { externalId = "254300003", url = "https://www.tesco.ie/groceries/en-IE/products/254300003", name = "Flour 1234567890123456789012345678901234567890 g", price = 2.15m });
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        Reasons(await BodyAsync(response)).Should().Equal("ok", "ok", "ok");
+        var sizes = await _factory.WithDb(db => db.StoreProducts.OrderBy(p => p.ExternalId).Select(p => p.SizeAmount).ToListAsync());
+        sizes.Should().Equal(2000m, null, null);
+    }
+
+    [Fact]
     public async Task A_batch_with_nothing_usable_is_a_422_and_writes_nothing()
     {
         var reader = await ReaderAsync();

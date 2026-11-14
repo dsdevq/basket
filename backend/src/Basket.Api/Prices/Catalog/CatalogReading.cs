@@ -125,7 +125,7 @@ public sealed record CatalogReading(
             name,
             UserNames.Clean(item.Brand, StoreProduct.MaxBrandLength),
             sizeText,
-            ProductSize.Parse(sizeText) ?? ProductSize.Parse(name),
+            ParseSize(sizeText) ?? ParseSize(name),
             item.UnitPrice,
             item.UnitPrice is null ? null : UserNames.Clean(item.UnitPriceBasis, StoreProduct.MaxUnitPriceBasisLength),
             Gtin.TryNormalize(item.Barcode, out var gtin) ? gtin : null,
@@ -142,5 +142,19 @@ public sealed record CatalogReading(
                 item.InStock ?? true));
         reason = null;
         return true;
+    }
+
+    private const decimal MaxSizeAmount = 10_000_000_000m;
+
+    private static ProductSize? ParseSize(string? text)
+    {
+        try
+        {
+            return ProductSize.Parse(text) is { Amount: < MaxSizeAmount } size ? size : null;
+        }
+        catch (OverflowException)
+        {
+            return null;
+        }
     }
 }
