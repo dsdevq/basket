@@ -36,12 +36,35 @@ There are two ways to prove itself to basket; the reader uses the first one that
 
 Files you fill in (`.env.local`, `urls.local.json`) are ignored by git. The secret and the token are never logged.
 
+### The identity service over https, no tunnel
+
+Logto runs on the VPS and publishes its issuer as the tailnet https address, `https://<vps>.<tailnet>.ts.net:3001/oidc`
+(its discovery document at `<issuer>/.well-known/openid-configuration` says so, and every token's `iss` is that value).
+Basket validates the same string (`FleetAgent:Authority`, see [docs/decisions.md](../docs/decisions.md), "Fleet identity on the
+machine endpoints"), so the reader's `BASKET_FLEET_ISSUER` and `BASKET_API_ORIGIN` are both tailnet https addresses and the PC
+needs nothing but Tailscale being up: no reverse ssh tunnel, no `127.0.0.1` address. (The `http://127.0.0.1:3001/oidc` form
+this README used to give only worked while a tunnel from the VPS was open by hand.) The tailnet certificate is a real one, so
+Node verifies it without any setting.
+
+`npm run check` proves it from the PC, without reading a page or posting a price and without printing any token or secret:
+
+```text
+ok   issuer address: https://<vps>.<tailnet>.ts.net:3001/oidc (https, not a loopback address)
+ok   discovery: answers, and reports the issuer https://<vps>.<tailnet>.ts.net:3001/oidc
+ok   token: granted; iss https://<vps>.<tailnet>.ts.net:3001/oidc, audience https://fleet.lifekit.internal/api, scope basket:price-ingest basket:catalog-read
+ok   basket: https://<vps>.<tailnet>.ts.net:10000 accepts the token (GET /api/products, HTTP 200)
+```
+
+It stops at the first step that fails and says why: a loopback issuer (tunnel-dependent), an issuer that differs from what
+Logto reports, a token with the wrong `iss`, audience or scope, or basket answering 401 (its `FLEET_AGENT_AUTHORITY` is not that
+issuer). Exit code `0` when all four pass, `1` otherwise.
+
 | Setting | Where | Meaning |
 |---|---|---|
 | `BASKET_API_ORIGIN` | env or `.env.local` | Where basket runs, e.g. `https://basket.example.com`. `http` only for `localhost`. |
 | `BASKET_FLEET_CLIENT_ID` | env or `.env.local` | The fleet identity's client id (the `fleet-agent` application). With the next two, replaces the `bsk_` token. |
 | `BASKET_FLEET_CLIENT_SECRET` | env or `.env.local` | Its secret. Never logged, never in the repo. |
-| `BASKET_FLEET_ISSUER` | env or `.env.local` | The identity service's issuer address, e.g. `http://127.0.0.1:3001/oidc`; the reader posts to `<issuer>/token`. `http` only for `localhost`/`127.0.0.1`. Setting only some of the three is an error naming the rest. |
+| `BASKET_FLEET_ISSUER` | env or `.env.local` | The identity service's issuer address, e.g. `https://<vps>.<tailnet>.ts.net:3001/oidc` (below); the reader posts to `<issuer>/token`. Keep it equal to the issuer Logto reports and stamps into its tokens (`npm run check` compares them). `http` is accepted only for `localhost`/`127.0.0.1`, which on the PC means a hand-held ssh tunnel and is not for regular use. Setting only some of the three is an error naming the rest. |
 | `BASKET_INGEST_TOKEN` | env or `.env.local` | The `bsk_...` token, used when no fleet setting is present. Never logged. The environment wins over the file. |
 | `BASKET_READER_URLS` | env or `.env.local` | The URL file (fallback list). Default `pc-reader/urls.local.json`. |
 | `BASKET_READER_PROFILE` | env or `.env.local` | Chrome profile directory. Default `~/.local/state/basket-pc-reader/profile`: a profile of the reader's own, never your everyday one. `npm run profile` opens the same directory by hand (below). |
@@ -152,6 +175,7 @@ Tesco and are not a Dunnes workaround. `npm start -- --store dunnes` runs only D
 ## Develop
 
 ```sh
+npm run check       # the fleet identity end to end over the configured addresses (needs the real credentials and the tailnet)
 npm test            # parsers on saved pages, pacing, blocked handling, work list, ingest client, fleet token and catalog (no network)
 npm run typecheck
 ```
@@ -168,3 +192,4 @@ Settings (or use the fleet identity), and point `BASKET_API_ORIGIN` at `http://l
 Not installed on purpose. On this PC a systemd user timer (`~/.config/systemd/user/basket-pc-reader.timer` plus a oneshot
 `.service` running `node src/main.ts` in this folder with `BASKET_READER_HEADLESS=1`, or a session with a display, and
 `Persistent=true` so a missed run happens when the PC wakes) would do it.
+It needs Tailscale up on the PC (the identity service and basket are tailnet addresses); `npm run check` exits `1` when either is unreachable, which a scheduled run can use to skip quietly.
