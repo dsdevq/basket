@@ -1929,7 +1929,7 @@ migration**.
   counts as old. An `Old price`, `Out of stock` or `Offer ended` row keeps its last figure and its date, drawn dimmed with a warning tag, and shows
   no card price, old price or promo. A row is one
   of: a usable price (no tag); `Old price`; `Out of stock`; `Offer not started` or `Offer ended` (the shelf's "from 12 Nov" / "ended");
-  `No price listed`; `Not read yet` (a linked page with no reading; "Waiting for the next PC read" for Aldi, Tesco and Dunnes);
+  `No price listed`; `Not read yet` (a linked page with no reading; "Waiting for the next PC read" for Tesco and Dunnes; Aldi is read nightly since issue 129);
   `No price read` (a shop known only from a receipt: no figure, just "Last paid €1.19 on 3 Nov", which is not a price today);
   `No page there` (nothing linked, nothing bought; the row is dimmed and cannot be chosen, and shows the suggested pages waiting for a
   yes or no on the Prices tab). "Last paid: not yet connected" is Settings' business and is not drawn here.
