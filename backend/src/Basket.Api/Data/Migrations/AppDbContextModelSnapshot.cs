@@ -755,6 +755,36 @@ namespace Basket.Api.Data.Migrations
                     b.ToTable("trip_item", (string)null);
                 });
 
+            modelBuilder.Entity("Basket.Api.Data.UserPreference", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.Property<string>("Theme")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)")
+                        .HasColumnName("theme");
+
+                    b.Property<double?>("ThemeIntensity")
+                        .HasColumnType("double precision")
+                        .HasColumnName("theme_intensity");
+
+                    b.Property<string>("ThemeSeed")
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)")
+                        .HasColumnName("theme_seed");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("user_preferences", (string)null);
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>
                 {
                     b.Property<int>("Id")
@@ -999,6 +1029,15 @@ namespace Basket.Api.Data.Migrations
                     b.HasOne("Basket.Api.Data.Trip", null)
                         .WithMany()
                         .HasForeignKey("TripId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Basket.Api.Data.UserPreference", b =>
+                {
+                    b.HasOne("Basket.Api.Data.AppUser", null)
+                        .WithOne()
+                        .HasForeignKey("Basket.Api.Data.UserPreference", "UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

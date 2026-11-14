@@ -35,6 +35,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
     public DbSet<LidlPlusConnection> LidlPlusConnections => Set<LidlPlusConnection>();
 
+    public DbSet<UserPreference> UserPreferences => Set<UserPreference>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
@@ -196,6 +198,16 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             connection.Property(c => c.Id).ValueGeneratedNever();
             connection.Property(c => c.RefreshTokenProtected).HasMaxLength(LidlPlusConnection.MaxProtectedLength).IsRequired();
             connection.Property(c => c.Problem).HasMaxLength(32);
+        });
+
+        builder.Entity<UserPreference>(preferences =>
+        {
+            preferences.ToTable("user_preferences");
+            preferences.HasKey(p => p.UserId);
+            preferences.Property(p => p.UserId).ValueGeneratedNever();
+            preferences.Property(p => p.Theme).HasMaxLength(UserPreference.MaxThemeLength).IsRequired();
+            preferences.Property(p => p.ThemeSeed).HasMaxLength(UserPreference.SeedLength);
+            preferences.HasOne<AppUser>().WithOne().HasForeignKey<UserPreference>(p => p.UserId).OnDelete(DeleteBehavior.Cascade);
         });
 
         builder.Entity<AppUser>().ToTable("users");
