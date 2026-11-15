@@ -2384,3 +2384,14 @@ suggested, unless the user changes the store. This introduces the trip record th
 - **Screens.** No route is added or removed. The List mock has a ticked item bought at Lidl, so the four `list` baselines change (a
   shop chip on the ticked row); the Linux images are re-rendered by the Update screen baselines workflow on this branch, never committed
   from a local run. `e2e/bought-at-flow.spec.ts` covers the sheet on a phone.
+
+## Adopting `@lifekit-hq/ui` 5.1.0: secondary controls follow the colour seed (2026-11-15, issue 85)
+
+`@lifekit-hq/ui`, `tokens`, `core`, `elements`, `charts-core` and `config` go from 5.0.0 to 5.1.0 (lifekit-common PR 354). The secondary
+button, the checked checkbox and the active segmented control did not follow the palette seed; the owner's direction was that this is
+fixed in the shared component, not in this app: "We dont create unique buttons per projects, all buttons share the same code".
+
+- **Library only.** Basket adds no button, checkbox or segmented-control code or style of its own; the fix arrives with the version bump
+  and nothing else changes in `frontend/src`. Frontend only: no endpoint, schema or migration changes.
+- **Baselines.** Screens that show these controls change colour, so their images are redrawn by the **Update screen baselines** workflow
+  on the adopting branch, never locally.
