@@ -2,8 +2,7 @@ using Basket.Api.Data;
 
 namespace Basket.Api.Prices.Sources;
 
-/// <summary><paramref name="NeedsCategory"/>: no reading has stored a category for it yet, so a source that would not otherwise open its page may do so once.</summary>
-public sealed record ListingToCheck(Guid ListingId, Uri Url, bool NeedsCategory = false);
+public sealed record ListingToCheck(Guid ListingId, Uri Url);
 
 /// <summary>What reading one listing produced: a quote, or the reason there is none.</summary>
 public sealed record ListingPull(PriceQuote? Quote, string? Error)

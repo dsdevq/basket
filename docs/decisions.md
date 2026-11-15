@@ -2185,7 +2185,10 @@ so their pages stay read one by one by the PC reader.
   03:00 price pull now has one source, Aldi's, whose sweep prices the pages it links. The one remaining Lidl product-page read is the capped
   barcode read of the sweep (`Prices:LidlBarcodePagesPerNight`), which is a range read for the matcher, not a listing read. A Lidl page whose
   product the sweep does not list gets no new reading and goes stale the way any unlisted product does (Promotions already
-  ignore readings older than 3 days).
+  ignore readings older than 3 days). The per-listing readers go with the source: the offer-page and product-page parsers
+  (`ParseOfferTiles`, `ParseProductPage`), the breadcrumb and `og:image` readers only they used, and `ListingToCheck.NeedsCategory`; a Lidl
+  listing's category and photo now come from the sweep's tile (`wonCategoryPrimary`, `image`); the earlier sections that describe the
+  product-page and breadcrumb reads are history.
 - **The live shop search is gone.** `GET /api/products/search` (a live request to lidl.ie's search page per typed query) and its parser
   `ParseSearchTiles` are removed, as "Add to shelf by catalog search" said they would be; the sheet searches the stored catalog
   (`GET /api/catalog/search`) and nothing else asks Lidl at request time.

@@ -40,88 +40,6 @@ internal static partial class PageData
         return null;
     }
 
-    /// <summary>
-    /// The category path of a page, read from its schema.org BreadcrumbList: the crumbs between the shop's front page and the
-    /// product itself, joined with <see cref="Basket.Api.Data.StoreListing.CategorySeparator"/> ("Chilled Food &gt; Milk").
-    /// The leading "Home" crumb is dropped, and so is the last crumb when it is the product (its name, or its address, is the
-    /// page's). Null when the page has no breadcrumb or nothing is left of it.
-    /// </summary>
-    public static string? BreadcrumbCategory(string html, string? productName = null, string? productUrl = null)
-    {
-        foreach (Match block in JsonLdBlock().Matches(html))
-        {
-            JsonDocument document;
-            try
-            {
-                document = JsonDocument.Parse(block.Groups["json"].Value);
-            }
-            catch (JsonException)
-            {
-                continue;
-            }
-
-            var root = document.RootElement;
-            var candidates = root.ValueKind == JsonValueKind.Array ? root.EnumerateArray().ToArray() : [root];
-            foreach (var candidate in candidates)
-            {
-                if (candidate.ValueKind != JsonValueKind.Object
-                    || String(candidate, "@type") != "BreadcrumbList"
-                    || !candidate.TryGetProperty("itemListElement", out var list)
-                    || list.ValueKind != JsonValueKind.Array)
-                {
-                    continue;
-                }
-
-                var crumbs = list.EnumerateArray()
-                    .Select(e => (Name: Clean(String(e, "name") ?? String(e, "item", "name")), Item: String(e, "item") ?? String(e, "item", "@id")))
-                    .Where(c => c.Name is not null)
-                    .ToList();
-                if (crumbs.Count > 0 && IsFrontPage(crumbs[0].Item, crumbs[0].Name!))
-                {
-                    crumbs.RemoveAt(0);
-                }
-
-                if (crumbs.Count > 0
-                    && ((productName is not null && string.Equals(crumbs[^1].Name, productName, StringComparison.OrdinalIgnoreCase))
-                        || SamePath(crumbs[^1].Item, productUrl)))
-                {
-                    crumbs.RemoveAt(crumbs.Count - 1);
-                }
-
-                var path = string.Join(Basket.Api.Data.StoreListing.CategorySeparator, crumbs.Select(c => c.Name));
-                return path.Length == 0 ? null : path;
-            }
-        }
-
-        return null;
-    }
-
-    private static bool SamePath(string? first, string? second) =>
-        Uri.TryCreate(first, UriKind.Absolute, out var a)
-        && Uri.TryCreate(second, UriKind.Absolute, out var b)
-        && a.AbsolutePath != "/"
-        && a.AbsolutePath == b.AbsolutePath;
-
-    private static bool IsFrontPage(string? item, string name) =>
-        string.Equals(name, "Home", StringComparison.OrdinalIgnoreCase)
-        || (Uri.TryCreate(item, UriKind.Absolute, out var uri) && uri.AbsolutePath == "/");
-
-    /// <summary>The first Offer of a Product (the shops use either one object or a list).</summary>
-    public static JsonElement? FirstOffer(JsonElement product)
-    {
-        if (!product.TryGetProperty("offers", out var offers))
-        {
-            return null;
-        }
-
-        return offers.ValueKind switch
-        {
-            JsonValueKind.Object => offers,
-            JsonValueKind.Array when offers.GetArrayLength() > 0 => offers[0],
-            _ => null,
-        };
-    }
-
     /// <summary>The JSON objects held in <c>data-grid-data="..."</c> attributes (Lidl's product tiles).</summary>
     public static IEnumerable<JsonElement> GridTiles(string html)
     {
@@ -199,28 +117,6 @@ internal static partial class PageData
         }
     }
 
-    /// <summary>The page's <c>og:image</c> address (what shops give link previews), when it is a usable one.</summary>
-    public static string? OgImage(string html)
-    {
-        foreach (Match tag in MetaTag().Matches(html))
-        {
-            var attributes = tag.Value;
-            var property = MetaProperty().Match(attributes);
-            if (!property.Success || !string.Equals(property.Groups["v"].Value, "og:image", StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            var content = MetaContent().Match(attributes);
-            if (content.Success && ImageUrls.TryNormalize(WebUtility.HtmlDecode(content.Groups["v"].Value), out var url))
-            {
-                return url;
-            }
-        }
-
-        return null;
-    }
-
     public static string? Clean(string? text)
     {
         if (string.IsNullOrWhiteSpace(text))
@@ -248,15 +144,6 @@ internal static partial class PageData
 
     [GeneratedRegex(@"<script[^>]*type=""application/ld\+json""[^>]*>(?<json>.*?)</script>", RegexOptions.Singleline | RegexOptions.IgnoreCase)]
     private static partial Regex JsonLdBlock();
-
-    [GeneratedRegex(@"\bproperty\s*=\s*""(?<v>[^""]*)""", RegexOptions.IgnoreCase)]
-    private static partial Regex MetaProperty();
-
-    [GeneratedRegex(@"\bcontent\s*=\s*""(?<v>[^""]*)""", RegexOptions.IgnoreCase)]
-    private static partial Regex MetaContent();
-
-    [GeneratedRegex(@"<meta\b[^>]*>", RegexOptions.IgnoreCase)]
-    private static partial Regex MetaTag();
 
     [GeneratedRegex(@"data-grid-data=""(?<data>[^""]*)""")]
     private static partial Regex GridDataAttribute();

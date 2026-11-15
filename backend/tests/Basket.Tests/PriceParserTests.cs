@@ -1,4 +1,5 @@
 using Basket.Api.Prices;
+using Basket.Api.Prices.Catalog;
 using Basket.Api.Prices.Parsing;
 using Basket.Tests.Support;
 using FluentAssertions;
@@ -8,45 +9,30 @@ namespace Basket.Tests;
 /// <summary>The parsers against pages recorded from lidl.ie and aldi.ie on 2026-11-05. No test touches the network.</summary>
 public sealed class PriceParserTests
 {
-    private static readonly IReadOnlyDictionary<string, PriceQuote> Offers = LidlParser.ParseOfferTiles(Fixtures.Read("lidl-offers-page.html"));
+    private static readonly IReadOnlyDictionary<string, CatalogItem> Offers = PricedTiles(Fixtures.Read("lidl-offers-page.html"));
+
+    private static Dictionary<string, CatalogItem> PricedTiles(string html) => LidlParser.ParseCatalogTiles(html)
+        .Where(item => item.ExternalId is not null && (item.Price is not null || item.LoyaltyPrice is not null))
+        .ToDictionary(item => item.ExternalId!);
 
     [Fact]
     public void Lidl_offer_tile_gives_price_lidl_plus_price_promo_and_dates()
     {
         var skewers = Offers["11115738"];
 
-        skewers.Title.Should().Be("VITASIA 10 Chicken Breast Skewers");
+        skewers.Name.Should().Be("VITASIA 10 Chicken Breast Skewers");
         skewers.Price.Should().Be(2.19m);
         skewers.LoyaltyPrice.Should().Be(2.19m);
         skewers.LoyaltyScheme.Should().Be("Lidl Plus");
         skewers.PromoText.Should().Be("Mix 'n' Match 2 for €4");
         skewers.ValidFrom.Should().Be(new DateOnly(2026, 8, 26));
         skewers.ValidUntil.Should().Be(new DateOnly(2026, 11, 11));
-        skewers.InStock.Should().BeTrue();
     }
 
     [Fact]
-    public void Lidl_offer_tile_keeps_the_photo_address_and_a_product_page_the_first_gallery_image()
+    public void Lidl_offer_tile_keeps_the_photo_address()
     {
         Offers["11115738"].ImageUrl.Should().Be("https://www.lidl.ie/assets/gcpa9b8e188dc8a48039b8b578c2c9466bf.png");
-
-        LidlParser.ParseProductPage(Fixtures.Read("lidl-product-page.html")).ImageUrl
-            .Should().Be("https://www.lidl.ie/assets/gcpb5678e59619845ec8710bd6e485f4e3d.png");
-        LidlParser.ParseProductPage(Fixtures.Read("lidl-product-page-no-price.html")).ImageUrl
-            .Should().Be("https://www.lidl.ie/assets/gcpbc4f96d4506e494eabf4ba0c20bb0335.png");
-    }
-
-    [Fact]
-    public void A_product_page_without_json_ld_images_falls_back_to_og_image_and_never_to_a_bad_address()
-    {
-        const string Ld = """<script type="application/ld+json">{"@type":"Product","name":"Milk","image":"IMG"}</script>""";
-        const string Og = """<meta property="og:image" content="https://www.lidl.ie/assets/og.png?a=1&amp;b=2" />""";
-
-        LidlParser.ParseProductPage(Ld.Replace("\"IMG\"", "[]") + Og).ImageUrl.Should().Be("https://www.lidl.ie/assets/og.png?a=1&b=2");
-        LidlParser.ParseProductPage(Ld.Replace("\"IMG\"", "{\"url\":\"https://www.lidl.ie/assets/obj.png\"}")).ImageUrl.Should().Be("https://www.lidl.ie/assets/obj.png");
-        LidlParser.ParseProductPage(Ld.Replace("IMG", "http://www.lidl.ie/assets/plain.png")).ImageUrl.Should().BeNull("only https is kept");
-        LidlParser.ParseProductPage(Ld.Replace("IMG", "/assets/relative.png")).ImageUrl.Should().BeNull("a relative address is no address");
-        LidlParser.ParseProductPage(Ld.Replace("IMG", "")).ImageUrl.Should().BeNull();
     }
 
     [Theory]
@@ -93,11 +79,11 @@ public sealed class PriceParserTests
     {
         // Oracle: Lidl writes a day boundary as 23:59:59Z (1788220799 is 2026-08-31T23:59:59Z, 1787616000 is 2026-08-25T00:00:00Z).
         // Dublin is on BST in August, so converting to local time would push the end to 1 Sep and the start to 25 Aug 01:00.
-        var priceWindow = LidlParser.ParseOfferTiles(Tile("""{"erpNumber":"1","price":{"price":1.5},"regionsPrices":{"1":{"currentPrice":{"startDate":"2026-08-25T00:00:00Z","endDate":"2026-08-31T23:59:59Z"}}}}"""))["1"];
+        var priceWindow = PricedTiles(Tile("""{"erpNumber":"1","price":{"price":1.5},"regionsPrices":{"1":{"currentPrice":{"startDate":"2026-08-25T00:00:00Z","endDate":"2026-08-31T23:59:59Z"}}}}"""))["1"];
         priceWindow.ValidFrom.Should().Be(new DateOnly(2026, 8, 25));
         priceWindow.ValidUntil.Should().Be(new DateOnly(2026, 8, 31));
 
-        var tileWindow = LidlParser.ParseOfferTiles(Tile("""{"erpNumber":"2","price":{"price":1.5},"storeStartDate":1787616000,"storeEndDate":1788220799}"""))["2"];
+        var tileWindow = PricedTiles(Tile("""{"erpNumber":"2","price":{"price":1.5},"storeStartDate":1787616000,"storeEndDate":1788220799}"""))["2"];
         tileWindow.ValidFrom.Should().Be(new DateOnly(2026, 8, 25));
         tileWindow.ValidUntil.Should().Be(new DateOnly(2026, 8, 31));
     }
@@ -131,51 +117,8 @@ public sealed class PriceParserTests
     [Fact]
     public void Lidl_page_without_tiles_gives_nothing()
     {
-        LidlParser.ParseOfferTiles("<html><body>no grid here</body></html>").Should().BeEmpty();
-        LidlParser.ParseOfferTiles("<div data-grid-data=\"{not json\"></div>").Should().BeEmpty();
-    }
-
-    [Fact]
-    public void Lidl_product_page_reads_the_json_ld_price_and_stock()
-    {
-        var priced = LidlParser.ParseProductPage(Fixtures.Read("lidl-product-page.html"));
-        priced.Title.Should().Be("10 Chicken Breast Skewers");
-        priced.Price.Should().Be(2.19m);
-        priced.InStock.Should().BeFalse("the page says OutOfStock");
-
-        var unpriced = LidlParser.ParseProductPage(Fixtures.Read("lidl-product-page-no-price.html"));
-        unpriced.Title.Should().Be("Aubergine");
-        unpriced.Price.Should().BeNull();
-        unpriced.InStock.Should().BeFalse();
-    }
-
-    [Fact]
-    public void Lidl_product_page_reads_its_category_from_the_breadcrumb_without_the_front_page_and_the_product()
-    {
-        LidlParser.ParseProductPage(Fixtures.Read("lidl-product-page-breadcrumb.html")).Category.Should().Be("Food & Drink > Meat & Poultry");
-    }
-
-    [Fact]
-    public void Lidl_product_page_drops_the_last_crumb_by_address_when_its_name_differs_from_the_product()
-    {
-        var html = Fixtures.Read("lidl-product-page-breadcrumb.html").Replace(
-            "\"name\":\"10 Chicken Breast Skewers\",\"item\"", "\"name\":\"Chicken Skewers\",\"item\"");
-
-        LidlParser.ParseProductPage(html).Category.Should().Be("Food & Drink > Meat & Poultry");
-    }
-
-    [Fact]
-    public void A_page_without_a_breadcrumb_has_no_category()
-    {
-        LidlParser.ParseProductPage(Fixtures.Read("lidl-product-page.html")).Category.Should().BeNull();
-    }
-
-    [Fact]
-    public void Lidl_product_page_without_product_data_is_a_parse_failure()
-    {
-        var act = () => LidlParser.ParseProductPage("<html><body>Something else</body></html>");
-
-        act.Should().Throw<ParseException>();
+        LidlParser.ParseCatalogTiles("<html><body>no grid here</body></html>").Should().BeEmpty();
+        LidlParser.ParseCatalogTiles("<div data-grid-data=\"{not json\"></div>").Should().BeEmpty();
     }
 
     [Theory]
