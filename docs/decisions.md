@@ -2338,7 +2338,7 @@ suggested, unless the user changes the store. This introduces the trip record th
 - **One lock for the ticked lines.** Tick, un-tick, delete and close take one transaction-scoped Postgres advisory lock first, so the
   list's ticked lines and the open trip's records move together and two phones ticking at once cannot start two open trips. The household
   makes a few ticks a minute at most, so waiting for the lock costs nothing.
-- **Migration: additive but it changes a column, so it needs the owner's go before merge (`20261114225403_OpenTrip`).** Two nullable
+- **Migration: additive but it changes a column, so it needs the owner's go before merge (`20261115130000_OpenTrip`).** Two nullable
   columns on `trip_item` (`bought_store`, `list_item_id` with a set-null foreign key to `list_item` and a partial unique index), the
   `trip.closed_at` column made nullable, and the unique index `ux_trip_open`. It also files the lines already ticked when it runs as the
   open trip, bought at the shop they were picked from (`OpenTrip.BackfillSql`, idempotent), so the deploy loses nothing mid-shop. No

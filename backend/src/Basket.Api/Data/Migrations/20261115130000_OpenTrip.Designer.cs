@@ -13,7 +13,7 @@ using NpgsqlTypes;
 namespace Basket.Api.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20261114225403_OpenTrip")]
+    [Migration("20261115130000_OpenTrip")]
     partial class OpenTrip
     {
         /// <inheritdoc />
@@ -541,6 +541,11 @@ namespace Basket.Api.Data.Migrations
                     b.Property<DateTimeOffset>("FinishedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("finished_at");
+
+                    b.Property<string>("Kind")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("kind");
 
                     b.Property<int>("Listings")
                         .HasColumnType("integer")
