@@ -19,6 +19,7 @@ const MESSAGES = {
   load: 'Could not load the list. Check your connection and try again.',
   add: 'Could not add that. Try again.',
   update: 'Could not update that item. It is back as it was.',
+  boughtAt: 'Could not change the shop. It is back as it was.',
   remove: 'Could not delete that item.',
   close: 'Could not finish the trip. The list is as it was. Try again.',
   closeChanged: 'The list just changed. Check it and tap Done shopping again.',
@@ -118,6 +119,8 @@ export const ListStore = signalStore(
             checked,
             checkedAt: checked ? new Date().toISOString() : null,
             checkedBy: checked && me ? {id: me.id, name: me.displayName} : null,
+            // The server records the shop at the tick (the pick, else the plan's); until it answers, show the pick.
+            boughtStore: checked ? (item.boughtStore ?? item.store) : null,
           };
           replace(optimistic);
           try {
@@ -125,6 +128,19 @@ export const ListStore = signalStore(
           } catch {
             replace(item);
             toast.error(MESSAGES.update);
+          }
+        },
+
+        /** Changes where a ticked item was bought; shown at once and put back if the server refuses. */
+        async setBoughtStore(item: ListItem, shop: StoreId): Promise<boolean> {
+          replace({...item, boughtStore: shop});
+          try {
+            replace(await api.setBoughtAt(item.id, shop));
+            return true;
+          } catch {
+            replace(item);
+            toast.error(MESSAGES.boughtAt);
+            return false;
           }
         },
 

@@ -863,7 +863,7 @@ namespace Basket.Api.Data.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
-                    b.Property<DateTimeOffset>("ClosedAt")
+                    b.Property<DateTimeOffset?>("ClosedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("closed_at");
 
@@ -884,11 +884,17 @@ namespace Basket.Api.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ClosedAt");
-
                     b.HasIndex("Source", "ExternalId")
                         .IsUnique()
                         .HasFilter("external_id IS NOT NULL");
+
+                    b.HasIndex(new[] { "ClosedAt" }, "IX_trip_closed_at");
+
+                    b.HasIndex(new[] { "ClosedAt" }, "ux_trip_open")
+                        .IsUnique()
+                        .HasFilter("closed_at IS NULL");
+
+                    NpgsqlIndexBuilderExtensions.AreNullsDistinct(b.HasIndex(new[] { "ClosedAt" }, "ux_trip_open"), false);
 
                     b.ToTable("trip", (string)null);
                 });
@@ -900,6 +906,11 @@ namespace Basket.Api.Data.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<string>("BoughtStore")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("bought_store");
+
                     b.Property<DateTimeOffset?>("CheckedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("checked_at");
@@ -907,6 +918,10 @@ namespace Basket.Api.Data.Migrations
                     b.Property<Guid?>("CheckedByUserId")
                         .HasColumnType("uuid")
                         .HasColumnName("checked_by_user_id");
+
+                    b.Property<Guid?>("ListItemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("list_item_id");
 
                     b.Property<Guid?>("ProductId")
                         .HasColumnType("uuid")
@@ -930,6 +945,10 @@ namespace Basket.Api.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CheckedByUserId");
+
+                    b.HasIndex("ListItemId")
+                        .IsUnique()
+                        .HasFilter("list_item_id IS NOT NULL");
 
                     b.HasIndex("ProductId");
 
@@ -1216,6 +1235,11 @@ namespace Basket.Api.Data.Migrations
                     b.HasOne("Basket.Api.Data.AppUser", null)
                         .WithMany()
                         .HasForeignKey("CheckedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Basket.Api.Data.ListItem", null)
+                        .WithMany()
+                        .HasForeignKey("ListItemId")
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("Basket.Api.Data.Product", null)

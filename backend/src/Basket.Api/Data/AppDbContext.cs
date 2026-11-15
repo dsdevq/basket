@@ -72,7 +72,12 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
         {
             trip.ToTable("trip");
             trip.HasKey(t => t.Id);
-            trip.HasIndex(t => t.ClosedAt);
+            trip.HasIndex(t => t.ClosedAt, "IX_trip_closed_at");
+            // At most one open trip (no closed_at): the nulls count as one value, so a second one cannot be started.
+            trip.HasIndex(t => t.ClosedAt, "ux_trip_open")
+                .IsUnique()
+                .AreNullsDistinct(false)
+                .HasFilter("closed_at IS NULL");
             trip.Property(t => t.Source).HasMaxLength(16);
             trip.Property(t => t.ExternalId).HasMaxLength(64);
             trip.Property(t => t.Total).HasPrecision(10, 2);
@@ -90,6 +95,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             item.HasIndex(i => i.TripId);
             item.Property(i => i.Store).HasConversion<string>().HasMaxLength(16);
             item.HasOne<Product>().WithMany().HasForeignKey(i => i.ProductId).OnDelete(DeleteBehavior.SetNull);
+            item.Property(i => i.BoughtStore).HasConversion<string>().HasMaxLength(16);
+            // The list line it records: gone (set null) once the line leaves the list. A line has at most one record in the open trip.
+            item.HasOne<ListItem>().WithMany().HasForeignKey(i => i.ListItemId).OnDelete(DeleteBehavior.SetNull);
+            item.HasIndex(i => i.ListItemId).IsUnique().HasFilter("list_item_id IS NOT NULL");
         });
 
         builder.Entity<Invite>(invite =>

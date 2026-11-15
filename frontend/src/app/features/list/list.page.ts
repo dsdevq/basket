@@ -160,8 +160,8 @@ const USUAL_SHOWN = 5;
         (swipeTrailingAction)="remove(item)"
         class="[&_.truncate]:overflow-visible [&_.truncate]:whitespace-normal [&_.truncate]:break-words"
       >
-        @if (item.store) {
-          <cmn-tag meta variant="neutral">{{ storeName(item.store) }}</cmn-tag>
+        @if (shop(item); as name) {
+          <cmn-tag meta variant="neutral">{{ name }}</cmn-tag>
         }
         <cmn-checkbox
           [checked]="item.checked"
@@ -247,8 +247,10 @@ export class ListPage implements OnInit {
     void this.store.addProduct(productId, null);
   }
 
-  protected storeName(store: StoreId): string {
-    return STORE_NAMES[store];
+  /** The shop chip of a row: where a ticked line was bought, else the shop an open line was picked from. */
+  protected shop(item: ListItem): string | null {
+    const store: StoreId | null = item.checked ? item.boughtStore : item.store;
+    return store ? STORE_NAMES[store] : null;
   }
 
   protected toggle(item: ListItem, checked: boolean): void {

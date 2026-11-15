@@ -66,6 +66,7 @@ function line(id: string, productId: string, store: StoreId | null): ListItem {
     productId,
     store,
     imageUrl: null,
+    boughtStore: null,
   };
 }
 

@@ -9,17 +9,24 @@ export const FROZEN_NOW = new Date('2026-11-06T10:00:00Z');
 
 const OWNER = {authenticated: true, user: {id: 'u1', displayName: 'Anna', role: 'owner'}};
 const GUEST = {authenticated: false, user: null};
-const ITEMS: {text: string; checked: boolean; productId?: string; store?: string}[] = [
+const ITEMS: {
+  text: string;
+  checked: boolean;
+  productId?: string;
+  store?: string;
+  boughtStore?: string;
+}[] = [
   {text: 'Milk', checked: false},
   {text: 'Bread', checked: false},
   {text: 'Apples', checked: false},
-  {text: 'Rice', checked: true},
+  {text: 'Rice', checked: true, boughtStore: 'lidl'},
   {text: 'Whole milk 2L', checked: false, productId: 'p1', store: 'tesco'},
 ].map((item, i) => ({
   id: `item-${i}`,
   ...item,
   productId: item.productId ?? null,
   store: item.store ?? null,
+  boughtStore: item.boughtStore ?? null,
   imageUrl: null,
   addedAt: '2026-11-03T09:00:00Z',
   addedBy: {id: 'u1', name: 'Anna'},

@@ -20,6 +20,7 @@ function item(id: string, over: Partial<ListItem> = {}): ListItem {
     productId: null,
     store: null,
     imageUrl: null,
+    boughtStore: null,
     ...over,
   };
 }
@@ -107,6 +108,71 @@ describe('ListStore', () => {
     resolve({...original, checked: true, checkedAt: '2026-11-03T10:05:00Z', checkedBy: ME});
     await pending;
     expect(store.items()[0]?.checkedAt).toBe('2026-11-03T10:05:00Z');
+  });
+
+  it('shows the shop a line was picked from on a tick at once, and none on an untick', async () => {
+    const picked = item('a', {productId: 'milk', store: 'aldi'});
+    const never = new Promise<ListItem>(() => undefined);
+    const {store} = setup({
+      items: vi.fn().mockResolvedValue([picked]),
+      setChecked: vi.fn().mockReturnValue(never),
+    });
+    await store.load();
+
+    void store.toggle(picked, true);
+    expect(store.items()[0]).toMatchObject({checked: true, boughtStore: 'aldi'});
+    void store.toggle(store.items()[0], false);
+    expect(store.items()[0]).toMatchObject({checked: false, boughtStore: null});
+  });
+
+  it('keeps the shop the server recorded at the tick', async () => {
+    const original = item('a', {productId: 'milk'});
+    const ticked = {
+      ...original,
+      checked: true,
+      checkedAt: '2026-11-03T10:05:00Z',
+      checkedBy: ME,
+      boughtStore: 'lidl' as const,
+    };
+    const {store} = setup({
+      items: vi.fn().mockResolvedValue([original]),
+      setChecked: vi.fn().mockResolvedValue(ticked),
+    });
+    await store.load();
+
+    await store.toggle(original, true);
+
+    expect(store.items()[0]?.boughtStore).toBe('lidl');
+  });
+
+  it('changes where a ticked line was bought at once and keeps the server answer', async () => {
+    const ticked = item('a', {checked: true, boughtStore: 'lidl'});
+    let resolve!: (value: ListItem) => void;
+    const setBoughtAt = vi.fn().mockReturnValue(new Promise<ListItem>(r => (resolve = r)));
+    const {store} = setup({items: vi.fn().mockResolvedValue([ticked]), setBoughtAt});
+    await store.load();
+
+    const pending = store.setBoughtStore(ticked, 'tesco');
+    expect(store.items()[0]?.boughtStore).toBe('tesco');
+    resolve({...ticked, boughtStore: 'tesco'});
+
+    expect(await pending).toBe(true);
+    expect(setBoughtAt).toHaveBeenCalledWith('a', 'tesco');
+    expect(store.items()[0]?.boughtStore).toBe('tesco');
+  });
+
+  it('puts the old shop back and says so when the change is refused', async () => {
+    const ticked = item('a', {checked: true, boughtStore: 'lidl'});
+    const {store, toast} = setup({
+      items: vi.fn().mockResolvedValue([ticked]),
+      setBoughtAt: vi.fn().mockRejectedValue(new Error('nope')),
+    });
+    await store.load();
+
+    expect(await store.setBoughtStore(ticked, 'tesco')).toBe(false);
+
+    expect(store.items()[0]?.boughtStore).toBe('lidl');
+    expect(toast.error).toHaveBeenCalled();
   });
 
   it('ignores a refresh that was read before a tick landed', async () => {
