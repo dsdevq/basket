@@ -2223,7 +2223,10 @@ until it is pointed at this (it replaces the source of the rows, not the sheet).
   private method of `ServerCandidates` (narrowing a shop's catalog to the rows worth comparing, a row's title and size) moved to
   `CatalogRows`, which both the candidate search and this endpoint call, so the two cannot disagree about which rows are compared.
 - **What is looked up.** The source row taken as a product (its brand and name, barcode, category, own size fields), against the live rows of
-  every other shop, with item 7's narrowing and its 300-rows-per-shop cap. The source's own shop is not in the answer: an equivalent in the
+  every other shop, with item 7's narrowing and its 300-rows-per-shop cap. The narrowing's key word comes from the source's unbranded
+  name, not from the brand-prefixed title the matcher compares, because the shops keep a brand in a field of its own and the other
+  shops' name column then omits it (Lidl "Baked Beans" by Heinz 415 g still finds Tesco "Baked Beans" by Heinz 415 g); the candidate
+  search keeps its own key word. The source's own shop is not in the answer: an equivalent in the
   same shop is a different question. A discontinued source is still answered (as the detail is); discontinued rows are never offered.
 - **Top 3 per shop.** Ordered by matcher score (barcode 100, name and size 50-90, generic 25-49), then rows with a usable unit price before
   those without, then the lower unit price, then name and id, so the answer is the same every time until a sweep changes the catalog. Every
@@ -2245,6 +2248,6 @@ until it is pointed at this (it replaces the source of the rows, not the sheet).
 - **Screens.** No route or page template changed, so no screen baseline changes (baselines are only ever rewritten by the Update screen
   baselines workflow).
 - **Tests.** `CatalogEquivalentsTests` against Postgres (shape and order of shops, unit prices and differences, the cap of 3 with the lowest score dropped, the tie order of equal scores (comparable price first, cheaper first, stale last),
-  the own shop left out, size and pack never different, multipack per litre, barcode match and mismatch, stale / out of stock / no price
+  the own shop left out, a brand held in its own field or written in the name, size and pack never different, multipack per litre, barcode match and mismatch, stale / out of stock / no price
   flags, discontinued rows and source, no-size source, nothing written, unknown id, who may read), `AuthGuardTests` (401 signed out), the
   frontend `CatalogApi` spec. Every product is invented; no real data or token is in this public repository.
