@@ -1600,7 +1600,7 @@ another. So i get predictable list by what is closest to me."
 - **One order per chain.** Lidl, Aldi, Tesco and Dunnes each have a seeded list of sections in walking order, in code
   (`SeededSectionOrder`): Fruit & veg, Bakery, Meat & fish, Dairy & eggs, then Frozen, Cupboard, Drinks (Tesco and Dunnes put Frozen
   after Drinks), Household, Health & beauty, Pet, and Other last. The order is a typical guess for a shop of that chain, not a
-  floor plan; the order learned from trips (#43) replaces it for a store once that store has enough trips.
+  floor plan; the order learned from trips (#43, below) replaces it for a store once that store has enough trips.
 - **The unit is the product's category.** A product's section comes from the shop-page breadcrumb kept on its listing (#41), read
   from the innermost part outward, so "Fresh Food > Milk" is Dairy & eggs and not Fruit & veg. A product with no category, or one
   no section claims, is in Other and sorts last. Matching is by plain keywords, fixed in code, and a keyword counts only as a whole
@@ -1619,9 +1619,8 @@ per section.
 - **Borrowed pattern, named:** the sectioned shopping list of AnyList and the Tesco app (items under department headers, in the
   store's aisle order). On the library side it is the page template's own `cmn-list-section` of `cmn-list-item-row`, one section
   per header; no new component, no new interaction, nothing to drag or enter.
-- **Seeded order, today.** The order is `SeededSectionOrder` (#42) for the shop's chain; no order is learned yet (#43), so this is
-  the only source. When #43 lands, `ByShopBuilder.Group` is the one place that swaps the seed for a store's learned order where it
-  has one. The category of a line is the one on its listing at that shop (#41), as the seed reads it, so the same product can sit
+- **Seeded order, then learned.** The order is `SeededSectionOrder` (#42) for the shop's chain; since #43 (below) `ByShopBuilder.Group`
+  swaps the seed for a store's learned order where it has one. The category of a line is the one on its listing at that shop (#41), as the seed reads it, so the same product can sit
   in different sections at two shops, which is right: the walk is one shop's.
 - **The server sorts, the page only cuts.** `ByShopBuilder.Group` orders a shop's lines by section rank, stable, so inside a
   section lines stay in the order they were added to the list. Each `ByShopLine` carries its `section` ("Other" for a product with
@@ -1640,6 +1639,46 @@ per section.
   with different orders) and `PlanTests` (the pair split in walk order). Frontend: `walkSections`, and both pages against recorded
   responses (headers, order, shop total). The e2e fixtures for `by-shop-complete` and `plan-split` now carry sections; their
   baselines are rendered by the Update screen baselines workflow on the PR branch, never committed by hand.
+
+## A store's section order learned from the order items are checked off (2026-11-15, issue #43, epic #25)
+
+Owner's words, as in the seed: "in lidl all the products are almost in the same position - what i mean is that first of all there is
+fruit section then meat and so on and so on. And once my partner drafts the list - I wanted to see it sorted according to what goes
+after another. So i get predictable list by what is closest to me." The seeded order (#42) is a typical guess; the order the owner
+actually walks is in the trips he ticks off, so a store's walk is learned from them and replaces the seed once there are enough.
+
+- **Borrowed pattern, named:** the learned shopping order of Listonic (it learns which categories are checked off first and orders the
+  list's categories that way) and Grocery - Smart Shopping List (it learns the route from the order items are checked off). Nothing is entered and no interaction is added: the owner shops as before and
+  the order follows.
+- **The unit is the section.** The tick of a line says which section the shop keeps it in, by the category of its listing at the shop it
+  was bought at (`trip_item.product_id` and `bought_store` joined to the listing, then `SeededSectionOrder.SectionOf`, as #42 and #44
+  read it). A free-text line, a line with no shop, one whose page has no category, and "Other" teach nothing. The category is the
+  listing's today, not as it was on the day of the trip.
+- **The rule for enough trips.** A trip counts for a store only if it shows a walk: at least **4** lines bought at that store, in at
+  least **3** named sections, ticked over at least **3 minutes** from first to last (a list ticked off in one go on the sofa has no
+  order in it). A store's order is learned once it has at least **3** such trips, from its latest **10** (a shop moves its shelves,
+  so old walks fade). Below 3, that store keeps the seeded order; each store decides on its own. Only trips closed on the list count; a
+  Lidl Plus receipt has no tick times, and the open trip is not closed yet. The numbers are constants in `LearnedSectionOrder`.
+- **How the order is made.** In one trip a section sits where its middle tick falls (one stray tick does not move it). Across trips
+  every pair of sections is a vote (this one came before that one) and a section ranks by the pairs it wins minus the pairs it loses
+  (Copeland's rule), because a trip rarely visits every section; ties fall back on the seeded order. One odd trip among several does
+  not flip the order. A section seen in fewer than **2** of the counted trips is not placed by the learning; it keeps its seeded place
+  after the learned sections, and "Other" is last.
+- **Derived on every read, no migration.** Nothing is stored: `WalkOrderLoader` reads the latest 60 closed list trips and their ticks,
+  `LearnedSectionOrder` decides, and a trip closed today counts at once. The ticks, the shop and the product are already on `trip_item`
+  (open trip, #36 and #157), so the order is a view of data kept anyway. The cost is a few small queries per plan read; if it ever
+  shows, caching or a stored summary is the follow-up, and that would be a migration for the owner's go.
+- **Where it applies.** `WalkOrders` is the one place the choice is made (learned for a store that has enough trips, else seeded) and
+  `ByShopBuilder.Group` takes it, as its comment in #44 said it would: By shop's split and the Plan tab's two-shop split are in the
+  learned order with no change to the pages, which already cut the server's order into sections. `GET /api/walk/order` (signed-in
+  people only, read-only) says per store whether the order is `learned` or `seeded`, from how many `trips`, and its `sections`.
+- **Not in this change:** a screen that shows where an order came from or lets anyone edit it, a learned order for the List tab (its
+  lines are not tied to a shop until one is chosen), and sorting inside a section (lines keep the order they were added in).
+- **Tests.** `LearnedSectionOrderTests`, on recorded tick sequences: three walking trips replace the seed and the unseen sections
+  follow in seeded order, two trips do not, a sofa tick and trips with too few lines or sections do not count, other shops' lines and
+  "Other" are left out, one odd trip does not flip the order, partial trips combine, a section seen once is not placed, only the latest
+  ten count, each store learns on its own; and over HTTP, closed trips in the database change `/api/walk/order` and the By shop split.
+  The auth guard lists the new route. No screen changes, so no baseline moves.
 
 ## Tesco pages linked for Golden kiwi and Salt (2026-11-14)
 

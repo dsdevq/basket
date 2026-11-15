@@ -44,7 +44,7 @@ public sealed record ByShopStore(
 
 /// <summary>
 /// The lines bought at one shop in the split, with what they cost together, in the order that shop is walked: section by section
-/// (<see cref="SeededSectionOrder"/>), the order the lines were added within a section.
+/// (<see cref="WalkOrders"/>), the order the lines were added within a section.
 /// </summary>
 public sealed record ByShopGroup(string Store, string StoreName, decimal Total, IReadOnlyList<ByShopLine> Lines);
 
@@ -75,8 +75,9 @@ public sealed record ByShopResponse(
 /// </summary>
 public static class ByShopBuilder
 {
-    public static ByShopResponse Build(PlanResponse plan)
+    public static ByShopResponse Build(PlanResponse plan, WalkOrders? walk = null)
     {
+        walk ??= WalkOrders.Seeded;
         var stores = Stores.All.Select(store => Store(store.Slug(), store.DisplayName(), plan.Items)).ToList();
 
         var cheapest = stores.Where(s => s.Complete).OrderBy(s => s.Total).Select(s => s.Store).FirstOrDefault();
@@ -85,7 +86,7 @@ public static class ByShopBuilder
             stores = stores.Select(s => s.Store == cheapest ? s with { Cheapest = true } : s).ToList();
         }
 
-        var split = Split(plan.Items, stores.FirstOrDefault(s => s.Cheapest));
+        var split = Split(plan.Items, stores.FirstOrDefault(s => s.Cheapest), walk);
         return new ByShopResponse(plan.AsOf, plan.StaleAfterDays, plan.Items.Count, stores, split);
     }
 
@@ -142,7 +143,7 @@ public static class ByShopBuilder
         return packs.Count > 1 && (packs.Any(p => p is null) || packs.Distinct().Count() > 1);
     }
 
-    private static ByShopSplit Split(IReadOnlyList<PlanItem> items, ByShopStore? cheapest)
+    private static ByShopSplit Split(IReadOnlyList<PlanItem> items, ByShopStore? cheapest, WalkOrders walk)
     {
         var groups = new List<ByShopGroup>();
         var unplaced = new List<PlanBlocker>();
@@ -155,7 +156,7 @@ public static class ByShopBuilder
                 .ToList();
             if (lines.Count > 0)
             {
-                groups.Add(Group(store, lines));
+                groups.Add(Group(store, lines, walk));
             }
         }
 
@@ -171,12 +172,13 @@ public static class ByShopBuilder
 
     /// <summary>
     /// One shop's group with its lines in walk order. The sort is stable, so within a section the lines stay in the order they were
-    /// added to the list. The one place the walk is applied, shared with the two-shop split.
+    /// added to the list. The one place the walk is applied, shared with the two-shop split. The order is the shop's learned one
+    /// where it has enough trips (<see cref="WalkOrders"/>), the seeded one where not.
     /// </summary>
-    internal static ByShopGroup Group(Store store, IEnumerable<ByShopLine> lines)
+    internal static ByShopGroup Group(Store store, IEnumerable<ByShopLine> lines, WalkOrders walk)
     {
-        var walk = lines.OrderBy(l => SeededSectionOrder.RankOfSection(store, l.Section)).ToList();
-        return new ByShopGroup(store.Slug(), store.DisplayName(), walk.Sum(l => l.Price), walk);
+        var ordered = lines.OrderBy(l => walk.RankOfSection(store, l.Section)).ToList();
+        return new ByShopGroup(store.Slug(), store.DisplayName(), ordered.Sum(l => l.Price), ordered);
     }
 
     internal static ByShopLine Line(PlanItem item, PlanStorePrice entry)
