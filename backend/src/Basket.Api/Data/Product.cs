@@ -160,6 +160,16 @@ public enum PullOutcome
     Failed,
 }
 
+/// <summary>What a <see cref="PricePullRun"/> read: the shelf's linked pages, or the shop's whole catalog.</summary>
+public enum RunKind
+{
+    /// <summary>The products on the shelf: the nightly pull of linked pages, or a PC reader's posted prices.</summary>
+    Shelf,
+
+    /// <summary>A sweep of the shop's whole range, closed on the server (<c>Listings</c> is the live catalog, <c>Read</c> what it listed).</summary>
+    Sweep,
+}
+
 /// <summary>How one shop's part of one nightly run went. The page shows the latest one per shop.</summary>
 public sealed class PricePullRun
 {
@@ -172,6 +182,9 @@ public sealed class PricePullRun
     public DateTimeOffset FinishedAt { get; set; }
 
     public PullOutcome Outcome { get; set; }
+
+    /// <summary>Null on the rows written before the column existed: their kind is unknown and the catalog health view skips them.</summary>
+    public RunKind? Kind { get; set; }
 
     public int Listings { get; set; }
 

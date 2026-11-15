@@ -133,6 +133,7 @@ public sealed class PriceIngest(AppDbContext db, PriceRecorder recorder, TimePro
                 StartedAt = now,
                 FinishedAt = now,
                 Outcome = accepted == total ? PullOutcome.Ok : accepted > 0 ? PullOutcome.Partial : PullOutcome.Failed,
+                Kind = RunKind.Shelf,
                 Listings = total,
                 Read = accepted,
                 Message = accepted == total

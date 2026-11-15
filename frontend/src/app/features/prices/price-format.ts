@@ -118,8 +118,12 @@ export function suggestionLine(entry: ProductStore): string[] {
 export function detailLines(entry: ProductStore): string[] {
   const price = entry.price;
   const paid = lastPaidLine(entry.lastPaid);
+  // The shop's own sweeps stopped listing this page: whatever price is shown is the last one, and the way out is a new page.
+  const gone = entry.listing?.discontinued
+    ? [`${entry.name} no longer lists this product. Link another page`]
+    : [];
   if (!price) {
-    return [unreadLine(entry), paid].filter(Boolean);
+    return [...gone, unreadLine(entry), paid].filter(Boolean);
   }
   const read = [`Seen ${shortDate(price.observedOn)}`];
   if (paid) {
@@ -128,7 +132,7 @@ export function detailLines(entry: ProductStore): string[] {
   if (entry.listing?.error) {
     read.push(`Last read failed: ${entry.listing.error}`);
   }
-  return [priceParts(price).join(' · '), read.join(' · ')].filter(Boolean);
+  return [...gone, priceParts(price).join(' · '), read.join(' · ')].filter(Boolean);
 }
 
 const OUTCOME_TITLES: Record<RunOutcome, string> = {

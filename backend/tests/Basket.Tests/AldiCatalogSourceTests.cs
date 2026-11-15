@@ -57,8 +57,12 @@ public sealed class AldiCatalogSourceTests : IClassFixture<BasketFactory>
         await _factory.WithDb(async db =>
         {
             await db.StoreProducts.ExecuteDeleteAsync();
+            await db.PricePullRuns.ExecuteDeleteAsync();
             return 0;
         });
+
+    private Task<List<PricePullRun>> SweepRunsAsync() =>
+        _factory.WithDb(db => db.PricePullRuns.Where(r => r.Store == Store.Aldi).OrderBy(r => r.FinishedAt).ToListAsync());
 
     private Task<List<StoreProduct>> ProductsAsync() =>
         _factory.WithDb(db => db.StoreProducts.Where(p => p.Store == Store.Aldi).OrderBy(p => p.ExternalId).ToListAsync());
@@ -159,6 +163,9 @@ public sealed class AldiCatalogSourceTests : IClassFixture<BasketFactory>
 
         pull.Outcome.Should().Be(PullOutcome.Ok);
         pull.Message.Should().Contain("1 products were no longer listed");
+        var runs = await SweepRunsAsync();
+        runs.Should().HaveCount(2).And.OnlyContain(r => r.Kind == RunKind.Sweep && r.Outcome == PullOutcome.Ok);
+        (runs[1].Read, runs[1].Listings).Should().Be((9, 9), "the sweep listed nine and nine are live after the tenth was delisted");
         var products = await ProductsAsync();
         products.Where(p => p.DiscontinuedAt is not null).Select(p => p.ExternalId).Should().Equal(skus[9]);
     }
@@ -177,6 +184,8 @@ public sealed class AldiCatalogSourceTests : IClassFixture<BasketFactory>
         pull.Outcome.Should().Be(PullOutcome.Partial);
         pull.Message.Should().Contain("nothing was marked discontinued");
         (await ProductsAsync()).Should().OnlyContain(p => p.DiscontinuedAt == null);
+        var last = (await SweepRunsAsync()).Last();
+        (last.Kind, last.Outcome, last.Read, last.Listings).Should().Be((RunKind.Sweep, PullOutcome.Partial, 3, 10), "the sweep saw three of ten known and the live catalog is still ten");
     }
 
     [Theory]
@@ -193,6 +202,9 @@ public sealed class AldiCatalogSourceTests : IClassFixture<BasketFactory>
         pull.Message.Should().Contain($"HTTP {status}").And.Contain("does not try to get around a block");
         fetcher.Requested.Should().Equal(TreeUrl);
         (await ProductsAsync()).Should().BeEmpty();
+        var run = (await SweepRunsAsync()).Single();
+        (run.Kind, run.Outcome, run.Read).Should().Be((RunKind.Sweep, PullOutcome.Blocked, 0));
+        run.Message.Should().Contain($"HTTP {status}");
     }
 
     [Fact]
@@ -215,6 +227,8 @@ public sealed class AldiCatalogSourceTests : IClassFixture<BasketFactory>
         var products = await ProductsAsync();
         products.Should().HaveCount(60, "the first page was recorded before the refusal");
         products.Should().OnlyContain(p => p.DiscontinuedAt == null);
+        var run = (await SweepRunsAsync()).Last();
+        (run.Kind, run.Outcome, run.Read).Should().Be((RunKind.Sweep, PullOutcome.Blocked, 60), "the sweep row says how far it got");
     }
 
     [Fact]

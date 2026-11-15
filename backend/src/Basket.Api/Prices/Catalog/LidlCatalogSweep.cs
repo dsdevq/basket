@@ -261,6 +261,7 @@ public sealed class LidlCatalogSweep(
             StartedAt = started,
             FinishedAt = clock.GetUtcNow(),
             Outcome = outcome,
+            Kind = RunKind.Sweep,
             Read = seen,
             Message = PriceRecorder.Truncate(message, 500),
         });
@@ -312,6 +313,7 @@ public sealed class LidlCatalogJob(IServiceScopeFactory scopes, TimeProvider clo
                 StartedAt = now,
                 FinishedAt = now,
                 Outcome = PullOutcome.Failed,
+                Kind = RunKind.Sweep,
                 Message = PriceRecorder.Truncate($"Unexpected error in the catalog sweep: {message}", 500),
             });
             await db.SaveChangesAsync(ct);

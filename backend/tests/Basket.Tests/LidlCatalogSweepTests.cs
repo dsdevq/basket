@@ -161,6 +161,7 @@ public sealed class LidlCatalogSweepTests : IClassFixture<BasketFactory>
         {
             var run = await db.PricePullRuns.SingleAsync(r => r.Store == Store.Lidl);
             run.Outcome.Should().Be(PullOutcome.Ok);
+            run.Kind.Should().Be(RunKind.Sweep);
             run.Read.Should().Be(4);
             run.Listings.Should().Be(4);
             return 0;
@@ -239,6 +240,7 @@ public sealed class LidlCatalogSweepTests : IClassFixture<BasketFactory>
         {
             var run = await db.PricePullRuns.Where(r => r.Store == Store.Lidl).OrderByDescending(r => r.StartedAt).FirstAsync();
             run.Outcome.Should().Be(PullOutcome.Blocked);
+            run.Kind.Should().Be(RunKind.Sweep);
             run.Message.Should().Contain("429").And.Contain("does not try to get around");
             (await db.StoreProducts.CountAsync(p => p.DiscontinuedAt != null)).Should().Be(0);
             return 0;

@@ -115,6 +115,7 @@ public sealed class CatalogIngest(AppDbContext db, CatalogRecorder recorder, Tim
             StartedAt = startedAt,
             FinishedAt = clock.GetUtcNow(),
             Outcome = close.Outcome,
+            Kind = RunKind.Sweep,
             Listings = close.Live,
             Read = close.Touched,
             Message = close.Message,

@@ -2251,3 +2251,50 @@ until it is pointed at this (it replaces the source of the rows, not the sheet).
   the own shop left out, a brand held in its own field or written in the name, size and pack never different, multipack per litre, barcode match and mismatch, stale / out of stock / no price
   flags, discontinued rows and source, no-size source, nothing written, unknown id, who may read), `AuthGuardTests` (401 signed out), the
   frontend `CatalogApi` spec. Every product is invented; no real data or token is in this public repository.
+
+## Catalog 13/14: catalog health (2026-11-15, issue 139 of epic 126)
+
+Owner's direction, 2026-11-14: per-store catalog readers feed one combined catalog. The sweeps run elsewhere (the server's own for Lidl and
+Aldi, the PC reader's for Tesco and Dunnes, which issues 135 and 136 closed as not doable for now); this is the view that says whether each
+shop's sweep is alive. The owner approved one migration for it on 2026-11-15.
+
+- **Reused, not rebuilt.** No new door, route, identity or matcher. The health is a new field on the response the Prices page already reads,
+  `GET /api/products` (`stores[].catalog`), under the same policy as before (a signed-in person, or the fleet identity holding
+  `basket:catalog-read`). What it reads is what #128 put in place: the `price_pull_run` rows the sweeps already write through
+  `CatalogIngest.CompleteAsync` (the PC reader's `POST /api/ingest/catalog/complete` and the Lidl sweep), the `store_product` counts, and
+  `ReadBy(store)` to tell a shop the server sweeps from one the PC reads. The matcher is not touched. Nothing new is posted by the PC reader,
+  so the fleet identity and the `basket:price-ingest` scope are unchanged.
+- **One migration, one nullable column.** `PullRunKind` adds `price_pull_run.kind` (`varchar(16)`, null): `Shelf` (the nightly pull of
+  linked pages, and the PC reader's posted prices) or `Sweep` (a sweep of a shop's whole range). Nothing is rewritten: the rows written so far
+  stay null, and a null kind is an unknown kind that the health view skips, so a shop's health starts at "no sweep recorded" until its next
+  sweep writes a row with a kind. The alternative, guessing the kind from the message or from `listings`/`read`, would have been a heuristic
+  on free text. The migration is named after the latest on main (`20261114160000`).
+- **Who writes `Sweep`.** `CatalogIngest.CompleteAsync` (the PC reader's close), the Lidl sweep's own run rows (a blocked, partial or failed
+  sweep, and the job's failure row), and now the Aldi sweep. Aldi's run row used to be the nightly job's only, whose `listings` and `read` are
+  the linked pages', not the sweep's; `AldiCatalogSource` now also writes a `Sweep` row (`read` is what the sweep listed, `listings` the live
+  catalog after it), including for a refusal, an unreadable range and a partial sweep, beside the job's `Shelf` row. The Prices page's
+  existing "last run" line still shows the newest row of any kind, as before.
+- **What a shop's health is.** `state` is `never` (no sweep row: nothing is guessed, and the catalog's own counts are still shown), `fresh`
+  or `stale`. Stale means no sweep that finished `Ok` within `staleAfterDays`: **2** for a shop the server sweeps nightly, **9** for one the
+  PC reads about weekly (a week and two days of slack), counted from the last good sweep, so a run of failed or refused sweeps does not keep
+  a shop looking fresh. `lastSweep` is the newest sweep whatever its outcome, `lastOkAt` the newest good one, and `live`/`discontinued` the
+  catalog's counts. Only the last 90 days of sweep rows are read, so the query does not grow with the table.
+- **The 90 percent warning.** `shrunk` is set when the latest sweep listed (`read`) under 90 percent of what the last earlier `Ok` sweep
+  listed, the same bar as the discontinued guard (`CatalogIngest.DiscontinueGuardPercent`). The baseline is the last good sweep, not the one
+  before it, so two half-sweeps in a row are both flagged; a first sweep has nothing to shrink from. The guard itself is unchanged: a sweep
+  under the bar already delisted nothing and wrote a `Partial` or `Failed` run, and this makes that visible without opening the logs.
+- **Discontinued, visible.** Each shop reports `discontinued` (products its sweeps stopped listing) and `discontinuedOnShelf` (shelf pages
+  linked to one of them), and each listing carries `discontinued`, so a product row says "Lidl no longer lists this product. Link another
+  page" above its last price instead of showing that price as if it were current. Linking another page is the existing sheet; nothing is
+  unlinked or deleted for the person.
+- **The Prices page.** A "Shop catalogs" card under the products (one row per shop: when it was last swept and how many products that
+  listed, live and discontinued counts, and a tag: Up to date, Stale, Shrunk, Check for a sweep that was refused or came up short, No sweep
+  yet), and a warning above the list for a stale catalog and for a shrunk sweep, in the same alert the nightly-pull problems use. No new
+  route; the page template gained one card, so the Prices screen baselines change and are rewritten only by the Update screen baselines
+  workflow on this branch.
+- **Tests.** `CatalogHealthTests` (the pure rules: no sweep, the 2 and 9 day edges, only an `Ok` sweep keeps a shop fresh, the 90 percent
+  edge, the baseline, a first sweep; and `GET /api/products` against Postgres: counts, a null-kind row skipped, a shelf row not counted as a
+  sweep, a delisted shelf page flagged), the kind asserted on every writer (`PricePullJobTests`, `IngestTests`, `CatalogIngestTests`,
+  `LidlCatalogSweepTests`, `AldiCatalogSourceTests` for the Aldi sweep row in the complete, partial, blocked and part-way cases), and the
+  frontend `catalog-health-format`, `price-format` and `PricesPage` specs. Every shop, count and date is invented; no real data or token is
+  in this public repository.

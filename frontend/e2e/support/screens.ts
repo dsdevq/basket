@@ -110,6 +110,26 @@ function price(over: object) {
   };
 }
 
+/** A shop's catalog health on the frozen day (6 Nov): swept last night, or, when stale, ten days ago. */
+function catalogHealth(
+  state: 'fresh' | 'stale',
+  live: number,
+  discontinued: number,
+  onShelf: number
+) {
+  const swept = state === 'fresh' ? '2026-11-06T03:30:00Z' : '2026-10-27T03:30:00Z';
+  return {
+    state,
+    staleAfterDays: state === 'fresh' ? 2 : 9,
+    lastSweep: {finishedAt: swept, outcome: 'ok', seen: live, live, message: null},
+    lastOkAt: swept,
+    live,
+    discontinued,
+    discontinuedOnShelf: onShelf,
+    shrunk: null,
+  };
+}
+
 export const PRODUCTS = {
   products: [
     {
@@ -180,9 +200,24 @@ export const PRODUCTS = {
   ],
   stores: [
     {
+      store: 'lidl',
+      name: 'Lidl',
+      readBy: 'nightly',
+      catalog: catalogHealth('fresh', 690, 12, 0),
+      lastRun: null,
+    },
+    {
+      store: 'aldi',
+      name: 'Aldi',
+      readBy: 'nightly',
+      catalog: catalogHealth('fresh', 3554, 40, 1),
+      lastRun: null,
+    },
+    {
       store: 'tesco',
       name: 'Tesco',
       readBy: 'pc',
+      catalog: catalogHealth('stale', 5200, 80, 0),
       lastRun: {
         finishedAt: '2026-11-05T03:00:00Z',
         outcome: 'blocked',
@@ -190,6 +225,22 @@ export const PRODUCTS = {
         read: 0,
         message: 'www.tesco.ie answered HTTP 403.',
       },
+    },
+    {
+      store: 'dunnes',
+      name: 'Dunnes',
+      readBy: 'pc',
+      catalog: {
+        state: 'never',
+        staleAfterDays: 9,
+        lastSweep: null,
+        lastOkAt: null,
+        live: 0,
+        discontinued: 0,
+        discontinuedOnShelf: 0,
+        shrunk: null,
+      },
+      lastRun: null,
     },
   ],
 };

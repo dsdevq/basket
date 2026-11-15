@@ -15,8 +15,11 @@ public sealed record AddProductRequest(string? Name = null, string? Barcode = nu
 
 public sealed record LinkStoreRequest(string? Url, string? ImageUrl = null);
 
-/// <summary><see cref="Confirmed"/>: a person chose this page as the product's equivalent here (see <c>StoreListing.ConfirmedAt</c>).</summary>
-public sealed record ListingResponse(string Url, string? Title, DateTimeOffset? CheckedAt, string? Error, string? Category, string? ImageUrl, bool Confirmed);
+/// <summary>
+/// <see cref="Confirmed"/>: a person chose this page as the product's equivalent here (see <c>StoreListing.ConfirmedAt</c>).
+/// <see cref="Discontinued"/>: the shop's sweeps no longer list the catalog product this page is.
+/// </summary>
+public sealed record ListingResponse(string Url, string? Title, DateTimeOffset? CheckedAt, string? Error, string? Category, string? ImageUrl, bool Confirmed, bool Discontinued = false);
 
 /// <summary>
 /// One dated reading. <see cref="State"/>: <c>current</c> (usable today), <c>upcoming</c> (the offer starts later),
@@ -55,7 +58,7 @@ public sealed record ProductResponse(Guid Id, string Name, IReadOnlyList<Product
 
 public sealed record RunResponse(DateTimeOffset FinishedAt, string Outcome, int Listings, int Read, string? Message);
 
-public sealed record StoreStatusResponse(string Store, string Name, string ReadBy, RunResponse? LastRun);
+public sealed record StoreStatusResponse(string Store, string Name, string ReadBy, RunResponse? LastRun, CatalogHealthResponse Catalog);
 
 public static class ProductEndpoints
 {
@@ -81,6 +84,11 @@ public static class ProductEndpoints
         var today = Today(clock);
         var products = await db.Products.AsNoTracking().OrderBy(p => p.Name).ToListAsync(ct);
         var listings = (await db.StoreListings.AsNoTracking().ToListAsync(ct)).ToLookup(l => l.ProductId);
+        var delisted = (await db.StoreListings.AsNoTracking()
+                .Where(l => db.StoreProducts.Any(p => p.Id == l.StoreProductId && p.DiscontinuedAt != null))
+                .Select(l => l.Id)
+                .ToListAsync(ct))
+            .ToHashSet();
         var latest = await LatestObservationsAsync(db, ct);
         var connected = await db.LidlPlusConnections.AnyAsync(ct);
         var paid = (await db.PaidPrices.AsNoTracking().ToListAsync(ct))
@@ -104,7 +112,7 @@ public static class ProductEndpoints
                     store.Slug(),
                     store.DisplayName(),
                     store.ReadBy(),
-                    listing is null ? null : new ListingResponse(listing.Url, listing.Title, listing.LastCheckedAt, listing.LastError, listing.Category, listing.ImageUrl, listing.ConfirmedAt is not null),
+                    listing is null ? null : new ListingResponse(listing.Url, listing.Title, listing.LastCheckedAt, listing.LastError, listing.Category, listing.ImageUrl, listing.ConfirmedAt is not null, delisted.Contains(listing.Id)),
                     listing is not null && latest.TryGetValue(listing.Id, out var observation) ? ToPrice(observation, today) : null,
                     LastPaid(store, paid.GetValueOrDefault((product.Id, store)), connected),
                     proposals.GetValueOrDefault((product.Id, store)));
@@ -115,6 +123,7 @@ public static class ProductEndpoints
             .GroupBy(r => r.Store)
             .Select(g => g.OrderByDescending(r => r.FinishedAt).First())
             .ToListAsync(ct);
+        var health = await CatalogHealth.ForAllAsync(db, clock.GetUtcNow(), ct);
         var stores = Stores.All.Select(store =>
         {
             var run = runs.FirstOrDefault(r => r.Store == store);
@@ -122,7 +131,8 @@ public static class ProductEndpoints
                 store.Slug(),
                 store.DisplayName(),
                 store.ReadBy(),
-                run is null ? null : new RunResponse(run.FinishedAt, run.Outcome.ToString().ToLowerInvariant(), run.Listings, run.Read, run.Message));
+                run is null ? null : new RunResponse(run.FinishedAt, run.Outcome.ToString().ToLowerInvariant(), run.Listings, run.Read, run.Message),
+                health[store]);
         }).ToList();
 
         return Results.Ok(new { products = response, stores });

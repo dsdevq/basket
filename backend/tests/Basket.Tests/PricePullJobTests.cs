@@ -105,7 +105,7 @@ public sealed class PricePullJobTests : IClassFixture<BasketFactory>
             lidlObservation.PromoText.Should().Be("Lidl Plus deal");
             var runs = await db.PricePullRuns.ToListAsync();
             runs.Should().HaveCount(2);
-            runs.Should().OnlyContain(r => r.Outcome == PullOutcome.Ok && r.Listings == 1 && r.Read == 1);
+            runs.Should().OnlyContain(r => r.Outcome == PullOutcome.Ok && r.Listings == 1 && r.Read == 1 && r.Kind == RunKind.Shelf);
             (await db.StoreListings.ToListAsync()).Should().OnlyContain(l => l.LastError == null && l.Title == "Shop title" && l.LastCheckedAt != null);
             return 0;
         });
@@ -146,6 +146,7 @@ public sealed class PricePullJobTests : IClassFixture<BasketFactory>
             var observations = await db.PriceObservations.Join(db.StoreListings, o => o.ListingId, l => l.Id, (o, l) => new { l.Store, o.Price }).ToListAsync();
             observations.Should().BeEquivalentTo([new { Store = Store.Aldi, Price = (decimal?)1.19m }, new { Store = Store.Tesco, Price = (decimal?)1.35m }]);
             var failed = await db.PricePullRuns.SingleAsync(r => r.Store == Store.Lidl);
+            failed.Kind.Should().Be(RunKind.Shelf);
             failed.Outcome.Should().Be(PullOutcome.Failed);
             failed.Message.Should().Contain("lidl exploded");
             (await db.PricePullRuns.CountAsync(r => r.Outcome == PullOutcome.Ok)).Should().Be(2);
