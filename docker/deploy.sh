@@ -7,9 +7,6 @@
 #     older SHA is a rollback.
 #   - the secrets: docker/.env.sops, decrypted into the git-ignored docker/.env with the age key at SOPS_AGE_KEY_FILE
 #     (default ~/.config/sops/age/firstmate.agekey, a recipient beside the captain in .sops.yaml). Needs sops.
-#     TEMPORARY: until docker/.env.sops is committed, the old env file ($BASKET_ENV_FILE, default ~/.config/basket/env)
-#     is used instead and the script says so. The follow-up item bsk-fam-b6b has the operator produce the encrypted
-#     docker/.env.sops, makes it required and deletes this fallback (docs/vps-setup.md).
 # Gated by the platform contract (lifekit-stack scripts/platform-contract.py, on the box at /srv/lifekit-stack):
 # the declarations are checked before anything changes, the running containers after.
 # Idempotent: re-running redeploys the same image.
@@ -23,27 +20,22 @@ if ! [[ $IMAGE_TAG =~ ^[0-9a-f]{40}$ ]]; then
 fi
 export IMAGE_TAG
 
-if [[ -f docker/.env.sops ]]; then
-  KEYFILE="${SOPS_AGE_KEY_FILE:-$HOME/.config/sops/age/firstmate.agekey}"
-  if [[ ! -f $KEYFILE ]]; then
-    echo "error: no age key at $KEYFILE - cannot decrypt docker/.env.sops (set SOPS_AGE_KEY_FILE to another recipient's key)" >&2
-    exit 1
-  fi
-  if ! command -v sops >/dev/null 2>&1; then
-    echo "error: sops missing on PATH. Install from https://github.com/getsops/sops/releases" >&2
-    exit 1
-  fi
-  echo "[deploy] decrypt docker/.env.sops"
-  ( umask 077; SOPS_AGE_KEY_FILE="$KEYFILE" sops --decrypt --input-type dotenv --output-type dotenv docker/.env.sops > docker/.env )
-  ENV_FILE=docker/.env
-else
-  ENV_FILE="${BASKET_ENV_FILE:-$HOME/.config/basket/env}"
-  if [[ ! -f $ENV_FILE ]]; then
-    echo "error: no docker/.env.sops and no env file at $ENV_FILE (docs/vps-setup.md)" >&2
-    exit 1
-  fi
-  echo "[deploy] warn: docker/.env.sops is not committed yet - using $ENV_FILE. This fallback is temporary: bsk-fam-b6b makes the encrypted file required and deletes it" >&2
+if [[ ! -f docker/.env.sops ]]; then
+  echo "error: docker/.env.sops is missing - the deploy secrets come from it only (docs/vps-setup.md)" >&2
+  exit 1
 fi
+KEYFILE="${SOPS_AGE_KEY_FILE:-$HOME/.config/sops/age/firstmate.agekey}"
+if [[ ! -f $KEYFILE ]]; then
+  echo "error: no age key at $KEYFILE - cannot decrypt docker/.env.sops (set SOPS_AGE_KEY_FILE to another recipient's key)" >&2
+  exit 1
+fi
+if ! command -v sops >/dev/null 2>&1; then
+  echo "error: sops missing on PATH. Install from https://github.com/getsops/sops/releases" >&2
+  exit 1
+fi
+echo "[deploy] decrypt docker/.env.sops"
+( umask 077; SOPS_AGE_KEY_FILE="$KEYFILE" sops --decrypt --input-type dotenv --output-type dotenv docker/.env.sops > docker/.env )
+ENV_FILE=docker/.env
 
 compose=(docker compose -p basket -f docker/docker-compose.prod.yml --env-file "$ENV_FILE")
 
