@@ -32,9 +32,6 @@ public sealed class ServerCandidates(AppDbContext db, TimeProvider clock, ILogge
     /// <summary>Products loaded and matched together in a sweep-wide run.</summary>
     public const int BatchSize = 25;
 
-    /// <summary>Most catalog rows one product is compared with per shop; the matcher is cheap, the cap is for a name every row shares.</summary>
-    public const int MaxRowsPerStore = 300;
-
     /// <summary>Matches one product against the catalog of every shop where it has no confirmed page.</summary>
     public Task<ServerCandidateResult> RunForProductAsync(Guid productId, CancellationToken ct) => RunAsync([productId], null, ct);
 
@@ -112,7 +109,7 @@ public sealed class ServerCandidates(AppDbContext db, TimeProvider clock, ILogge
             var all = await db.MatchCandidates.Where(c => c.ProductId == product.Id && c.Store == store).ToDictionaryAsync(c => c.Url, StringComparer.Ordinal, ct);
             var seen = new HashSet<string>(StringComparer.Ordinal);
             var passed = new List<(StoreProduct Row, Proposal Proposal)>();
-            foreach (var row in await RowsAsync(store, facts, ct))
+            foreach (var row in await CatalogRows.NarrowAsync(db, store, facts, ct))
             {
                 if (!Stores.TryNormalizeProductUrl(store, row.Url, out var uri))
                 {
@@ -125,8 +122,8 @@ public sealed class ServerCandidates(AppDbContext db, TimeProvider clock, ILogge
                     continue;
                 }
 
-                var title = TitleOf(row);
-                var verdict = CandidateMatcher.Evaluate(facts, new CandidateFacts(title, row.Barcode, row.Category, SizeOf(row)));
+                var title = CatalogRows.TitleOf(row);
+                var verdict = CandidateMatcher.Evaluate(facts, new CandidateFacts(title, row.Barcode, row.Category, CatalogRows.SizeOf(row)));
                 if (verdict is not null)
                 {
                     passed.Add((row, new Proposal(url, title, row.Barcode, verdict)));
@@ -163,65 +160,15 @@ public sealed class ServerCandidates(AppDbContext db, TimeProvider clock, ILogge
         var rows = confirmed.Select(l => l.StoreProductId is { } id && linked.TryGetValue(id, out var row) ? row : null).Where(r => r is not null).Select(r => r!).ToList();
         var barcode = product.Barcode ?? rows.Select(r => r.Barcode).FirstOrDefault(b => b is not null);
         var category = confirmed.Select(l => l.Category).FirstOrDefault(c => c is not null) ?? rows.Select(r => r.Category).FirstOrDefault(c => c is not null);
-        var size = ProductSize.Parse(product.Name) is null ? rows.Select(SizeOf).FirstOrDefault(s => s is not null) : null;
+        var size = ProductSize.Parse(product.Name) is null ? rows.Select(CatalogRows.SizeOf).FirstOrDefault(s => s is not null) : null;
         return new ProductFacts(product.Name, barcode, category, size);
     }
-
-    /// <summary>The catalog rows of a shop worth comparing with the product (see the class summary), live ones only, in a fixed order.</summary>
-    private async Task<List<StoreProduct>> RowsAsync(Store store, ProductFacts facts, CancellationToken ct)
-    {
-        var shop = db.StoreProducts.AsNoTracking().Where(p => p.Store == store && p.DiscontinuedAt == null);
-        var rows = new Dictionary<Guid, StoreProduct>();
-        if (Gtin.TryNormalize(facts.Barcode, out var code))
-        {
-            foreach (var row in await shop.Where(p => p.Barcode == code).OrderBy(p => p.Name).ThenBy(p => p.Id).Take(MaxRowsPerStore).ToListAsync(ct))
-            {
-                rows[row.Id] = row;
-            }
-        }
-
-        var size = facts.Size ?? ProductSize.Parse(facts.Name);
-        if (size is not null && CandidateMatcher.KeyWord(facts.Name) is { } word)
-        {
-            var unit = size.Unit switch
-            {
-                SizeUnit.Mass => StoreProduct.Grams,
-                SizeUnit.Volume => StoreProduct.Millilitres,
-                _ => StoreProduct.Each,
-            };
-            var bySize = shop.Where(p => p.SizeUnit == unit && p.SizeAmount == size.Amount && p.SizePacks == size.Packs);
-            // The word is letters and digits only (the matcher's folding), so they carry no LIKE syntax.
-            var like = $"%{word}%";
-            foreach (var row in await bySize
-                         .Where(p => EF.Functions.ILike(p.Name, like))
-                         .OrderBy(p => p.Name).ThenBy(p => p.Id).Take(MaxRowsPerStore).ToListAsync(ct))
-            {
-                rows[row.Id] = row;
-            }
-        }
-
-        return rows.Values.OrderBy(r => r.Name, StringComparer.Ordinal).ThenBy(r => r.Id).ToList();
-    }
-
-    /// <summary>
-    /// The name a row is compared and shown under: the brand first when the name does not already carry it, because a brand is what
-    /// tells "Heinz baked beans" from "Branston baked beans" and the shops keep it in a field of its own.
-    /// </summary>
-    private static string TitleOf(StoreProduct row) =>
-        PriceRecorder.Truncate(
-            row.Brand is { Length: > 0 } brand && !row.Name.Contains(brand, StringComparison.OrdinalIgnoreCase) ? $"{brand} {row.Name}" : row.Name,
-            300)!;
-
-    private static ProductSize? SizeOf(StoreProduct row) =>
-        row.SizeAmount is { } amount && row.SizeUnit is { } unit
-            ? new ProductSize(unit == StoreProduct.Grams ? SizeUnit.Mass : unit == StoreProduct.Millilitres ? SizeUnit.Volume : SizeUnit.Count, amount, row.SizePacks)
-            : null;
 
     /// <summary>Makes the barcode-exact row the product's page in <paramref name="store"/>, unconfirmed.</summary>
     private async Task LinkAsync(Product product, Store store, StoreProduct row, string url, DateTimeOffset now, CancellationToken ct)
     {
         var listing = await ProductEndpoints.PointListingAsync(db, null, product.Id, store, url, now, ct);
-        listing.Title = PriceRecorder.Truncate(TitleOf(row), 300);
+        listing.Title = PriceRecorder.Truncate(CatalogRows.TitleOf(row), 300);
         listing.ImageUrl = row.ImageUrl;
         listing.Category = PriceRecorder.Truncate(row.Category, StoreListing.MaxCategoryLength);
     }

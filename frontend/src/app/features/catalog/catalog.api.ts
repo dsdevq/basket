@@ -3,7 +3,7 @@ import {inject, Injectable} from '@angular/core';
 import {firstValueFrom} from 'rxjs';
 
 import type {StoreId} from '../prices/prices.model';
-import type {CatalogProduct, CatalogSearchResponse} from './catalog.model';
+import type {CatalogEquivalents, CatalogProduct, CatalogSearchResponse} from './catalog.model';
 
 @Injectable({providedIn: 'root'})
 export class CatalogApi {
@@ -20,5 +20,10 @@ export class CatalogApi {
 
   public product(id: string): Promise<CatalogProduct> {
     return firstValueFrom(this.http.get<CatalogProduct>(`/api/catalog/${id}`));
+  }
+
+  /** The best three equivalents of a catalog product in each of the other shops, with unit prices beside the product's own. Read only. */
+  public equivalents(id: string): Promise<CatalogEquivalents> {
+    return firstValueFrom(this.http.get<CatalogEquivalents>(`/api/catalog/${id}/equivalents`));
   }
 }
