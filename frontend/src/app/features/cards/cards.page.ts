@@ -31,7 +31,7 @@ interface Row {
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <cmn-page kind="list">
+    <cmn-page [reload]="load" kind="list">
       @if (loading()) {
         <cmn-skeleton shape="section" />
       } @else if (failed()) {
@@ -70,7 +70,8 @@ export class CardsPage implements OnInit {
     void this.load();
   }
 
-  protected async load(): Promise<void> {
+  /** Also the pull to refresh of this tab root: the shell's pull gesture calls it and waits for the promise. */
+  protected readonly load = async (): Promise<void> => {
     try {
       const cards = await this.api.list();
       this.rows.set(
@@ -82,7 +83,7 @@ export class CardsPage implements OnInit {
     } finally {
       this.loading.set(false);
     }
-  }
+  };
 
   protected sublabel(row: Row): string {
     if (!row.card) {
