@@ -8,11 +8,30 @@ using Basket.Api.Prices.Catalog;
 namespace Basket.Api.Prices.Parsing;
 
 /// <summary>
-/// Reads lidl.ie for the catalog sweep: the category listing pages carry a tile per product with the price, the Lidl Plus
-/// price and the dates, and a product page gives the barcode.
+/// Reads lidl.ie. Lidl shows no everyday shelf prices online, only the offers of the week: the offer pages carry a
+/// tile per product with the price, the Lidl Plus price and the dates. The catalog sweep reads the category listing pages
+/// the same way, and a product page gives the barcode.
 /// </summary>
 public static partial class LidlParser
 {
+    /// <summary>The priced tiles of an offer or category page, keyed by Lidl's product number.</summary>
+    public static IReadOnlyDictionary<string, PriceQuote> ParseOfferTiles(string html)
+    {
+        var quotes = new Dictionary<string, PriceQuote>(StringComparer.Ordinal);
+        foreach (var tile in PageData.GridTiles(html))
+        {
+            var id = PageData.String(tile, "erpNumber") ?? PageData.String(tile, "productId");
+            if (id is null || TileQuote(tile) is not { } quote)
+            {
+                continue;
+            }
+
+            quotes[id] = quote;
+        }
+
+        return quotes;
+    }
+
     /// <summary>
     /// Every product tile of a category listing page as a catalog item, priced or not: Lidl lists its whole range online but
     /// shows a regular price on only part of it, so a tile with no price is a product without one, never an error. A tile

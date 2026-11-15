@@ -5,7 +5,6 @@ using Basket.Api.Prices.Fetching;
 using Basket.Tests.Support;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
@@ -131,15 +130,6 @@ public sealed class LidlCatalogSweepTests : IClassFixture<BasketFactory>
             (await db.PriceObservations.SingleAsync(o => o.ListingId == listingId)).Price.Should().Be(2.49m);
             return 0;
         });
-    }
-
-    [Fact]
-    public void No_price_pull_source_reads_lidl_product_pages_any_more()
-    {
-        using var scope = _factory.Services.CreateScope();
-
-        scope.ServiceProvider.GetServices<Basket.Api.Prices.Sources.IStorePriceSource>().Select(s => s.Store)
-            .Should().BeEquivalentTo([Store.Aldi], "Lidl's prices come from the catalog sweep");
     }
 
     [Fact]

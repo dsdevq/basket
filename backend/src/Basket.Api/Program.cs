@@ -59,6 +59,7 @@ builder.Services.AddHttpClient<IPageFetcher, PoliteFetcher>((services, client) =
     MaxAutomaticRedirections = 3,
     PooledConnectionLifetime = TimeSpan.FromMinutes(5),
 });
+builder.Services.AddScoped<IStorePriceSource, LidlPriceSource>();
 builder.Services.AddScoped<IStorePriceSource, AldiCatalogSource>();
 builder.Services.AddScoped<PriceRecorder>();
 builder.Services.AddScoped<PricePullJob>();

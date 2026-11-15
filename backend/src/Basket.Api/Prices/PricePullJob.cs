@@ -66,6 +66,10 @@ public sealed class PricePullJob(
             {
                 PriceRecorder.RecordFailure(listing, pull.Message ?? "Not read.", finished);
             }
+            else if (result.IsUnlisted)
+            {
+                continue;
+            }
             else if (result.Quote is { } quote)
             {
                 read++;

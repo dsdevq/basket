@@ -10,6 +10,11 @@ public sealed record ListingPull(PriceQuote? Quote, string? Error)
     public static ListingPull Priced(PriceQuote quote) => new(quote, null);
 
     public static ListingPull Failed(string error) => new(null, error);
+
+    /// <summary>The source's pages do not list this one (another reader prices it): nothing is recorded for it, not even a failure.</summary>
+    public static ListingPull Unlisted { get; } = new(null, null);
+
+    public bool IsUnlisted => Quote is null && Error is null;
 }
 
 public sealed record StorePull(PullOutcome Outcome, string? Message, IReadOnlyDictionary<Guid, ListingPull> Listings);

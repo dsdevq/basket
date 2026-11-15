@@ -176,14 +176,14 @@ passkey accounts; the family sign-in pages (step A4, below) have landed, while t
   his home connection, when the PC is on; basket builds no VPS-side Tesco/Aldi scraping and does not work round the block.
   Until a reading arrives their rows say "Waiting for the next PC read". The PC side is a separate fleet task; the write-only
   ingest endpoint is below, and `PriceRecorder` is the write path both the Lidl job and that endpoint use.
-- **Lidl's price comes from its offer pages** (superseded by "Catalog 14/14": the nightly catalog sweep prices linked pages now). lidl.ie shows no everyday prices, only the week's offers. The job reads
+- **Lidl's price comes from its offer pages.** lidl.ie shows no everyday prices, only the week's offers. The job reads
   three offer/category pages (`Prices:LidlOfferPages`), whose product tiles carry the price, the Lidl Plus price (no
-  login needed), the old price, the promo text and the dates. A linked product on none of them is read from its own page
-  (JSON-LD price and stock). Lidl's offers start and end on dates, so a reading keeps `ValidFrom`/`ValidUntil` (the
+  login needed), the old price, the promo text and the dates. A linked product on none of them is no longer read from its own page
+  (JSON-LD price and stock; see "Catalog 14/14"): the catalog sweep prices it. Lidl's offers start and end on dates, so a reading keeps `ValidFrom`/`ValidUntil` (the
   price's own window, the tile's store dates only when the price has none) and the page shows "from 12 Nov" or "ended"
   instead of an out-of-date price.
-  If an offer page could not be read or came back with no priced products, a product page without a price is a failed
-  reading (the last good price stays), not "no price", since the product may be on offer on the missing page.
+  If an offer page could not be read or came back with no priced products, the run says so (partial, or failed when no
+  page had products); a linked product the pages do not list is left as it is, never marked failed.
 - **Products are linked to shop pages by pasted address, not matched.** M2 stores `product` and one `store_listing` per
   shop (address checked against that shop's product-page shape, nothing else is ever fetched). Barcode/search matching
   with his confirmation is M3.
@@ -2179,16 +2179,16 @@ the shops whose catalog sweep runs; keep the work-list mode only as the daily fa
 (issue 129, `AldiCatalogSource`) and Lidl (issue 130, `LidlCatalogSweep`). Tesco and Dunnes are closed as not doable (issues 135 and 136),
 so their pages stay read one by one by the PC reader.
 
-- **Lidl: no per-product page read.** `LidlPriceSource` is gone, with its `Prices:LidlOfferPages` option. A linked Lidl page is priced by the
-  03:30 sweep: `CatalogRecorder` links an unlinked page whose address names a swept product and writes the day's observation through
-  `PriceRecorder`, the same row the old read wrote, with the Lidl Plus price, was price, promo and dates the listing tiles carry. The
-  03:00 price pull now has one source, Aldi's, whose sweep prices the pages it links. The one remaining Lidl product-page read is the capped
-  barcode read of the sweep (`Prices:LidlBarcodePagesPerNight`), which is a range read for the matcher, not a listing read. A Lidl page whose
-  product the sweep does not list gets no new reading and goes stale the way any unlisted product does (Promotions already
-  ignore readings older than 3 days). The per-listing readers go with the source: the offer-page and product-page parsers
-  (`ParseOfferTiles`, `ParseProductPage`), the breadcrumb and `og:image` readers only they used, and `ListingToCheck.NeedsCategory`; a Lidl
-  listing's category and photo now come from the sweep's tile (`wonCategoryPrimary`, `image`); the earlier sections that describe the
-  product-page and breadcrumb reads are history.
+- **Lidl: no per-product page read, the offer pages stay.** The Lidl source of the 03:00 price pull (`LidlPriceSource`) now reads only the
+  offer pages (`Prices:LidlOfferPages`: lidl-plus-offers, super-savers and the food page, one request each), as before. What is removed is the
+  per-product page read: both the fallback for a product on no offer page and the once-for-category read of a listed product's own page. A linked Lidl page
+  the offer pages do not list is left untouched by the pull (`ListingPull.Unlisted`): it is not marked failed and keeps what the sweep
+  gave it, because it is fed by the 03:30 catalog sweep, where `CatalogRecorder` links an unlinked page whose address names a swept product
+  and writes the day's observation through `PriceRecorder`, with the Lidl Plus price, was price, promo and dates the listing tiles carry.
+  The one remaining Lidl product-page read is the capped barcode read of the sweep (`Prices:LidlBarcodePagesPerNight`), which is a range
+  read for the matcher, not a listing read. The per-product parsers go: `ParseProductPage`, the breadcrumb and `og:image` readers only
+  it used, and `ListingToCheck.NeedsCategory`; a Lidl listing's category and photo come from the sweep's tile (`wonCategoryPrimary`, `image`);
+  the earlier sections that describe the product-page and breadcrumb reads are history.
 - **The live shop search is gone.** `GET /api/products/search` (a live request to lidl.ie's search page per typed query) and its parser
   `ParseSearchTiles` are removed, as "Add to shelf by catalog search" said they would be; the sheet searches the stored catalog
   (`GET /api/catalog/search`) and nothing else asks Lidl at request time.
@@ -2203,7 +2203,8 @@ so their pages stay read one by one by the PC reader.
   and the existing candidate matcher (`ServerCandidates`) unchanged.
 - **No migration, no owner step, no screen.** No page template changes (the Prices tab already says "Waiting for the next PC read" only
   for PC shops), so no screen baseline is touched.
-- **Tests.** `LidlCatalogSweepTests` (a linked Lidl page is linked and priced by the sweep and its own page is never requested; no price
-  pull source is registered for Lidl), `PricePullJobTests` (a failing or empty shop leaves the others alone, unchanged), the PC reader's
+- **Tests.** `LidlCatalogSweepTests` (a linked Lidl page is linked and priced by the sweep and its own page is never requested),
+  `PriceSourceTests` (the Lidl offer-page read; a product the pages do not list is left alone and no product page is requested),
+  `PricePullJobTests` (an unlisted listing is not marked failed; a failing or empty shop leaves the others alone), the PC reader's
   work-list, fleet-catalog, run and parse tests now on Dunnes and Tesco, with Aldi entries refused or skipped. Fixtures are invented
   products and addresses; no real data or token is in this public repository.

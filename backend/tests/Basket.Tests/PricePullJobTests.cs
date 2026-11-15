@@ -154,6 +154,33 @@ public sealed class PricePullJobTests : IClassFixture<BasketFactory>
     }
 
     [Fact]
+    public async Task A_listing_the_source_does_not_list_is_left_untouched_not_marked_failed()
+    {
+        await SeedAsync(("milk", Store.Lidl), ("bread", Store.Lidl));
+        At("2026-11-05T03:00:00Z");
+        var lidl = new FakeSource(Store.Lidl, l => new StorePull(
+            PullOutcome.Ok,
+            null,
+            l.ToDictionary(x => x.ListingId, x => x.Url.ToString().Contains("milk") ? ListingPull.Priced(Quote(1.29m)) : ListingPull.Unlisted)));
+
+        await Job(lidl).RunAsync(CancellationToken.None);
+
+        await _factory.WithDb(async db =>
+        {
+            var bread = await db.StoreListings.SingleAsync(l => l.Url.Contains("bread"));
+            bread.LastError.Should().BeNull();
+            bread.LastCheckedAt.Should().BeNull();
+            (await db.StoreListings.SingleAsync(l => l.Url.Contains("milk"))).LastCheckedAt.Should().NotBeNull();
+            (await db.PriceObservations.CountAsync()).Should().Be(1);
+            var run = await db.PricePullRuns.SingleAsync();
+            run.Outcome.Should().Be(PullOutcome.Ok);
+            run.Listings.Should().Be(2);
+            run.Read.Should().Be(1);
+            return 0;
+        });
+    }
+
+    [Fact]
     public async Task A_blocked_shop_is_recorded_as_blocked_with_no_prices_and_the_others_still_run()
     {
         await SeedAsync(("milk", Store.Tesco), ("milk", Store.Aldi));

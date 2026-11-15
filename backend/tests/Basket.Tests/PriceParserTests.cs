@@ -1,5 +1,4 @@
 using Basket.Api.Prices;
-using Basket.Api.Prices.Catalog;
 using Basket.Api.Prices.Parsing;
 using Basket.Tests.Support;
 using FluentAssertions;
@@ -9,24 +8,21 @@ namespace Basket.Tests;
 /// <summary>The parsers against pages recorded from lidl.ie and aldi.ie on 2026-11-05. No test touches the network.</summary>
 public sealed class PriceParserTests
 {
-    private static readonly IReadOnlyDictionary<string, CatalogItem> Offers = PricedTiles(Fixtures.Read("lidl-offers-page.html"));
-
-    private static Dictionary<string, CatalogItem> PricedTiles(string html) => LidlParser.ParseCatalogTiles(html)
-        .Where(item => item.ExternalId is not null && (item.Price is not null || item.LoyaltyPrice is not null))
-        .ToDictionary(item => item.ExternalId!);
+    private static readonly IReadOnlyDictionary<string, PriceQuote> Offers = LidlParser.ParseOfferTiles(Fixtures.Read("lidl-offers-page.html"));
 
     [Fact]
     public void Lidl_offer_tile_gives_price_lidl_plus_price_promo_and_dates()
     {
         var skewers = Offers["11115738"];
 
-        skewers.Name.Should().Be("VITASIA 10 Chicken Breast Skewers");
+        skewers.Title.Should().Be("VITASIA 10 Chicken Breast Skewers");
         skewers.Price.Should().Be(2.19m);
         skewers.LoyaltyPrice.Should().Be(2.19m);
         skewers.LoyaltyScheme.Should().Be("Lidl Plus");
         skewers.PromoText.Should().Be("Mix 'n' Match 2 for €4");
         skewers.ValidFrom.Should().Be(new DateOnly(2026, 8, 26));
         skewers.ValidUntil.Should().Be(new DateOnly(2026, 11, 11));
+        skewers.InStock.Should().BeTrue();
     }
 
     [Fact]
@@ -79,11 +75,11 @@ public sealed class PriceParserTests
     {
         // Oracle: Lidl writes a day boundary as 23:59:59Z (1788220799 is 2026-08-31T23:59:59Z, 1787616000 is 2026-08-25T00:00:00Z).
         // Dublin is on BST in August, so converting to local time would push the end to 1 Sep and the start to 25 Aug 01:00.
-        var priceWindow = PricedTiles(Tile("""{"erpNumber":"1","price":{"price":1.5},"regionsPrices":{"1":{"currentPrice":{"startDate":"2026-08-25T00:00:00Z","endDate":"2026-08-31T23:59:59Z"}}}}"""))["1"];
+        var priceWindow = LidlParser.ParseOfferTiles(Tile("""{"erpNumber":"1","price":{"price":1.5},"regionsPrices":{"1":{"currentPrice":{"startDate":"2026-08-25T00:00:00Z","endDate":"2026-08-31T23:59:59Z"}}}}"""))["1"];
         priceWindow.ValidFrom.Should().Be(new DateOnly(2026, 8, 25));
         priceWindow.ValidUntil.Should().Be(new DateOnly(2026, 8, 31));
 
-        var tileWindow = PricedTiles(Tile("""{"erpNumber":"2","price":{"price":1.5},"storeStartDate":1787616000,"storeEndDate":1788220799}"""))["2"];
+        var tileWindow = LidlParser.ParseOfferTiles(Tile("""{"erpNumber":"2","price":{"price":1.5},"storeStartDate":1787616000,"storeEndDate":1788220799}"""))["2"];
         tileWindow.ValidFrom.Should().Be(new DateOnly(2026, 8, 25));
         tileWindow.ValidUntil.Should().Be(new DateOnly(2026, 8, 31));
     }
@@ -117,8 +113,8 @@ public sealed class PriceParserTests
     [Fact]
     public void Lidl_page_without_tiles_gives_nothing()
     {
-        LidlParser.ParseCatalogTiles("<html><body>no grid here</body></html>").Should().BeEmpty();
-        LidlParser.ParseCatalogTiles("<div data-grid-data=\"{not json\"></div>").Should().BeEmpty();
+        LidlParser.ParseOfferTiles("<html><body>no grid here</body></html>").Should().BeEmpty();
+        LidlParser.ParseOfferTiles("<div data-grid-data=\"{not json\"></div>").Should().BeEmpty();
     }
 
     [Theory]
