@@ -28,22 +28,19 @@ is not acceptable, so basket uses 10000.
 needs `sops` and `age` installed; never use the captain's private key on the box, the deploy uses firstmate's
 (`~/.config/sops/age/firstmate.agekey`, or `SOPS_AGE_KEY_FILE`).
 
-Create it once from the existing plaintext env file, then commit it:
+It is committed and `docker/deploy.sh` requires it: a missing file fails the deploy, there is no other source for the
+secrets. To create it from scratch (a fresh install), write the plaintext first (`umask 077`), then encrypt it:
 
 ```sh
 sops encrypt --input-type dotenv --output-type dotenv --filename-override docker/.env.sops \
-  ~/.config/basket/env > docker/.env.sops
+  plaintext.env > docker/.env.sops
 ```
 
-For a fresh install write the plaintext first (`umask 077`): `PUBLIC_ORIGIN`, `POSTGRES_PASSWORD=$(openssl rand -hex 24)`
-and `BOOTSTRAP_TOKEN=$(openssl rand -base64 33 | tr '+/' '-_' | tr -d '=')`, then encrypt it as above and delete the
-plaintext. `BOOTSTRAP_TOKEN` is the owner's one-time sign-up secret (at least 32 characters). Keep it out of chat logs
+The plaintext holds `PUBLIC_ORIGIN`, `POSTGRES_PASSWORD=$(openssl rand -hex 24)`
+and `BOOTSTRAP_TOKEN=$(openssl rand -base64 33 | tr '+/' '-_' | tr -d '=')`; delete the plaintext after encrypting. `BOOTSTRAP_TOKEN` is the owner's one-time sign-up secret (at least 32 characters). Keep it out of chat logs
 and tickets: whoever has it while no user exists can register as owner.
 
 Change a value with `docker/secrets-edit.sh` (decrypts into `$EDITOR`, re-encrypts on save, leaves no plaintext).
-Until `docker/.env.sops` is committed, `docker/deploy.sh` falls back to `~/.config/basket/env` and says so. That fallback
-is temporary: the separate follow-up item `bsk-fam-b6b` has the operator produce the encrypted `docker/.env.sops`, makes it
-required, and deletes the fallback branch from `deploy.sh` and the old env file.
 
 To accept the fleet's machine identity, also add `FLEET_AGENT_AUTHORITY` and `FLEET_AGENT_BACKCHANNEL_AUTHORITY` (not
 secrets; `docker/.env.example` and `docs/decisions.md` "Fleet identity" say what each is). Both empty keeps the path off.
