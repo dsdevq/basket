@@ -55,7 +55,7 @@ const key = (productId: string, store: string | null): string => `${productId}|$
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <cmn-page kind="overview">
+    <cmn-page [reload]="pullReload" kind="overview">
       <div class="mb-cmn-4 md:max-w-md">
         <cmn-segmented
           [options]="options"
@@ -187,9 +187,14 @@ export class ShelfPage implements OnInit {
   }
 
   protected reload(quiet = false): void {
-    void this.habits.load();
-    void this.prices.load(quiet);
-    void this.list.load(quiet);
+    void this.loadAll(quiet);
+  }
+
+  /** Pull to refresh on this tab root: the shell's pull gesture calls it and waits for the promise. */
+  protected readonly pullReload = (): Promise<void> => this.loadAll();
+
+  private async loadAll(quiet = false): Promise<void> {
+    await Promise.all([this.habits.load(), this.prices.load(quiet), this.list.load(quiet)]);
   }
 
   protected rowKey(tile: ShelfTile): string {

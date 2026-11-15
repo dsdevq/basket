@@ -55,7 +55,7 @@ import {
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <cmn-page kind="list">
+    <cmn-page [reload]="reload" kind="list">
       @switch (store.status()) {
         @case ('loading') {
           <cmn-skeleton shape="section" />
@@ -199,6 +199,9 @@ export class PlanPage implements OnInit {
   protected readonly was = wasText;
   protected readonly tag = rowTag;
   protected readonly variant = tagVariant;
+
+  /** Pull to refresh on this tab root: the shell's pull gesture calls it and waits for the promise. */
+  protected readonly reload = (): Promise<void> => this.store.load();
 
   /** Prices change at most once a night, so the page re-reads when it opens and when it comes back into view. */
   public ngOnInit(): void {

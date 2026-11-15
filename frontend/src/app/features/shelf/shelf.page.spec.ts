@@ -1,5 +1,5 @@
 import {type ComponentFixture, TestBed} from '@angular/core/testing';
-import {CmnDrawerService, ToastService} from '@lifekit-hq/ui';
+import {CmnDrawerService, CmnPullRefreshService, ToastService} from '@lifekit-hq/ui';
 
 import {SessionStore} from '../../core/auth/session.store';
 import {HabitsApi} from '../habits/habits.api';
@@ -150,6 +150,16 @@ async function render(
 }
 
 describe('ShelfPage', () => {
+  it('registers a reload of the shelf, the list and the habits as the pull to refresh of the tab root', async () => {
+    const {fixture, listApi, pricesApi} = await render();
+
+    await TestBed.inject(CmnPullRefreshService).refresh();
+    await settle(fixture);
+
+    expect(pricesApi.all).toHaveBeenCalledTimes(2);
+    expect(listApi.items).toHaveBeenCalledTimes(2);
+  });
+
   afterEach(() => {
     TestBed.resetTestingModule();
   });

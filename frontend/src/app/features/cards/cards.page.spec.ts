@@ -1,6 +1,6 @@
 import {TestBed} from '@angular/core/testing';
 import {Router} from '@angular/router';
-import {CmnDrawerService} from '@lifekit-hq/ui';
+import {CmnDrawerService, CmnPullRefreshService, ToastService} from '@lifekit-hq/ui';
 import {of} from 'rxjs';
 
 import {CardsApi} from './cards.api';
@@ -45,6 +45,16 @@ async function render(list: ReturnType<typeof vi.fn>, saved: unknown = undefined
 describe('CardsPage', () => {
   afterEach(() => {
     TestBed.resetTestingModule();
+  });
+
+  it('registers its load as the pull to refresh of the tab root', async () => {
+    const list = vi.fn().mockResolvedValue([TESCO]);
+    const {settle} = await render(list);
+
+    await TestBed.inject(CmnPullRefreshService).refresh();
+    await settle();
+
+    expect(list).toHaveBeenCalledTimes(2);
   });
 
   it('lists the four shops, with the number hidden down to its last four', async () => {
@@ -110,5 +120,18 @@ describe('CardsPage', () => {
     await settle();
 
     expect(host.textContent).toContain('•••• 8923');
+  });
+
+  it('keeps the cards on screen when a pull fails, and says so in a toast', async () => {
+    const list = vi.fn().mockResolvedValueOnce([TESCO]).mockRejectedValue(new Error('offline'));
+    const {host, settle} = await render(list);
+    const error = vi.spyOn(TestBed.inject(ToastService), 'error');
+
+    await TestBed.inject(CmnPullRefreshService).refresh();
+    await settle();
+
+    expect(host.textContent).toContain('•••• 8923');
+    expect(host.textContent).not.toContain('Could not load your cards');
+    expect(error).toHaveBeenCalledOnce();
   });
 });

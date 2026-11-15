@@ -7,6 +7,7 @@ import {
   ListSectionComponent,
   PageComponent,
   SkeletonComponent,
+  ToastService,
 } from '@lifekit-hq/ui';
 import {firstValueFrom} from 'rxjs';
 
@@ -31,7 +32,7 @@ interface Row {
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <cmn-page kind="list">
+    <cmn-page [reload]="load" kind="list">
       @if (loading()) {
         <cmn-skeleton shape="section" />
       } @else if (failed()) {
@@ -61,6 +62,7 @@ export class CardsPage implements OnInit {
   private readonly api = inject(CardsApi);
   private readonly drawer = inject(CmnDrawerService);
   private readonly router = inject(Router);
+  private readonly toast = inject(ToastService);
 
   protected readonly rows = signal<readonly Row[]>([]);
   protected readonly loading = signal(true);
@@ -70,7 +72,8 @@ export class CardsPage implements OnInit {
     void this.load();
   }
 
-  protected async load(): Promise<void> {
+  /** Also the pull to refresh of this tab root: the shell's pull gesture calls it and waits for the promise. */
+  protected readonly load = async (): Promise<void> => {
     try {
       const cards = await this.api.list();
       this.rows.set(
@@ -78,11 +81,15 @@ export class CardsPage implements OnInit {
       );
       this.failed.set(false);
     } catch {
-      this.failed.set(true);
+      if (this.rows().length > 0) {
+        this.toast.error('Could not refresh your cards. Try again.');
+      } else {
+        this.failed.set(true);
+      }
     } finally {
       this.loading.set(false);
     }
-  }
+  };
 
   protected sublabel(row: Row): string {
     if (!row.card) {

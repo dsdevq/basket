@@ -1,5 +1,5 @@
 import {type ComponentFixture, TestBed} from '@angular/core/testing';
-import {ToastService} from '@lifekit-hq/ui';
+import {CmnPullRefreshService, ToastService} from '@lifekit-hq/ui';
 
 import {bought} from './by-shop-fixtures';
 import {PlanApi} from './plan.api';
@@ -127,6 +127,15 @@ const text = (host: HTMLElement, selector: string): string =>
 describe('PlanPage', () => {
   afterEach(() => {
     TestBed.resetTestingModule();
+  });
+
+  it('registers its load as the pull to refresh of the tab root', async () => {
+    const {api, fixture} = await render(RESPONSE);
+
+    await TestBed.inject(CmnPullRefreshService).refresh();
+    await settle(fixture);
+
+    expect(api.get).toHaveBeenCalledTimes(2);
   });
 
   it('says on top that no one shop covers the list, which shop is closest and what blocks it', async () => {
