@@ -140,11 +140,26 @@ public sealed class CatalogEquivalentsTests : IClassFixture<BasketFactory>
         var body = await GetAsync(owner, source.Id);
 
         body.GetProperty("stores").EnumerateArray().Select(s => s.GetProperty("store").GetString()).Should().NotContain("lidl");
-        var aldi = Shop(body, "aldi").GetProperty("items");
-        aldi.GetArrayLength().Should().BeLessThanOrEqualTo(3);
-        aldi[0].GetProperty("item").GetProperty("id").GetGuid().Should().Be(exact.Id);
-        var scores = aldi.EnumerateArray().Select(i => i.GetProperty("score").GetInt32()).ToList();
-        scores.Should().BeInDescendingOrder();
+        var aldi = Shop(body, "aldi");
+        Names(aldi).Should().Equal("Baked Beans 400 g", "Fancy Baked Beans Sauce 400 g", "Baked Beans Tomato Sauce Sweet 400 g");
+        aldi.GetProperty("items")[0].GetProperty("item").GetProperty("id").GetGuid().Should().Be(exact.Id);
+        aldi.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("score").GetInt32()).Should().Equal(90, 70, 66);
+    }
+
+    [Fact]
+    public async Task Rows_of_equal_score_put_a_comparable_price_first_then_the_cheaper_and_a_stale_row_last()
+    {
+        var owner = await SeedAsync();
+        var source = await AddAsync(Store.Lidl, "Baked Beans 400 g", 400, "g");
+        await AddAsync(Store.Aldi, "Baked Beans Alpha 400 g", 400, "g", price: 2.00m);
+        await AddAsync(Store.Aldi, "Baked Beans Beta 400 g", 400, "g", price: 1.00m, change: p => p.LastSeenAt = _factory.Clock.GetUtcNow().AddDays(-5));
+        await AddAsync(Store.Aldi, "Baked Beans Gamma 400 g", 400, "g", price: 1.50m);
+
+        var body = await GetAsync(owner, source.Id);
+
+        var aldi = Shop(body, "aldi");
+        aldi.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("score").GetInt32()).Distinct().Should().ContainSingle();
+        Names(aldi).Should().Equal("Baked Beans Gamma 400 g", "Baked Beans Alpha 400 g", "Baked Beans Beta 400 g");
     }
 
     [Fact]

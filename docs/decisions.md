@@ -2244,7 +2244,7 @@ until it is pointed at this (it replaces the source of the rows, not the sheet).
   this browses the catalog, the match sheet still owns decisions about a shelf product. Unknown id: 404.
 - **Screens.** No route or page template changed, so no screen baseline changes (baselines are only ever rewritten by the Update screen
   baselines workflow).
-- **Tests.** `CatalogEquivalentsTests` against Postgres (shape and order of shops, unit prices and differences, the cap of 3 and score order,
+- **Tests.** `CatalogEquivalentsTests` against Postgres (shape and order of shops, unit prices and differences, the cap of 3 with the lowest score dropped, the tie order of equal scores (comparable price first, cheaper first, stale last),
   the own shop left out, size and pack never different, multipack per litre, barcode match and mismatch, stale / out of stock / no price
   flags, discontinued rows and source, no-size source, nothing written, unknown id, who may read), `AuthGuardTests` (401 signed out), the
-  frontend `CatalogApi` and `catalog-format` specs. Every product is invented; no real data or token is in this public repository.
+  frontend `CatalogApi` spec. Every product is invented; no real data or token is in this public repository.
