@@ -31,11 +31,6 @@ public sealed class WalkOrders
         return new WalkOrders(learned);
     }
 
-    public bool IsLearned(Store store) => _learned.ContainsKey(store);
-
-    /// <summary>How many trips <paramref name="store"/>'s order was learned from; 0 while it is the seeded one.</summary>
-    public int TripsOf(Store store) => _learned.TryGetValue(store, out var order) ? order.Trips : 0;
-
     /// <summary>The sections of <paramref name="store"/> in the order they come, "Other" last.</summary>
     public IReadOnlyList<string> For(Store store) => _learned.TryGetValue(store, out var order) ? order.Sections : SeededSectionOrder.For(store);
 

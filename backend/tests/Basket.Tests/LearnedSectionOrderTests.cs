@@ -137,9 +137,8 @@ public sealed class LearnedSectionOrderTests
 
         var walk = WalkOrders.From(ticks);
 
-        walk.IsLearned(Store.Lidl).Should().BeTrue();
-        walk.TripsOf(Store.Lidl).Should().Be(3);
-        walk.IsLearned(Store.Aldi).Should().BeFalse();
+        walk.For(Store.Lidl).Should().NotEqual(SeededSectionOrder.For(Store.Lidl));
+        walk.For(Store.Lidl).First().Should().Be(Drinks);
         walk.For(Store.Aldi).Should().Equal(SeededSectionOrder.For(Store.Aldi));
         walk.RankOfSection(Store.Lidl, Drinks).Should().Be(0);
         walk.RankOfSection(Store.Aldi, Drinks).Should().Be(SeededSectionOrder.RankOfSection(Store.Aldi, Drinks));
@@ -147,7 +146,7 @@ public sealed class LearnedSectionOrderTests
     }
 
     [Fact]
-    public async Task The_basket_and_the_walk_endpoint_follow_the_order_learned_from_closed_trips()
+    public async Task The_by_shop_basket_follows_the_order_learned_from_closed_trips()
     {
         await using var factory = new BasketFactory();
         var (owner, _) = await factory.OwnerAsync();
@@ -191,14 +190,6 @@ public sealed class LearnedSectionOrderTests
             await db.SaveChangesAsync();
             return 0;
         });
-
-        var order = await owner.GetFromJsonAsync<JsonElement>("/api/walk/order");
-        var lidl = order.GetProperty("stores").EnumerateArray().Single(s => s.GetProperty("store").GetString() == "lidl");
-        lidl.GetProperty("source").GetString().Should().Be("learned");
-        lidl.GetProperty("trips").GetInt32().Should().Be(3);
-        lidl.GetProperty("sections").EnumerateArray().Select(s => s.GetString()).Take(4).Should().Equal(Drinks, Bakery, Meat, Fruit);
-        order.GetProperty("stores").EnumerateArray().Where(s => s.GetProperty("store").GetString() != "lidl")
-            .Should().OnlyContain(s => s.GetProperty("source").GetString() == "seeded" && s.GetProperty("trips").GetInt32() == 0);
 
         var byShop = await owner.GetFromJsonAsync<JsonElement>("/api/plan/by-shop");
         byShop.GetProperty("split").GetProperty("groups")[0].GetProperty("lines").EnumerateArray()

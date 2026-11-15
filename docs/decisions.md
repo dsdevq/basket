@@ -1670,15 +1670,14 @@ actually walks is in the trips he ticks off, so a store's walk is learned from t
   shows, caching or a stored summary is the follow-up, and that would be a migration for the owner's go.
 - **Where it applies.** `WalkOrders` is the one place the choice is made (learned for a store that has enough trips, else seeded) and
   `ByShopBuilder.Group` takes it, as its comment in #44 said it would: By shop's split and the Plan tab's two-shop split are in the
-  learned order with no change to the pages, which already cut the server's order into sections. `GET /api/walk/order` (signed-in
-  people only, read-only) says per store whether the order is `learned` or `seeded`, from how many `trips`, and its `sections`.
+  learned order with no change to the pages, which already cut the server's order into sections.
 - **Not in this change:** a screen that shows where an order came from or lets anyone edit it, a learned order for the List tab (its
   lines are not tied to a shop until one is chosen), and sorting inside a section (lines keep the order they were added in).
 - **Tests.** `LearnedSectionOrderTests`, on recorded tick sequences: three walking trips replace the seed and the unseen sections
   follow in seeded order, two trips do not, a sofa tick and trips with too few lines or sections do not count, other shops' lines and
   "Other" are left out, one odd trip does not flip the order, partial trips combine, a section seen once is not placed, only the latest
-  ten count, each store learns on its own; and over HTTP, closed trips in the database change `/api/walk/order` and the By shop split.
-  The auth guard lists the new route. No screen changes, so no baseline moves.
+  ten count, each store learns on its own; and over HTTP, closed trips in the database change the By shop split.
+  No new route and no screen changes, so no baseline moves.
 
 ## Tesco pages linked for Golden kiwi and Salt (2026-11-14)
 
