@@ -13,13 +13,15 @@ import {
   ListSectionComponent,
   PageComponent,
   SkeletonComponent,
+  TagComponent,
 } from '@lifekit-hq/ui';
 import {firstValueFrom, fromEvent} from 'rxjs';
 
 import {ComposerBarComponent} from '../../core/shell/composer-bar.component';
+import {healthLines, healthTag, healthWarnings} from './catalog-health-format';
 import {MatchSheetComponent, type MatchSheetData, type MatchSheetResult} from './match.sheet';
 import {detailLines, headline, storeProblem, suggestionLine} from './price-format';
-import type {Product, ProductStore} from './prices.model';
+import type {Product, ProductStore, StoreStatus} from './prices.model';
 import {PricesStore} from './prices.store';
 import {type ProductAction, ProductActionsSheetComponent} from './product-actions.sheet';
 import {ProductSearchSheetComponent} from './product-search.sheet';
@@ -39,6 +41,7 @@ import {StoreLinkSheetComponent} from './store-link.sheet';
     ListSectionComponent,
     PageComponent,
     SkeletonComponent,
+    TagComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -89,6 +92,21 @@ import {StoreLinkSheetComponent} from './store-link.sheet';
                   <span amount class="text-cmn-sm font-semibold text-text-primary">{{
                     headline(entry)
                   }}</span>
+                </cmn-list-item-row>
+              }
+            </cmn-list-section>
+          }
+          @if (store.stores().length) {
+            <cmn-list-section heading="Shop catalogs" card data-testid="catalog-health">
+              @for (status of store.stores(); track status.store) {
+                <cmn-list-item-row
+                  [label]="status.name"
+                  [sublabel]="healthText(status)"
+                  class="[&_.truncate]:overflow-visible [&_.truncate]:whitespace-pre-line [&_.truncate]:break-words"
+                >
+                  <cmn-tag [variant]="healthTag(status).variant" meta>{{
+                    healthTag(status).text
+                  }}</cmn-tag>
                 </cmn-list-item-row>
               }
             </cmn-list-section>
@@ -160,7 +178,18 @@ export class PricesPage implements OnInit {
           ? `${problem}. ${status.lastRun.message}`
           : problem;
       })
+      .concat(this.store.stores().flatMap(status => healthWarnings(status, new Date())))
       .filter(Boolean);
+  }
+
+  /** The tag on a shop's row in the catalog card. */
+  protected healthTag(status: StoreStatus): ReturnType<typeof healthTag> {
+    return healthTag(status.catalog);
+  }
+
+  /** When the shop's catalog was last swept and how it stands, one line per fact group. */
+  protected healthText(status: StoreStatus): string {
+    return healthLines(status.catalog, new Date()).join('\n');
   }
 
   /** One line per fact group; the row keeps the line breaks. */

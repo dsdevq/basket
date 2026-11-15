@@ -88,6 +88,7 @@ public sealed class PricePullJob(
             StartedAt = started,
             FinishedAt = finished,
             Outcome = pull.Outcome,
+            Kind = RunKind.Shelf,
             Listings = listings.Count,
             Read = read,
             Message = PriceRecorder.Truncate(pull.Message, 500),
@@ -111,6 +112,7 @@ public sealed class PricePullJob(
                 StartedAt = now,
                 FinishedAt = now,
                 Outcome = PullOutcome.Failed,
+                Kind = RunKind.Shelf,
                 Message = PriceRecorder.Truncate($"Unexpected error: {message}", 500),
             });
             await db.SaveChangesAsync(ct);

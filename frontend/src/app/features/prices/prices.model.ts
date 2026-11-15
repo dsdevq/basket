@@ -26,6 +26,8 @@ export interface Listing {
   readonly error: string | null;
   /** The shop's photo of the product (https), once a reader has sent one. */
   readonly imageUrl: string | null;
+  /** True once the shop's sweeps no longer list the catalog product this page is. */
+  readonly discontinued?: boolean;
 }
 
 /**
@@ -77,10 +79,36 @@ export interface Product {
 
 export type RunOutcome = 'ok' | 'partial' | 'blocked' | 'failed';
 
+/** One sweep of a shop's whole range: `seen` is what it listed, `live` the products the catalog holds after it. */
+export interface SweepRun {
+  readonly finishedAt: string;
+  readonly outcome: RunOutcome;
+  readonly seen: number;
+  readonly live: number;
+  readonly message: string | null;
+}
+
+/**
+ * How a shop's catalog is doing. `never`: no sweep is recorded (nothing is guessed). `stale`: no complete sweep within `staleAfterDays`
+ * (2 for a shop the server sweeps, 9 for one the PC reads). `shrunk`: the latest sweep listed under 90% of the last complete one.
+ * `discontinuedOnShelf` counts the shelf's pages the shop no longer lists.
+ */
+export interface CatalogHealth {
+  readonly state: 'never' | 'fresh' | 'stale';
+  readonly staleAfterDays: number;
+  readonly lastSweep: SweepRun | null;
+  readonly lastOkAt: string | null;
+  readonly live: number;
+  readonly discontinued: number;
+  readonly discontinuedOnShelf: number;
+  readonly shrunk: {readonly seen: number; readonly previous: number} | null;
+}
+
 export interface StoreStatus {
   readonly store: StoreId;
   readonly name: string;
   readonly readBy: ReadBy;
+  readonly catalog: CatalogHealth;
   readonly lastRun: {
     readonly finishedAt: string;
     readonly outcome: RunOutcome;

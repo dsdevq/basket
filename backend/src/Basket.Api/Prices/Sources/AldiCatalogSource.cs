@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using Basket.Api.Data;
 using Basket.Api.Prices.Catalog;
 using Basket.Api.Prices.Fetching;
+using Microsoft.EntityFrameworkCore;
 
 namespace Basket.Api.Prices.Sources;
 
@@ -54,6 +55,7 @@ public sealed partial class AldiCatalogSource(
         var tree = await fetcher.GetAsync(new Uri(TreeUrl), ct);
         if (tree.Status == FetchStatus.Blocked)
         {
+            await RecordSweepAsync(startedAt, PullOutcome.Blocked, 0, StorePulls.BlockedMessage(tree.Detail!), ct);
             return StorePulls.Blocked(listings, tree.Detail!);
         }
 
@@ -79,6 +81,7 @@ public sealed partial class AldiCatalogSource(
             if (page.Status == FetchStatus.Blocked)
             {
                 // What the earlier pages recorded stays; nothing is delisted and nothing is retried.
+                await RecordSweepAsync(startedAt, PullOutcome.Blocked, seen.Count, StorePulls.BlockedMessage(page.Detail!), ct);
                 return StorePulls.Blocked(listings, page.Detail!);
             }
 
@@ -164,6 +167,7 @@ public sealed partial class AldiCatalogSource(
         if (seen.Count == 0)
         {
             var reason = stopped ?? "Aldi's product list was empty, the API may have changed.";
+            await RecordSweepAsync(startedAt, PullOutcome.Failed, 0, reason, ct);
             return Failed(listings, reason);
         }
 
@@ -174,6 +178,11 @@ public sealed partial class AldiCatalogSource(
             var close = await sweeps.CloseAsync(Store.Aldi, seen.Count, startedAt, ct);
             outcome = close.Outcome;
             message = close.Message ?? note;
+            await RecordSweepAsync(startedAt, close.Outcome, close.Touched, message, ct, close.Live);
+        }
+        else
+        {
+            await RecordSweepAsync(startedAt, PullOutcome.Partial, seen.Count, message, ct);
         }
 
         var results = new Dictionary<Guid, ListingPull>();
@@ -211,6 +220,28 @@ public sealed partial class AldiCatalogSource(
 
         log.LogInformation("Aldi: {Seen} products listed in {Pages} pages, {Read} of {Listings} linked products priced", seen.Count, pages, read, listings.Count);
         return new StorePull(outcome, message, results);
+    }
+
+    /// <summary>
+    /// The sweep's own run row, beside the shelf row the nightly job writes for the shop (whose counts are the linked pages'):
+    /// <c>Read</c> is what the sweep listed, <c>Listings</c> the live catalog after it, which the catalog health view compares.
+    /// </summary>
+    private async Task RecordSweepAsync(DateTimeOffset startedAt, PullOutcome outcome, int read, string? message, CancellationToken ct, int? live = null)
+    {
+        db.PricePullRuns.Add(new PricePullRun
+        {
+            Id = Guid.NewGuid(),
+            Store = Store.Aldi,
+            StartedAt = startedAt,
+            FinishedAt = clock.GetUtcNow(),
+            Outcome = outcome,
+            Kind = RunKind.Sweep,
+            Listings = live ?? await db.StoreProducts.CountAsync(p => p.Store == Store.Aldi && p.DiscontinuedAt == null, ct),
+            Read = read,
+            Message = PriceRecorder.Truncate(message, 500),
+        });
+        await db.SaveChangesAsync(ct);
+        db.ChangeTracker.Clear();
     }
 
     private static StorePull Failed(IReadOnlyList<ListingToCheck> listings, string message) =>

@@ -204,6 +204,7 @@ public sealed class IngestTests : IClassFixture<BasketFactory>
             runs.Select(r => (r.Store, r.Outcome, r.Listings, r.Read)).Should().Equal(
                 (Store.Dunnes, PullOutcome.Ok, 1, 1),
                 (Store.Tesco, PullOutcome.Ok, 1, 1));
+            runs.Should().OnlyContain(r => r.Kind == RunKind.Shelf, "posted prices are the shelf's, not a catalog sweep");
             return 0;
         });
 

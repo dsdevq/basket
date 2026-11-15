@@ -212,6 +212,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             run.HasKey(r => r.Id);
             run.Property(r => r.Store).HasConversion<string>().HasMaxLength(16);
             run.Property(r => r.Outcome).HasConversion<string>().HasMaxLength(16);
+            run.Property(r => r.Kind).HasConversion<string>().HasMaxLength(16);
             run.Property(r => r.Message).HasMaxLength(500);
             run.HasIndex(r => new { r.Store, r.FinishedAt });
         });

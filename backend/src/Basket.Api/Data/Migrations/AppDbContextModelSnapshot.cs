@@ -539,6 +539,11 @@ namespace Basket.Api.Data.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("finished_at");
 
+                    b.Property<string>("Kind")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("kind");
+
                     b.Property<int>("Listings")
                         .HasColumnType("integer")
                         .HasColumnName("listings");

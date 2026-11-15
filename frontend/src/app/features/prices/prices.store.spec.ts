@@ -3,6 +3,7 @@ import {TestBed} from '@angular/core/testing';
 import {ToastService} from '@lifekit-hq/ui';
 
 import type {CatalogItem} from '../catalog/catalog.model';
+import {health} from './catalog-health-fixtures';
 import {PricesApi} from './prices.api';
 import type {Product} from './prices.model';
 import {PricesStore} from './prices.store';
@@ -44,7 +45,9 @@ describe('PricesStore', () => {
     const {store} = setup({
       all: vi.fn().mockResolvedValue({
         products: [PRODUCT],
-        stores: [{store: 'lidl', name: 'Lidl', readBy: 'nightly', lastRun: null}],
+        stores: [
+          {store: 'lidl', name: 'Lidl', readBy: 'nightly', catalog: health(), lastRun: null},
+        ],
       }),
     });
 

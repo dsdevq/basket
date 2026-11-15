@@ -3,6 +3,7 @@ import {ActivatedRoute, convertToParamMap} from '@angular/router';
 import {CmnDrawerService, ToastService} from '@lifekit-hq/ui';
 import {of} from 'rxjs';
 
+import {health, neverSwept} from './catalog-health-fixtures';
 import {MatchSheetComponent} from './match.sheet';
 import {PricesApi} from './prices.api';
 import type {PricesResponse, Product, ProductStore} from './prices.model';
@@ -157,6 +158,7 @@ describe('PricesPage', () => {
           store: 'lidl',
           name: 'Lidl',
           readBy: 'nightly',
+          catalog: health(),
           lastRun: {
             finishedAt: '2026-11-05T03:00:00Z',
             outcome: 'blocked',
@@ -169,6 +171,7 @@ describe('PricesPage', () => {
           store: 'aldi',
           name: 'Aldi',
           readBy: 'pc',
+          catalog: health(),
           lastRun: {
             finishedAt: '2026-11-05T03:00:00Z',
             outcome: 'ok',
@@ -184,6 +187,88 @@ describe('PricesPage', () => {
     expect(alerts).toHaveLength(1);
     expect(alerts[0]?.textContent).toContain("Lidl blocks basket's automated requests");
     expect(alerts[0]?.textContent).toContain('HTTP 403');
+  });
+
+  it('shows what each shop catalog is doing: last sweep, counts, discontinued and a tag', async () => {
+    vi.useFakeTimers({toFake: ['Date'], now: new Date('2026-11-06T10:00:00Z')});
+    try {
+      const {host} = await render({
+        products: [milk()],
+        stores: [
+          {
+            store: 'lidl',
+            name: 'Lidl',
+            readBy: 'nightly',
+            catalog: health({live: 3554, discontinued: 12, discontinuedOnShelf: 1}),
+            lastRun: null,
+          },
+          {store: 'tesco', name: 'Tesco', readBy: 'pc', catalog: neverSwept(), lastRun: null},
+        ],
+      });
+
+      const card = host.querySelector('[data-testid="catalog-health"]');
+      const text = card?.textContent ?? '';
+      expect(text).toContain('Shop catalogs');
+      expect(text).toContain('Swept yesterday');
+      expect(text).toContain('690 products listed');
+      expect(text).toContain('3,554 products live');
+      expect(text).toContain('12 discontinued');
+      expect(text).toContain('1 on your shelf');
+      expect(text).toContain('Up to date');
+      expect(text).toContain('No catalog sweep recorded yet');
+      expect(text).toContain('No sweep yet');
+      expect(host.querySelectorAll('cmn-alert')).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('warns about a stale catalog and about a sweep that saw under 90% of the one before', async () => {
+    vi.useFakeTimers({toFake: ['Date'], now: new Date('2026-11-12T10:00:00Z')});
+    try {
+      const {host} = await render({
+        products: [],
+        stores: [
+          {
+            store: 'lidl',
+            name: 'Lidl',
+            readBy: 'nightly',
+            catalog: health({state: 'stale'}),
+            lastRun: null,
+          },
+          {
+            store: 'aldi',
+            name: 'Aldi',
+            readBy: 'nightly',
+            catalog: health({
+              state: 'fresh',
+              lastSweep: {
+                finishedAt: '2026-11-12T03:30:00Z',
+                outcome: 'partial',
+                seen: 1200,
+                live: 3554,
+                message: null,
+              },
+              lastOkAt: '2026-11-11T03:30:00Z',
+              shrunk: {seen: 1200, previous: 3554},
+            }),
+            lastRun: null,
+          },
+        ],
+      });
+
+      const alerts = Array.from(host.querySelectorAll('cmn-alert')).map(a => a.textContent ?? '');
+      expect(alerts).toHaveLength(2);
+      expect(alerts[0]).toContain("Lidl's catalog is stale");
+      expect(alerts[0]).toContain('more than 2 days');
+      expect(alerts[1]).toContain("Aldi's last sweep listed 1,200 products");
+      expect(alerts[1]).toContain('under 90% of the 3,554');
+      const card = host.querySelector('[data-testid="catalog-health"]')?.textContent ?? '';
+      expect(card).toContain('Stale');
+      expect(card).toContain('Shrunk');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('opens the link sheet for the shop that was tapped', async () => {

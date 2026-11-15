@@ -416,6 +416,7 @@ public sealed class CatalogIngestTests : IClassFixture<CatalogIngestTests.RoomyF
         body.GetProperty("outcome").GetString().Should().Be("Ok");
         var run = await _factory.WithDb(db => db.PricePullRuns.SingleAsync());
         (run.Store, run.Outcome, run.Listings, run.Read).Should().Be((Store.Tesco, PullOutcome.Ok, 2, 2));
+        run.Kind.Should().Be(RunKind.Sweep);
         run.StartedAt.Should().BeCloseTo(started, TimeSpan.FromMilliseconds(1));
         run.Message.Should().BeNull();
     }

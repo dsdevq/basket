@@ -1,3 +1,4 @@
+import {health} from './catalog-health-fixtures';
 import {
   detailLines,
   euro,
@@ -183,6 +184,7 @@ describe('price formatting', () => {
       store: 'lidl',
       name: 'Lidl',
       readBy: 'nightly',
+      catalog: health(),
       lastRun: {finishedAt: '2026-11-05T03:00:00Z', outcome, listings: 2, read: 0, message: null},
     });
 
@@ -190,7 +192,36 @@ describe('price formatting', () => {
     expect(storeProblem(status('blocked'))).toBe("Lidl blocks basket's automated requests");
     expect(storeProblem(status('failed'))).toBe('Lidl could not be read');
     expect(storeProblem(status('partial'))).toBe('Lidl some products could not be read');
-    expect(storeProblem({store: 'lidl', name: 'Lidl', readBy: 'nightly', lastRun: null})).toBe('');
+    expect(
+      storeProblem({
+        store: 'lidl',
+        name: 'Lidl',
+        readBy: 'nightly',
+        catalog: health(),
+        lastRun: null,
+      })
+    ).toBe('');
+  });
+
+  it('says first that the shop no longer lists a page, then what the last reading was', () => {
+    const gone = entry({
+      listing: {
+        url: 'https://www.lidl.ie/p/x/p11115738',
+        title: 'X',
+        checkedAt: null,
+        error: null,
+        imageUrl: null,
+        discontinued: true,
+      },
+    });
+
+    expect(detailLines(gone)).toEqual([
+      'Lidl no longer lists this product. Link another page',
+      'Seen 5 Nov',
+    ]);
+    expect(detailLines(entry())).not.toContain(
+      'Lidl no longer lists this product. Link another page'
+    );
   });
 
   it('says how many suggested pages wait, and nothing when none do', () => {

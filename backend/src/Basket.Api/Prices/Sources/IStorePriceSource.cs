@@ -32,10 +32,12 @@ public interface IStorePriceSource
 
 internal static class StorePulls
 {
+    public static string BlockedMessage(string detail) => $"{detail}. basket does not try to get around a block.";
+
     /// <summary>The site refused us: every listing gets the same reason and the shop's run is "blocked".</summary>
     public static StorePull Blocked(IReadOnlyList<ListingToCheck> listings, string detail)
     {
-        var message = $"{detail}. basket does not try to get around a block.";
+        var message = BlockedMessage(detail);
         return new StorePull(PullOutcome.Blocked, message, listings.ToDictionary(l => l.ListingId, _ => ListingPull.Failed(message)));
     }
 }
