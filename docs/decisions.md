@@ -2213,7 +2213,7 @@ so their pages stay read one by one by the PC reader.
 
 `GET /api/catalog/{id}/equivalents`: for one catalog product, the best matches in each of the other three shops' catalogs, with a unit
 price beside the product's own. It is what the compare sheet (#35) and "what is the analogue of this jamon" browsing read. Read only,
-**no migration**, and no screen yet: the typed client and the wording helpers are in, the sheet keeps reading the shelf's product answer
+**no migration**, and no screen yet: the typed client is in, the sheet keeps reading the shelf's product answer
 until it is pointed at this (it replaces the source of the rows, not the sheet).
 
 - **Reuse, nothing new at any door.** The catalog still arrives only through the existing ingest door (`POST /api/ingest/catalog`, the

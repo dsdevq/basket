@@ -1,6 +1,6 @@
 import type {Price} from '../prices/prices.model';
-import type {CatalogComparison, CatalogItem} from './catalog.model';
-import {catalogDetail, catalogPrice, unitPriceLabel, versusLabel} from './catalog-format';
+import type {CatalogItem} from './catalog.model';
+import {catalogDetail, catalogPrice} from './catalog-format';
 
 const PRICE: Price = {
   observedOn: '2026-11-14',
@@ -62,28 +62,5 @@ describe('catalogDetail', () => {
         unitPriceBasis: null,
       })
     ).toBe('');
-  });
-});
-
-describe('unit price comparison wording', () => {
-  const COMPARISON: CatalogComparison = {
-    unit: 'l',
-    pack: '2 l',
-    unitPrice: 0.9,
-    difference: -0.1,
-    flags: [],
-  };
-
-  it('prints the unit price per unit, and nothing without one', () => {
-    expect(unitPriceLabel(COMPARISON)).toBe('€0.90 / l');
-    expect(unitPriceLabel({...COMPARISON, unitPrice: null})).toBe('');
-    expect(unitPriceLabel({...COMPARISON, unit: null})).toBe('');
-  });
-
-  it('says cheaper, dearer or the same per unit, and nothing when not comparable', () => {
-    expect(versusLabel(COMPARISON)).toBe('€0.10 / l cheaper');
-    expect(versusLabel({...COMPARISON, difference: 0.2})).toBe('€0.20 / l dearer');
-    expect(versusLabel({...COMPARISON, difference: 0})).toBe('Same unit price');
-    expect(versusLabel({...COMPARISON, difference: null})).toBe('');
   });
 });
