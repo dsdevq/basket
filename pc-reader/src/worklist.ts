@@ -2,19 +2,17 @@ import { readFile } from 'node:fs/promises';
 import { STORES, type StoreId, type WorkItem } from './types.ts';
 
 const SHAPES: Record<StoreId, { host: string; path: RegExp }> = {
-  aldi: { host: 'www.aldi.ie', path: /^\/product\/[a-z0-9-]+-\d{6,}$/i },
   tesco: { host: 'www.tesco.ie', path: /^\/groceries\/en-IE\/products\/\d{4,12}$/i },
   dunnes: { host: 'www.dunnesstoresgrocery.com', path: /^\/product\/[a-z0-9-]+-\d{6,12}$/i },
 };
 
 const EXPECTED: Record<StoreId, string> = {
-  aldi: '/product/<name>-<number>',
   tesco: '/groceries/en-IE/products/<number>',
   dunnes: '/product/<name>-<number>',
 };
 
 /**
- * The product pages to read, from a JSON file the owner keeps: `[{"store": "aldi", "url": "https://..."}]`. The same
+ * The product pages to read, from a JSON file the owner keeps: `[{"store": "dunnes", "url": "https://..."}]`. The same
  * address shape basket accepts when a product is linked, checked here so the browser is only ever pointed at a product
  * page on the shop's own host. Query and fragment are dropped. A bad entry stops the run, with its position.
  */

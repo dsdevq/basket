@@ -5,7 +5,7 @@ import { postBatch } from '../src/ingest.ts';
 import { loadConfig, parseEnvFile } from '../src/config.ts';
 import type { Reading } from '../src/types.ts';
 
-const reading: Reading = { store: 'aldi', url: 'https://www.aldi.ie/product/x-000000000000422541', price: 1.49, inStock: true };
+const reading: Reading = { store: 'dunnes', url: 'https://www.dunnesstoresgrocery.com/product/x-100317581', price: 1.49, inStock: true };
 
 function stub(status: number, body: unknown) {
   const calls: { url: string; init: RequestInit }[] = [];

@@ -1,3 +1,4 @@
+using Basket.Api.Data;
 using Basket.Api.Prices.Fetching;
 using Basket.Api.Prices.Parsing;
 using Microsoft.Extensions.Options;
@@ -5,8 +6,9 @@ using Microsoft.Extensions.Options;
 namespace Basket.Api.Prices.Sources;
 
 /// <summary>
-/// Lidl: the weekly-offer pages first (one request each, however many products are linked), then the product page of
-/// anything they did not list. Lidl Plus prices come with the offer tiles and need no login.
+/// Lidl: the weekly-offer pages, one request each however many products are linked. Lidl Plus prices come with the offer
+/// tiles and need no login. A linked product the offer pages do not list is left alone: the catalog sweep prices it, and
+/// no product page is opened for it.
 /// </summary>
 public sealed class LidlPriceSource(IPageFetcher fetcher, IOptions<PricesOptions> options, ILogger<LidlPriceSource> log) : IStorePriceSource
 {
@@ -32,91 +34,30 @@ public sealed class LidlPriceSource(IPageFetcher fetcher, IOptions<PricesOptions
 
                     if (tiles.Count == 0)
                     {
-                        offerPageError ??= "A Lidl offers page had no priced products, the page layout may have changed, so a missing price here may be an offer.";
+                        offerPageError ??= "A Lidl offers page had no priced products, the page layout may have changed.";
                     }
 
                     break;
                 default:
-                    // An offer page being down only costs the offers on it; the product pages are still tried.
                     log.LogWarning("Lidl offer page {Page} was not read: {Detail}", page, result.Detail);
-                    offerPageError ??= $"A Lidl offers page was not read ({result.Detail ?? "no detail"}), so a missing price here may be an offer.";
+                    offerPageError ??= $"A Lidl offers page was not read ({result.Detail ?? "no detail"}).";
                     break;
             }
         }
 
         var results = new Dictionary<Guid, ListingPull>();
-        string? hint = null;
         foreach (var listing in listings)
         {
-            if (Stores.LidlProductId(listing.Url) is { } id && offers.TryGetValue(id, out var offer))
-            {
-                // The offer tile has no breadcrumb. A product that has no category yet opens its own page once for it; after that
-                // the offer page alone is enough again. A page that cannot be read costs the category only, never the price; a refusal still ends the pull.
-                if (listing.NeedsCategory)
-                {
-                    var categoryPage = await fetcher.GetAsync(listing.Url, ct);
-                    if (categoryPage.Status == FetchStatus.Blocked)
-                    {
-                        return StorePulls.Blocked(listings, categoryPage.Detail!);
-                    }
-
-                    offer = offer with { Category = categoryPage.Status == FetchStatus.Ok ? ReadCategory(categoryPage.Body!) : null };
-                }
-
-                results[listing.ListingId] = ListingPull.Priced(offer);
-                continue;
-            }
-
-            var page = await fetcher.GetAsync(listing.Url, ct);
-            switch (page.Status)
-            {
-                case FetchStatus.Blocked:
-                    return StorePulls.Blocked(listings, page.Detail!);
-                case FetchStatus.Ok:
-                    results[listing.ListingId] = ReadProductPage(page.Body!, offerPageError);
-                    break;
-                case FetchStatus.NotFound:
-                    results[listing.ListingId] = ListingPull.Failed("Lidl no longer has this page (404). Link another product page.");
-                    break;
-                default:
-                    hint ??= page.Detail;
-                    results[listing.ListingId] = ListingPull.Failed(page.Detail ?? "The Lidl page could not be read.");
-                    break;
-            }
+            results[listing.ListingId] = Stores.LidlProductId(listing.Url) is { } id && offers.TryGetValue(id, out var offer)
+                ? ListingPull.Priced(offer)
+                : ListingPull.Unlisted;
         }
 
-        return StorePulls.Summarize(listings, results, hint);
-    }
-
-    private static string? ReadCategory(string html)
-    {
-        try
+        if (offerPageError is null)
         {
-            return LidlParser.ParseProductPage(html).Category;
+            return new StorePull(PullOutcome.Ok, null, results);
         }
-        catch (ParseException)
-        {
-            return null;
-        }
-    }
 
-    private static ListingPull ReadProductPage(string html, string? offerPageError)
-    {
-        try
-        {
-            var quote = LidlParser.ParseProductPage(html);
-            if (quote.Price is null && offerPageError is not null)
-            {
-                return ListingPull.Failed(offerPageError);
-            }
-
-            return quote.Price is null
-                ? new ListingPull(quote, null) // on Lidl's site but not priced this week: a reading, "no price"
-                : ListingPull.Priced(quote);
-        }
-        catch (ParseException ex)
-        {
-            return ListingPull.Failed(ex.Message);
-        }
+        return new StorePull(offers.Count == 0 ? PullOutcome.Failed : PullOutcome.Partial, offerPageError, results);
     }
 }

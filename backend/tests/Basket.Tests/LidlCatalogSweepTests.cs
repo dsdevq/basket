@@ -105,6 +105,34 @@ public sealed class LidlCatalogSweepTests : IClassFixture<BasketFactory>
     }
 
     [Fact]
+    public async Task A_linked_lidl_page_takes_its_price_from_the_sweep_and_its_own_page_is_never_opened_for_it()
+    {
+        await CleanAsync();
+        var listingId = Guid.NewGuid();
+        var (_, _) = await _factory.OwnerAsync();
+        await _factory.WithDb(async db =>
+        {
+            var owner = await db.Users.Select(u => u.Id).FirstAsync();
+            var product = new Product { Id = Guid.NewGuid(), Name = "Butter", AddedAt = _clock.GetUtcNow(), AddedByUserId = owner };
+            db.Products.Add(product);
+            db.StoreListings.Add(new StoreListing { Id = listingId, ProductId = product.Id, Store = Store.Lidl, Url = ButterPage, AddedAt = _clock.GetUtcNow() });
+            await db.SaveChangesAsync();
+            return 0;
+        });
+        var fetcher = Shop(withBarcodes: false);
+
+        await SweepAsync(fetcher, barcodeCap: 0);
+
+        fetcher.Requested.Should().NotContain(ButterPage, "the sweep's listing tile already carries the price");
+        await _factory.WithDb(async db =>
+        {
+            (await db.StoreListings.SingleAsync(l => l.Id == listingId)).StoreProductId.Should().NotBeNull();
+            (await db.PriceObservations.SingleAsync(o => o.ListingId == listingId)).Price.Should().Be(2.49m);
+            return 0;
+        });
+    }
+
+    [Fact]
     public async Task Listing_pages_are_walked_by_offset_until_nothing_new_and_the_sitemap_adds_the_food_categories()
     {
         await CleanAsync();

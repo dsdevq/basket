@@ -9,8 +9,8 @@ namespace Basket.Api.Prices.Parsing;
 
 /// <summary>
 /// Reads lidl.ie. Lidl shows no everyday shelf prices online, only the offers of the week: the offer pages carry a
-/// tile per product with the price, the Lidl Plus price and the dates. A product on no offer page falls back to its
-/// own page, whose JSON-LD holds a price when there is one.
+/// tile per product with the price, the Lidl Plus price and the dates. The catalog sweep reads the category listing pages
+/// the same way, and a product page gives the barcode.
 /// </summary>
 public static partial class LidlParser
 {
@@ -30,31 +30,6 @@ public static partial class LidlParser
         }
 
         return quotes;
-    }
-
-    /// <summary>
-    /// What a Lidl search page lists: a tile per product with its name, its address and its photo, in the order Lidl ranks them.
-    /// A tile without a usable address or name is skipped. No price is read here; the nightly job prices a product once it is linked.
-    /// </summary>
-    public static IReadOnlyList<ShopSearchResult> ParseSearchTiles(string html)
-    {
-        var results = new List<ShopSearchResult>();
-        foreach (var tile in PageData.GridTiles(html))
-        {
-            var path = PageData.String(tile, "canonicalUrl") ?? PageData.String(tile, "canonicalPath");
-            var title = PageData.Clean(PageData.String(tile, "fullTitle") ?? PageData.String(tile, "title"));
-            if (title is null
-                || path is null
-                || !path.StartsWith('/')
-                || !Stores.TryNormalizeProductUrl(Store.Lidl, "https://" + Store.Lidl.Host() + path, out var url))
-            {
-                continue;
-            }
-
-            results.Add(new ShopSearchResult(Store.Lidl.Slug(), url.ToString(), title, TileImage(tile)));
-        }
-
-        return results;
     }
 
     /// <summary>
@@ -237,28 +212,4 @@ public static partial class LidlParser
     private static string? TileImage(JsonElement tile) =>
         PageData.ImageUrl(tile.TryGetProperty("image", out var image) ? image : null)
         ?? PageData.ImageUrl(tile.TryGetProperty("imageList", out var list) ? list : null);
-
-    /// <summary>A product page: name, price when Lidl lists one, and whether it is in stock.</summary>
-    public static PriceQuote ParseProductPage(string html)
-    {
-        var product = PageData.ProductJsonLd(html)
-            ?? throw new ParseException("The Lidl page has no product data (the page layout may have changed).");
-        var offer = PageData.FirstOffer(product);
-        var price = offer is { } o ? PageData.Money(o, "price") : null;
-        var availability = offer is { } a ? PageData.String(a, "availability") : null;
-
-        var name = PageData.Clean(PageData.String(product, "name"));
-        return new PriceQuote(
-            name,
-            price,
-            WasPrice: null,
-            LoyaltyPrice: null,
-            LoyaltyScheme: null,
-            PromoText: null,
-            ValidFrom: null,
-            ValidUntil: null,
-            InStock: price is not null && availability is not null && availability.EndsWith("InStock", StringComparison.Ordinal),
-            ImageUrl: PageData.ImageUrl(product.TryGetProperty("image", out var image) ? image : null) ?? PageData.OgImage(html),
-            Category: PageData.BreadcrumbCategory(html, name, PageData.String(product, "url")));
-    }
 }

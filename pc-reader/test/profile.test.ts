@@ -32,7 +32,7 @@ test('the opener resolves the profile exactly as the reader does, with no token 
 test('--store picks one shop and nothing else is accepted', () => {
   assert.equal(parseStoreArg([]), undefined);
   assert.equal(parseStoreArg(['--store', 'tesco']), 'tesco');
-  assert.equal(parseStoreArg(['--store=aldi']), 'aldi');
+  assert.equal(parseStoreArg(['--store=dunnes']), 'dunnes');
   assert.throws(() => parseStoreArg(['--store', 'lidl']), /Usage/);
   assert.throws(() => parseStoreArg(['--store']), /Usage/);
   assert.throws(() => parseStoreArg(['tesco']), /Usage/);

@@ -11,7 +11,7 @@ public sealed class PricesOptions
 
     /// <summary>
     /// Lidl's weekly-offer and food pages. Their product tiles carry the price, the Lidl Plus price and the dates.
-    /// A product that is on none of them is read from its own page instead.
+    /// A product that is on none of them is priced by the catalog sweep instead.
     /// </summary>
     public string[] LidlOfferPages { get; set; } =
     [

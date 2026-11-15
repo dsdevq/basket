@@ -54,7 +54,7 @@ public sealed class PricePullJob(
         }
 
         var pull = await source.PullAsync(
-            listings.Select(l => new ListingToCheck(l.Id, new Uri(l.Url), l.Category is null)).ToList(),
+            listings.Select(l => new ListingToCheck(l.Id, new Uri(l.Url))).ToList(),
             ct);
 
         var finished = clock.GetUtcNow();
@@ -65,6 +65,10 @@ public sealed class PricePullJob(
             if (!pull.Listings.TryGetValue(listing.Id, out var result))
             {
                 PriceRecorder.RecordFailure(listing, pull.Message ?? "Not read.", finished);
+            }
+            else if (result.IsUnlisted)
+            {
+                continue;
             }
             else if (result.Quote is { } quote)
             {

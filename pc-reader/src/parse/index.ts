@@ -1,5 +1,4 @@
 import type { Page, ParseResult, StoreId } from '../types.ts';
-import { parseAldi } from './aldi.ts';
 import { detectBlock } from './block.ts';
 import { parseDunnes } from './dunnes.ts';
 import { parseTesco } from './tesco.ts';
@@ -14,8 +13,6 @@ export function readPage(store: StoreId, url: string, page: Page): ParseResult {
     return { kind: 'unreadable', why: `HTTP ${page.status}` };
   }
   switch (store) {
-    case 'aldi':
-      return parseAldi(page.html, url);
     case 'dunnes':
       return parseDunnes(page.html, url);
     case 'tesco':

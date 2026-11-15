@@ -26,27 +26,9 @@ public sealed class PriceParserTests
     }
 
     [Fact]
-    public void Lidl_offer_tile_keeps_the_photo_address_and_a_product_page_the_first_gallery_image()
+    public void Lidl_offer_tile_keeps_the_photo_address()
     {
         Offers["11115738"].ImageUrl.Should().Be("https://www.lidl.ie/assets/gcpa9b8e188dc8a48039b8b578c2c9466bf.png");
-
-        LidlParser.ParseProductPage(Fixtures.Read("lidl-product-page.html")).ImageUrl
-            .Should().Be("https://www.lidl.ie/assets/gcpb5678e59619845ec8710bd6e485f4e3d.png");
-        LidlParser.ParseProductPage(Fixtures.Read("lidl-product-page-no-price.html")).ImageUrl
-            .Should().Be("https://www.lidl.ie/assets/gcpbc4f96d4506e494eabf4ba0c20bb0335.png");
-    }
-
-    [Fact]
-    public void A_product_page_without_json_ld_images_falls_back_to_og_image_and_never_to_a_bad_address()
-    {
-        const string Ld = """<script type="application/ld+json">{"@type":"Product","name":"Milk","image":"IMG"}</script>""";
-        const string Og = """<meta property="og:image" content="https://www.lidl.ie/assets/og.png?a=1&amp;b=2" />""";
-
-        LidlParser.ParseProductPage(Ld.Replace("\"IMG\"", "[]") + Og).ImageUrl.Should().Be("https://www.lidl.ie/assets/og.png?a=1&b=2");
-        LidlParser.ParseProductPage(Ld.Replace("\"IMG\"", "{\"url\":\"https://www.lidl.ie/assets/obj.png\"}")).ImageUrl.Should().Be("https://www.lidl.ie/assets/obj.png");
-        LidlParser.ParseProductPage(Ld.Replace("IMG", "http://www.lidl.ie/assets/plain.png")).ImageUrl.Should().BeNull("only https is kept");
-        LidlParser.ParseProductPage(Ld.Replace("IMG", "/assets/relative.png")).ImageUrl.Should().BeNull("a relative address is no address");
-        LidlParser.ParseProductPage(Ld.Replace("IMG", "")).ImageUrl.Should().BeNull();
     }
 
     [Theory]
@@ -133,49 +115,6 @@ public sealed class PriceParserTests
     {
         LidlParser.ParseOfferTiles("<html><body>no grid here</body></html>").Should().BeEmpty();
         LidlParser.ParseOfferTiles("<div data-grid-data=\"{not json\"></div>").Should().BeEmpty();
-    }
-
-    [Fact]
-    public void Lidl_product_page_reads_the_json_ld_price_and_stock()
-    {
-        var priced = LidlParser.ParseProductPage(Fixtures.Read("lidl-product-page.html"));
-        priced.Title.Should().Be("10 Chicken Breast Skewers");
-        priced.Price.Should().Be(2.19m);
-        priced.InStock.Should().BeFalse("the page says OutOfStock");
-
-        var unpriced = LidlParser.ParseProductPage(Fixtures.Read("lidl-product-page-no-price.html"));
-        unpriced.Title.Should().Be("Aubergine");
-        unpriced.Price.Should().BeNull();
-        unpriced.InStock.Should().BeFalse();
-    }
-
-    [Fact]
-    public void Lidl_product_page_reads_its_category_from_the_breadcrumb_without_the_front_page_and_the_product()
-    {
-        LidlParser.ParseProductPage(Fixtures.Read("lidl-product-page-breadcrumb.html")).Category.Should().Be("Food & Drink > Meat & Poultry");
-    }
-
-    [Fact]
-    public void Lidl_product_page_drops_the_last_crumb_by_address_when_its_name_differs_from_the_product()
-    {
-        var html = Fixtures.Read("lidl-product-page-breadcrumb.html").Replace(
-            "\"name\":\"10 Chicken Breast Skewers\",\"item\"", "\"name\":\"Chicken Skewers\",\"item\"");
-
-        LidlParser.ParseProductPage(html).Category.Should().Be("Food & Drink > Meat & Poultry");
-    }
-
-    [Fact]
-    public void A_page_without_a_breadcrumb_has_no_category()
-    {
-        LidlParser.ParseProductPage(Fixtures.Read("lidl-product-page.html")).Category.Should().BeNull();
-    }
-
-    [Fact]
-    public void Lidl_product_page_without_product_data_is_a_parse_failure()
-    {
-        var act = () => LidlParser.ParseProductPage("<html><body>Something else</body></html>");
-
-        act.Should().Throw<ParseException>();
     }
 
     [Theory]

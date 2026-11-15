@@ -178,12 +178,12 @@ passkey accounts; the family sign-in pages (step A4, below) have landed, while t
   ingest endpoint is below, and `PriceRecorder` is the write path both the Lidl job and that endpoint use.
 - **Lidl's price comes from its offer pages.** lidl.ie shows no everyday prices, only the week's offers. The job reads
   three offer/category pages (`Prices:LidlOfferPages`), whose product tiles carry the price, the Lidl Plus price (no
-  login needed), the old price, the promo text and the dates. A linked product on none of them is read from its own page
-  (JSON-LD price and stock). Lidl's offers start and end on dates, so a reading keeps `ValidFrom`/`ValidUntil` (the
+  login needed), the old price, the promo text and the dates. A linked product on none of them is no longer read from its own page
+  (JSON-LD price and stock; see "Catalog 14/14"): the catalog sweep prices it. Lidl's offers start and end on dates, so a reading keeps `ValidFrom`/`ValidUntil` (the
   price's own window, the tile's store dates only when the price has none) and the page shows "from 12 Nov" or "ended"
   instead of an out-of-date price.
-  If an offer page could not be read or came back with no priced products, a product page without a price is a failed
-  reading (the last good price stays), not "no price", since the product may be on offer on the missing page.
+  If an offer page could not be read or came back with no priced products, the run says so (partial, or failed when no
+  page had products); a linked product the pages do not list is left as it is, never marked failed.
 - **Products are linked to shop pages by pasted address, not matched.** M2 stores `product` and one `store_listing` per
   shop (address checked against that shop's product-page shape, nothing else is ever fetched). Barcode/search matching
   with his confirmation is M3.
@@ -2157,7 +2157,7 @@ live search page, so all four shops answer, with their photos, and a tap puts th
   under another name, is 409 `product_exists`, so a second tap or a second phone never makes a copy. A barcode another product has is 409
   `barcode_exists`. A row whose address does not normalize is 409 `catalog_page_invalid`. The sheet shows the server's message for a 409.
 - **Left in place.** `GET /api/products/search` (the live Lidl search) and its parser stay in the backend, unused by the app now; retiring them
-  belongs to issue 140 (retire per-listing reads). The frontend no longer has a client for it.
+  belongs to issue 140 (retire per-listing reads), and was done there (see "Catalog 14/14"). The frontend no longer has a client for it.
 - **No migration.** Product, listing and observation use their existing columns.
 - **Screens.** The sheet is not a route, so no screen baseline changes; the baselines are only ever rewritten by the Update screen baselines
   workflow.
@@ -2171,3 +2171,40 @@ live search page, so all four shops answer, with their photos, and a tap puts th
 The server-side catalog sweeps for Tesco (issue 135) and Dunnes (issue 136) are closed as not doable. Tesco: Akamai answered HTTP 403 on
 `robots.txt` itself to an automation-driven browser, even on the owner-warmed profile and headless, on 2026-11-15. Dunnes: Cloudflare answers
 403 to the reader profile. Both shops stay unread: no further attempts, and no evasion is built.
+
+## Catalog 14/14: retire per-listing reads (2026-11-15, issue 140 of epic 126)
+
+Owner's direction (2026-11-14): once catalog rows feed linked listings, stop the Lidl per-product page reads and the PC work-list reads for
+the shops whose catalog sweep runs; keep the work-list mode only as the daily fallback for PC stores. Two shops have a running sweep, Aldi
+(issue 129, `AldiCatalogSource`) and Lidl (issue 130, `LidlCatalogSweep`). Tesco and Dunnes are closed as not doable (issues 135 and 136),
+so their pages stay read one by one by the PC reader.
+
+- **Lidl: no per-product page read, the offer pages stay.** The Lidl source of the 03:00 price pull (`LidlPriceSource`) now reads only the
+  offer pages (`Prices:LidlOfferPages`: lidl-plus-offers, super-savers and the food page, one request each), as before. What is removed is the
+  per-product page read: both the fallback for a product on no offer page and the once-for-category read of a listed product's own page. A linked Lidl page
+  the offer pages do not list is left untouched by the pull (`ListingPull.Unlisted`): it is not marked failed and keeps what the sweep
+  gave it, because it is fed by the 03:30 catalog sweep, where `CatalogRecorder` links an unlinked page whose address names a swept product
+  and writes the day's observation through `PriceRecorder`, with the Lidl Plus price, was price, promo and dates the listing tiles carry.
+  The one remaining Lidl product-page read is the capped barcode read of the sweep (`Prices:LidlBarcodePagesPerNight`), which is a range
+  read for the matcher, not a listing read. The per-product parsers go: `ParseProductPage`, the breadcrumb and `og:image` readers only
+  it used, and `ListingToCheck.NeedsCategory`; a Lidl listing's category and photo come from the sweep's tile (`wonCategoryPrimary`, `image`);
+  the earlier sections that describe the product-page and breadcrumb reads are history.
+- **The live shop search is gone.** `GET /api/products/search` (a live request to lidl.ie's search page per typed query) and its parser
+  `ParseSearchTiles` are removed, as "Add to shelf by catalog search" said they would be; the sheet searches the stored catalog
+  (`GET /api/catalog/search`) and nothing else asks Lidl at request time.
+- **PC reader: Aldi is out of the work list.** Aldi is read by the server (`ReadBy` is `nightly`), so the catalog work list
+  (`GET /api/products`, only `readBy: pc` entries) never held it; the reader's own store list no longer has it either: `StoreId`, the URL-file
+  shapes and `--store` are `dunnes` and `tesco`, the Aldi page parser and its recorded pages are deleted, and an `aldi` entry in a hand-kept
+  URL file is refused naming the stores the reader takes. The work-list mode stays, for Dunnes and Tesco only, as the daily fallback:
+  `npm run daily` reads the catalog's pages for the PC shops (the URL file only when the catalog is not reachable), as before.
+- **Reuse, nothing new.** No endpoint, scope, token, identity, table or column is added. The sweeps write through the existing
+  `CatalogRecorder` and `CatalogIngest` (the path the ingest door `POST /api/ingest/catalog` also ends in), the PC reader keeps the fleet
+  identity it already uses for `GET /api/products` and the ingest door, and linking a listing to its catalog row is the existing link
+  and the existing candidate matcher (`ServerCandidates`) unchanged.
+- **No migration, no owner step, no screen.** No page template changes (the Prices tab already says "Waiting for the next PC read" only
+  for PC shops), so no screen baseline is touched.
+- **Tests.** `LidlCatalogSweepTests` (a linked Lidl page is linked and priced by the sweep and its own page is never requested),
+  `PriceSourceTests` (the Lidl offer-page read; a product the pages do not list is left alone and no product page is requested),
+  `PricePullJobTests` (an unlisted listing is not marked failed; a failing or empty shop leaves the others alone), the PC reader's
+  work-list, fleet-catalog, run and parse tests now on Dunnes and Tesco, with Aldi entries refused or skipped. Fixtures are invented
+  products and addresses; no real data or token is in this public repository.

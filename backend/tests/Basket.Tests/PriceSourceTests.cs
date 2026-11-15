@@ -39,113 +39,49 @@ public sealed class PriceSourceTests
     }
 
     [Fact]
-    public async Task Lidl_opens_a_listed_products_own_page_once_for_its_category_and_keeps_the_offer_price()
-    {
-        var fetcher = new FakeFetcher()
-            .Serve(OffersPage, Fixtures.Read("lidl-offers-page.html"))
-            .Serve(SkewersUrl, Fixtures.Read("lidl-product-page-breadcrumb.html"));
-        var skewers = Listing(SkewersUrl) with { NeedsCategory = true };
-
-        var pull = await Lidl(fetcher, OffersPage).PullAsync([skewers], CancellationToken.None);
-
-        var quote = pull.Listings[skewers.ListingId].Quote!;
-        quote.Price.Should().Be(2.19m);
-        quote.InStock.Should().BeTrue("the offer tile says so, the product page's stock is not the offer's");
-        quote.Category.Should().Be("Food & Drink > Meat & Poultry");
-        fetcher.Requested.Should().Equal(OffersPage, SkewersUrl);
-    }
-
-    [Fact]
-    public async Task Lidl_loses_only_the_category_when_a_listed_products_own_page_is_down()
+    public async Task Lidl_leaves_a_product_the_offer_pages_do_not_list_alone_and_never_opens_its_page()
     {
         var fetcher = new FakeFetcher().Serve(OffersPage, Fixtures.Read("lidl-offers-page.html"));
-        var skewers = Listing(SkewersUrl) with { NeedsCategory = true };
-
-        var pull = await Lidl(fetcher, OffersPage).PullAsync([skewers], CancellationToken.None);
-
-        pull.Outcome.Should().Be(PullOutcome.Ok);
-        pull.Listings[skewers.ListingId].Quote!.Price.Should().Be(2.19m);
-        pull.Listings[skewers.ListingId].Quote!.Category.Should().BeNull();
-    }
-
-    [Fact]
-    public async Task Lidl_stops_the_pull_when_a_listed_products_own_page_is_refused_for_its_category()
-    {
-        var fetcher = new FakeFetcher()
-            .Serve(OffersPage, Fixtures.Read("lidl-offers-page.html"))
-            .Serve(SkewersUrl, new FetchResult(FetchStatus.Blocked, null, "www.lidl.ie answered HTTP 403"));
-        var skewers = Listing(SkewersUrl) with { NeedsCategory = true };
-        var other = Listing(AubergineUrl) with { NeedsCategory = true };
-
-        var pull = await Lidl(fetcher, OffersPage).PullAsync([skewers, other], CancellationToken.None);
-
-        pull.Outcome.Should().Be(PullOutcome.Blocked);
-        pull.Message.Should().Contain("403");
-        fetcher.Requested.Should().Equal(OffersPage, SkewersUrl);
-    }
-
-    [Fact]
-    public async Task Lidl_reads_the_product_page_of_anything_the_offer_pages_do_not_list()
-    {
-        var fetcher = new FakeFetcher()
-            .Serve(OffersPage, Fixtures.Read("lidl-offers-page.html"))
-            .Serve(AubergineUrl, Fixtures.Read("lidl-product-page-no-price.html"));
         var skewers = Listing(SkewersUrl);
         var aubergine = Listing(AubergineUrl);
 
         var pull = await Lidl(fetcher, OffersPage).PullAsync([skewers, aubergine], CancellationToken.None);
 
-        pull.Outcome.Should().Be(PullOutcome.Ok);
-        pull.Listings[aubergine.ListingId].Quote!.Price.Should().BeNull("Lidl lists no price this week, which is itself the reading");
-        pull.Listings[aubergine.ListingId].Quote!.Title.Should().Be("Aubergine");
-        pull.Listings[aubergine.ListingId].Quote!.ImageUrl.Should().Be("https://www.lidl.ie/assets/gcpbc4f96d4506e494eabf4ba0c20bb0335.png");
-        fetcher.Requested.Should().Equal(OffersPage, AubergineUrl);
+        pull.Outcome.Should().Be(PullOutcome.Ok, "a product the catalog sweep prices is not a failure of the offer read");
+        pull.Listings[skewers.ListingId].Quote!.Price.Should().Be(2.19m);
+        pull.Listings[aubergine.ListingId].IsUnlisted.Should().BeTrue();
+        fetcher.Requested.Should().Equal(OffersPage);
     }
 
     [Fact]
-    public async Task Lidl_keeps_going_when_an_offer_page_is_down_and_one_product_is_gone()
+    public async Task Lidl_reports_a_down_offer_page_on_the_run_and_still_prices_what_the_others_list()
     {
+        var second = "https://www.lidl.ie/c/second";
         var fetcher = new FakeFetcher()
             .Serve(OffersPage, new FetchResult(FetchStatus.Failed, null, "timeout"))
-            .Serve(SkewersUrl, Fixtures.Read("lidl-product-page.html"));
+            .Serve(second, Fixtures.Read("lidl-offers-page.html"));
         var skewers = Listing(SkewersUrl);
-        var gone = Listing("https://www.lidl.ie/p/gone/p11999999");
+        var aubergine = Listing(AubergineUrl);
 
-        var pull = await Lidl(fetcher, OffersPage).PullAsync([skewers, gone], CancellationToken.None);
+        var pull = await Lidl(fetcher, OffersPage, second).PullAsync([skewers, aubergine], CancellationToken.None);
 
         pull.Outcome.Should().Be(PullOutcome.Partial);
+        pull.Message.Should().Contain("timeout");
         pull.Listings[skewers.ListingId].Quote!.Price.Should().Be(2.19m);
-        pull.Listings[gone.ListingId].Error.Should().Contain("404");
+        pull.Listings[aubergine.ListingId].IsUnlisted.Should().BeTrue();
     }
 
     [Fact]
-    public async Task Lidl_does_not_record_no_price_for_a_product_when_an_offer_page_was_down()
+    public async Task Lidl_fails_the_run_when_no_offer_page_had_products()
     {
-        var fetcher = new FakeFetcher()
-            .Serve(OffersPage, new FetchResult(FetchStatus.Failed, null, "timeout"))
-            .Serve(AubergineUrl, Fixtures.Read("lidl-product-page-no-price.html"));
-        var aubergine = Listing(AubergineUrl);
+        var fetcher = new FakeFetcher().Serve(OffersPage, "<html>redesigned</html>");
+        var skewers = Listing(SkewersUrl);
 
-        var pull = await Lidl(fetcher, OffersPage).PullAsync([aubergine], CancellationToken.None);
+        var pull = await Lidl(fetcher, OffersPage).PullAsync([skewers], CancellationToken.None);
 
         pull.Outcome.Should().Be(PullOutcome.Failed);
-        pull.Listings[aubergine.ListingId].Quote.Should().BeNull();
-        pull.Listings[aubergine.ListingId].Error.Should().Contain("timeout");
-    }
-
-    [Fact]
-    public async Task Lidl_does_not_record_no_price_for_a_product_when_an_offer_page_came_back_without_products()
-    {
-        var fetcher = new FakeFetcher()
-            .Serve(OffersPage, "<html>redesigned</html>")
-            .Serve(AubergineUrl, Fixtures.Read("lidl-product-page-no-price.html"));
-        var aubergine = Listing(AubergineUrl);
-
-        var pull = await Lidl(fetcher, OffersPage).PullAsync([aubergine], CancellationToken.None);
-
-        pull.Outcome.Should().Be(PullOutcome.Failed);
-        pull.Listings[aubergine.ListingId].Quote.Should().BeNull();
-        pull.Listings[aubergine.ListingId].Error.Should().Contain("page layout");
+        pull.Message.Should().Contain("page layout");
+        pull.Listings[skewers.ListingId].IsUnlisted.Should().BeTrue("no reading is a failure of the listing itself");
     }
 
     [Fact]
@@ -158,22 +94,6 @@ public sealed class PriceSourceTests
         pull.Outcome.Should().Be(PullOutcome.Blocked);
         pull.Message.Should().Contain("403").And.Contain("does not try to get around");
         fetcher.Requested.Should().Equal(OffersPage);
-    }
-
-    [Fact]
-    public async Task A_lidl_page_that_changed_shape_is_a_failure_for_that_product_only()
-    {
-        var fetcher = new FakeFetcher()
-            .Serve(OffersPage, Fixtures.Read("lidl-offers-page.html"))
-            .Serve(AubergineUrl, "<html><body>redesigned</body></html>");
-        var skewers = Listing(SkewersUrl);
-        var aubergine = Listing(AubergineUrl);
-
-        var pull = await Lidl(fetcher, OffersPage).PullAsync([skewers, aubergine], CancellationToken.None);
-
-        pull.Outcome.Should().Be(PullOutcome.Partial);
-        pull.Listings[skewers.ListingId].Quote.Should().NotBeNull();
-        pull.Listings[aubergine.ListingId].Error.Should().Contain("page layout");
     }
 
     [Fact]

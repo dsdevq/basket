@@ -2,8 +2,9 @@
 
 Reads Dunnes product pages (and Tesco's, while it is not paused, see below) in an ordinary browser on **your own PC and home connection** and posts the
 prices to basket's write-only ingest endpoint (`POST /api/ingest/prices`). tesco.ie and dunnesstoresgrocery.com
-refuse the VPS, so this is how those shops get prices. Aldi is no longer read here: the server's nightly job reads Aldi's product API
-("Catalog 3/14: the Aldi sweep" in the decisions), and the ingest endpoints answer `store_not_ingested` for it (see [docs/decisions.md](../docs/decisions.md), "M2 decisions",
+refuse the VPS, so this is how those shops get prices. Aldi and Lidl are not read here: the server sweeps their whole range every night and
+prices the linked pages from it ("Catalog 3/14: the Aldi sweep", "Catalog 14/14: retire per-listing reads" in the decisions), so the reader has no Aldi
+parser, an `aldi` entry in the URL file is refused, and the ingest endpoints answer `store_not_ingested` for it (see [docs/decisions.md](../docs/decisions.md), "M2 decisions",
 "Price ingest decisions" and "Dunnes: the server cannot read it, the PC reader does").
 A product with a page in one of these shops that has not been read yet shows "Waiting for the next PC read" in basket.
 
@@ -76,7 +77,7 @@ issuer). Exit code `0` when all four pass, `1` otherwise.
 ## Which pages: the catalog, then the URL file
 
 With the fleet identity the reader reads the list from basket itself (`GET /api/products`, scope `basket:catalog-read`): every
-product's linked page at a shop the PC reads (Dunnes, Tesco). Each address goes through the same check as the URL file
+product's linked page at a shop the PC reads (Dunnes, Tesco: the shops with no server-side catalog sweep, so page-by-page reading is how their prices arrive). Each address goes through the same check as the URL file
 below; one that fails it is skipped and counted in the log. Link a product to a shop page in basket and the next run reads it.
 An empty catalog means nothing to read (the file is not consulted).
 
@@ -106,7 +107,7 @@ anything else stops the run before a browser opens, naming the entry. Query stri
   fingerprint or user-agent changes, no proxy, no CAPTCHA solving. It is driven by Playwright, and a shop may notice and
   refuse; that is accepted (below).
 - Each page's price, name and stock are posted as read, with the was price and promo text where the shop's markup gives
-  them (Aldi only; see the Tesco and Dunnes sections below); basket dates the reading itself. Every page also posts the product
+  them (see the Tesco and Dunnes sections below); basket dates the reading itself. Every page also posts the product
   photo's address (the JSON-LD `image`, else `og:image`; https only, otherwise left out), never the picture; see
   [docs/decisions.md](../docs/decisions.md) ("The product photo"). Every shop's page also posts its category, the breadcrumb
   as a path ("Chilled Food > Milk"), when the page has one; see "Each store page keeps its category" there. A page it cannot read (shop changed its
@@ -134,7 +135,7 @@ On 2026-11-07 tesco.ie answered every fresh, reader-made Chrome profile with Aka
 while a long-used Chrome profile was served a real page. So the Tesco parser follows the page's schema.org markup and is
 tested on hand-written fixtures only. It reads the price, name and stock from the JSON-LD offer, the category from the page's
 breadcrumb, the photo address (see above), and nothing else from the visible text, so Tesco's was price, Clubcard price and offer dates are not posted
-until a live page shows where they can be read safely. The Aldi parser is tested on trimmed copies of live pages.
+until a live page shows where they can be read safely.
 
 ### The one manual step: open the reader's profile by hand once
 
@@ -155,7 +156,7 @@ cannot open the profile while Chrome has it open). Then, with Tesco back in `ENA
 npm start -- --store tesco
 ```
 
-`--store tesco` (or `aldi`, `dunnes`) runs only that shop's entries; everything else is unchanged. If Tesco still refuses, the reader
+`--store tesco` (or `dunnes`) runs only that shop's entries; everything else is unchanged. If Tesco still refuses, the reader
 stops that shop and records it as in "A blocked run"; it does not try again. Nothing here warms up, imitates or hides the
 automation, and the reader never handles your credentials: you type them into Chrome yourself. If Akamai still refuses,
 using your personal Chrome with an Allow click is your call, not something the reader does. If a Chrome crash leaves the
@@ -199,7 +200,7 @@ Settings (or use the fleet identity), and point `BASKET_API_ORIGIN` at `http://l
 ## Running it every day
 
 On this PC the reader runs once a day by itself, window-less, whenever the PC is on and Tailscale is up. Nobody has to be at the PC
-and no terminal has to be open. Dunnes only comes from the PC (Lidl and Aldi have the server's nightly job), so this is what keeps it
+and no terminal has to be open. Dunnes only comes from the PC (Lidl and Aldi are swept by the server every night), so this is what keeps it
 fresh. Tesco stays off (`ENABLED_STORES`).
 
 ```text
@@ -242,13 +243,13 @@ is not an outage and would never fix itself: it logs `failed: ...` and exits 1, 
 finished run: exit 0, day stamped, the block named in the line. Dunnes is behind a Cloudflare challenge today and shows up like this:
 
 ```text
-2026-11-14T10:18:17.195Z read: aldi 4/4 read, 4 accepted; dunnes blocked (HTTP 403; 0 not asked), 0/1 read, 0 accepted (reader exit 2)
+2026-11-14T10:18:17.195Z read: tesco 4/4 read, 4 accepted; dunnes blocked (HTTP 403; 0 not asked), 0/1 read, 0 accepted (reader exit 2)
 ```
 
 Only the reader failing outright (exit `1`: it could not start, or basket refused a batch) is `failed:` and leaves the day open.
 
-**Headless.** The scheduled run sets `BASKET_READER_HEADLESS=1`, so no Chrome window ever opens on the PC; Aldi reads the same
-headless (checked 2026-11-14: 4 of 4 pages read and accepted). To watch a run, put `Environment=BASKET_READER_HEADLESS=0` (and the
+**Headless.** The scheduled run sets `BASKET_READER_HEADLESS=1`, so no Chrome window ever opens on the PC; reading is the same
+headless. To watch a run, put `Environment=BASKET_READER_HEADLESS=0` (and the
 `DISPLAY`/`WAYLAND_DISPLAY`/`XDG_RUNTIME_DIR` of WSLg) in the unit by `systemctl --user edit`. The unit uses the reader's own
 Chrome profile (`~/.local/state/basket-pc-reader/profile`), never the everyday one.
 

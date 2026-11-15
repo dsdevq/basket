@@ -60,5 +60,5 @@ $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatt
   -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Hours 3)
 
 Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $triggers -Settings $settings `
-  -Principal $principal -Description 'Reads Aldi and Dunnes prices into basket once a day (pc-reader, WSL).' -Force | Out-Null
+  -Principal $principal -Description 'Reads Dunnes prices into basket once a day (pc-reader, WSL).' -Force | Out-Null
 Write-Output "registered task '$taskName': $how"

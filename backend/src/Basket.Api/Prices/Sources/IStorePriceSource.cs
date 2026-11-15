@@ -2,8 +2,7 @@ using Basket.Api.Data;
 
 namespace Basket.Api.Prices.Sources;
 
-/// <summary><paramref name="NeedsCategory"/>: no reading has stored a category for it yet, so a source that would not otherwise open its page may do so once.</summary>
-public sealed record ListingToCheck(Guid ListingId, Uri Url, bool NeedsCategory = false);
+public sealed record ListingToCheck(Guid ListingId, Uri Url);
 
 /// <summary>What reading one listing produced: a quote, or the reason there is none.</summary>
 public sealed record ListingPull(PriceQuote? Quote, string? Error)
@@ -11,6 +10,11 @@ public sealed record ListingPull(PriceQuote? Quote, string? Error)
     public static ListingPull Priced(PriceQuote quote) => new(quote, null);
 
     public static ListingPull Failed(string error) => new(null, error);
+
+    /// <summary>The source's pages do not list this one (another reader prices it): nothing is recorded for it, not even a failure.</summary>
+    public static ListingPull Unlisted { get; } = new(null, null);
+
+    public bool IsUnlisted => Quote is null && Error is null;
 }
 
 public sealed record StorePull(PullOutcome Outcome, string? Message, IReadOnlyDictionary<Guid, ListingPull> Listings);
@@ -33,15 +37,5 @@ internal static class StorePulls
     {
         var message = $"{detail}. basket does not try to get around a block.";
         return new StorePull(PullOutcome.Blocked, message, listings.ToDictionary(l => l.ListingId, _ => ListingPull.Failed(message)));
-    }
-
-    public static StorePull Summarize(IReadOnlyList<ListingToCheck> listings, Dictionary<Guid, ListingPull> results, string? failureHint = null)
-    {
-        var read = results.Values.Count(r => r.Quote is not null);
-        var outcome = read == listings.Count ? PullOutcome.Ok : read > 0 ? PullOutcome.Partial : PullOutcome.Failed;
-        var message = outcome == PullOutcome.Ok
-            ? null
-            : failureHint ?? results.Values.Select(r => r.Error).FirstOrDefault(e => e is not null);
-        return new StorePull(outcome, message, results);
     }
 }
