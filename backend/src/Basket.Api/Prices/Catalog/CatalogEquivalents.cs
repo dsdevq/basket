@@ -52,14 +52,14 @@ public static class CatalogEquivalents
     {
         var facts = CatalogRows.FactsOf(source);
         var searchable = Gtin.TryNormalize(facts.Barcode, out _)
-            || ((facts.Size ?? ProductSize.Parse(facts.Name)) is not null && CandidateMatcher.KeyWord(facts.Name) is not null);
+            || ((facts.Size ?? ProductSize.Parse(facts.Name)) is not null && CandidateMatcher.KeyWord(source.Name) is not null);
 
         var offered = new List<(StoreProduct Row, MatchVerdict Verdict)>();
         if (searchable)
         {
             foreach (var store in Stores.All.Where(s => s != source.Store))
             {
-                foreach (var row in await CatalogRows.NarrowAsync(db, store, facts, ct))
+                foreach (var row in await CatalogRows.NarrowAsync(db, store, facts, ct, source.Name))
                 {
                     var verdict = CandidateMatcher.Evaluate(facts, new CandidateFacts(CatalogRows.TitleOf(row), row.Barcode, row.Category, CatalogRows.SizeOf(row)));
                     if (verdict is not null)

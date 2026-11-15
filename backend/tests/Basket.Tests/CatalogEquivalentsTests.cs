@@ -163,6 +163,22 @@ public sealed class CatalogEquivalentsTests : IClassFixture<BasketFactory>
     }
 
     [Fact]
+    public async Task A_brand_kept_in_its_own_field_does_not_hide_the_same_product_in_another_shop()
+    {
+        var owner = await SeedAsync();
+        var source = await AddAsync(Store.Lidl, "Baked Beans", 415, "g", brand: "Heinz");
+        await AddAsync(Store.Aldi, "Baked Beans", 415, "g", brand: "Heinz");
+        await AddAsync(Store.Tesco, "Baked Beans", 415, "g", brand: "Branston");
+
+        var body = await GetAsync(owner, source.Id);
+
+        var aldi = Shop(body, "aldi").GetProperty("items").EnumerateArray().Should().ContainSingle().Subject;
+        aldi.GetProperty("item").GetProperty("name").GetString().Should().Be("Baked Beans");
+        aldi.GetProperty("basis").GetString().Should().Be("name_size");
+        Shop(body, "tesco").GetProperty("items").GetArrayLength().Should().Be(0);
+    }
+
+    [Fact]
     public async Task A_different_size_or_pack_is_never_an_equivalent()
     {
         var owner = await SeedAsync();

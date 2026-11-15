@@ -20,7 +20,11 @@ public static class CatalogRows
     public const int MaxRowsPerStore = 300;
 
     /// <summary>The live (not discontinued) rows of a shop worth comparing with the product, in a fixed order.</summary>
-    public static async Task<List<StoreProduct>> NarrowAsync(AppDbContext db, Store store, ProductFacts facts, CancellationToken ct)
+    /// <param name="kindName">
+    /// The name whose first generic word narrows by kind: the product's own name, without a brand the shops keep in a field of
+    /// its own (which would make the brand the key word and miss every row that states the same product without it). Defaults to the facts' name.
+    /// </param>
+    public static async Task<List<StoreProduct>> NarrowAsync(AppDbContext db, Store store, ProductFacts facts, CancellationToken ct, string? kindName = null)
     {
         var shop = db.StoreProducts.AsNoTracking().Where(p => p.Store == store && p.DiscontinuedAt == null);
         var rows = new Dictionary<Guid, StoreProduct>();
@@ -33,7 +37,7 @@ public static class CatalogRows
         }
 
         var size = facts.Size ?? ProductSize.Parse(facts.Name);
-        if (size is not null && CandidateMatcher.KeyWord(facts.Name) is { } word)
+        if (size is not null && CandidateMatcher.KeyWord(kindName ?? facts.Name) is { } word)
         {
             var unit = size.Unit switch
             {
