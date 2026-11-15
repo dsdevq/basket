@@ -38,14 +38,4 @@ internal static class StorePulls
         var message = $"{detail}. basket does not try to get around a block.";
         return new StorePull(PullOutcome.Blocked, message, listings.ToDictionary(l => l.ListingId, _ => ListingPull.Failed(message)));
     }
-
-    public static StorePull Summarize(IReadOnlyList<ListingToCheck> listings, Dictionary<Guid, ListingPull> results, string? failureHint = null)
-    {
-        var read = results.Values.Count(r => r.Quote is not null);
-        var outcome = read == listings.Count ? PullOutcome.Ok : read > 0 ? PullOutcome.Partial : PullOutcome.Failed;
-        var message = outcome == PullOutcome.Ok
-            ? null
-            : failureHint ?? results.Values.Select(r => r.Error).FirstOrDefault(e => e is not null);
-        return new StorePull(outcome, message, results);
-    }
 }
