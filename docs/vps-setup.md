@@ -99,6 +99,8 @@ yet** - until one is, the deploy job queues and nothing deploys (CI itself runs 
 unaffected). Registering one is a box-side action for the captain/firstmate (same pattern as the finance-sentry runner:
 labels `lifekit-vps` and `basket`, the deploy user, Docker access). The runner needs `docker`, `docker compose`,
 `curl`, `python3`, `sops` and firstmate's age key, plus the contract checker at `/srv/lifekit-stack/scripts/platform-contract.py`.
+`sops` and `age` may sit in the deploy user's `~/.local/bin`: a hand-started runner listener has a bare `PATH`, so
+`docker/deploy.sh` appends that directory itself (a system `sops` still wins).
 The workflow logs in to ghcr with `GITHUB_TOKEN`, so the `ghcr.io/dsdevq/basket`
 package must let this repo's Actions read it (package settings > "Manage Actions access"; CI creates the package on its
 first push). The image build in CI also reads the `@lifekit-hq` packages with `GITHUB_TOKEN`.
