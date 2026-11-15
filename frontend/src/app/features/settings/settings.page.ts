@@ -1,6 +1,6 @@
-import {DOCUMENT} from '@angular/common';
 import {ChangeDetectionStrategy, Component, inject} from '@angular/core';
 import {Router} from '@angular/router';
+import {APP_SEEDS} from '@lifekit-hq/tokens/engine';
 import {
   ACCOUNT_SIGN_OUT_ID,
   AppearanceSettingsComponent,
@@ -112,10 +112,8 @@ export class SettingsPage {
   protected readonly session = inject(SessionStore);
   protected readonly chrome = inject(ShellChromeService);
   protected readonly version = APP_VERSION;
-  /** Basket's own colour, so the picker can offer "back to the app colour": `--app-seed` in the generated seed theme. */
-  protected readonly seed = getComputedStyle(inject(DOCUMENT).documentElement)
-    .getPropertyValue('--app-seed')
-    .trim();
+  /** Basket's own colour, so the picker can offer "back to the app colour": the library's seed for this app. */
+  protected readonly seed = APP_SEEDS.bk.seed;
 
   protected async openPeople(): Promise<void> {
     await this.router.navigateByUrl('/people');

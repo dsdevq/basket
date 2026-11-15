@@ -13,11 +13,10 @@
     "test": "ng test",
     "test:ci": "ng test basket --configuration ci",
     "e2e": "playwright test",
-    "lint": "lifekit-theme-sync --check --csp ../backend/src/Basket.Api/appsettings.json && node scripts/build-seed.mjs --check && npm run drift && ng lint --max-warnings 0",
+    "lint": "lifekit-theme-sync --check --csp ../backend/src/Basket.Api/appsettings.json && npm run drift && ng lint --max-warnings 0",
     "drift": "lifekit-chrome-check drift src public",
     "e2e:screens:update": "playwright test --grep \"screen baseline\" --update-snapshots=changed",
     "sync:theme": "lifekit-theme-sync --csp ../backend/src/Basket.Api/appsettings.json",
-    "build:seed": "node scripts/build-seed.mjs",
     "format": "prettier --write \"src/**/*.{ts,html,scss}\"",
     "format:check": "prettier --check \"src/**/*.{ts,html,scss}\""
   },

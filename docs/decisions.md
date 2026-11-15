@@ -15,7 +15,7 @@ planning record so this repo carries its own reasons; the M1 section holds the c
 | Q6 | Matching uses **barcodes, store search and size rules**. **No LLM inside the app**; a model can join later through MCP. | M2-M3. The app stays deterministic and cheap to run; cognition stays outside, as in lifekit-dashboard. |
 | Q7 | Loyalty prices (Clubcard, Lidl Plus) count. | M2+. |
 | Q8 | Backend **.NET 10 minimal API + EF Core + Postgres + Hangfire**, frontend **Angular 22 on lifekit-common**. | The whole of M1. |
-| Q9 | Palette seed **Violet `#7c3aed`**. | `frontend/src/seeds/basket.css` is generated from it; Settings offers "back to the app colour". |
+| Q9 | Palette seed **Violet `#7c3aed`**. | The seed comes from the shared library (`@lifekit-hq/tokens/seeds/bk.css`, `APP_SEEDS.bk.seed`); Settings offers "back to the app colour". |
 | Q10 | **Her list first** (M1), then prices, Plan, Lidl. | M1 has the list, accounts and nothing else. |
 
 ## M1 decisions
