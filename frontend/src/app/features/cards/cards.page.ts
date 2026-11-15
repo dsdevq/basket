@@ -7,6 +7,7 @@ import {
   ListSectionComponent,
   PageComponent,
   SkeletonComponent,
+  ToastService,
 } from '@lifekit-hq/ui';
 import {firstValueFrom} from 'rxjs';
 
@@ -61,6 +62,7 @@ export class CardsPage implements OnInit {
   private readonly api = inject(CardsApi);
   private readonly drawer = inject(CmnDrawerService);
   private readonly router = inject(Router);
+  private readonly toast = inject(ToastService);
 
   protected readonly rows = signal<readonly Row[]>([]);
   protected readonly loading = signal(true);
@@ -79,7 +81,11 @@ export class CardsPage implements OnInit {
       );
       this.failed.set(false);
     } catch {
-      this.failed.set(true);
+      if (this.rows().length > 0) {
+        this.toast.error('Could not refresh your cards. Try again.');
+      } else {
+        this.failed.set(true);
+      }
     } finally {
       this.loading.set(false);
     }
