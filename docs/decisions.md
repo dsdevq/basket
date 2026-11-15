@@ -382,8 +382,9 @@ change borrows one named pattern; the audit is the 2026-11-07 phone UX audit (39
   List, Shelf, Plan, Cards and Prices (the Prices page sits behind More, and is a root too) bind `[reload]` to the page's
   own load, which returns a promise, so the shell's indicator stays until the fetch settles and no `reloading` flag is
   needed. The Shelf reloads what it shows: the prices, the list and the habits. Failure and offline stay with the page's
-  error state ("Try again") or its toast; the pull adds no error UI of its own, and it is not the only way to reload, since
-  List and Plan also re-read on returning to the tab (List every 15 seconds too) and the error state has a button. More
+  error state ("Try again") or its toast (a failed pull keeps the cards or plan already loaded); the pull adds no error UI
+  of its own, and it is not the only way to reload, since List, Shelf and Plan also re-read on returning to the tab (List
+  every 15 seconds too) and the error state has a button. More
   is a kit menu with nothing to fetch, and People and Settings are pushed screens, so none of them registers a reload.
   `PricesStore.load` drops a response that a later load or a local remove has overtaken (as `ListStore.load` does), so a
   slow pull cannot bring a deleted product back.
