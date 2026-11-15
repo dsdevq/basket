@@ -1,4 +1,5 @@
 using Basket.Api.Prices;
+using Basket.Api.Walk;
 
 namespace Basket.Api.Plan;
 
@@ -24,8 +25,9 @@ public sealed record PlanPairSplit(
 /// </summary>
 public static class PairSplitBuilder
 {
-    public static PlanPairSplit? Build(IReadOnlyList<PlanItem> items)
+    public static PlanPairSplit? Build(IReadOnlyList<PlanItem> items, WalkOrders? walk = null)
     {
+        walk ??= WalkOrders.Seeded;
         if (items.Count == 0)
         {
             return null;
@@ -37,7 +39,7 @@ public static class PairSplitBuilder
         {
             for (var second = first + 1; second < shops.Count; second++)
             {
-                var split = Pair(items, shops[first], shops[second]);
+                var split = Pair(items, shops[first], shops[second], walk);
                 if (split is not null && (cheapest is null || split.Total < cheapest.Total))
                 {
                     cheapest = split;
@@ -48,7 +50,7 @@ public static class PairSplitBuilder
         return cheapest;
     }
 
-    private static PlanPairSplit? Pair(IReadOnlyList<PlanItem> items, Store first, Store second)
+    private static PlanPairSplit? Pair(IReadOnlyList<PlanItem> items, Store first, Store second, WalkOrders walk)
     {
         var lines = new Dictionary<Store, List<ByShopLine>> { [first] = [], [second] = [] };
         foreach (var item in items)
@@ -75,7 +77,7 @@ public static class PairSplitBuilder
 
         var groups = new[] { first, second }
             .Where(shop => lines[shop].Count > 0)
-            .Select(shop => ByShopBuilder.Group(shop, lines[shop]))
+            .Select(shop => ByShopBuilder.Group(shop, lines[shop], walk))
             .ToList();
         var all = groups.SelectMany(g => g.Lines).ToList();
         return new PlanPairSplit(

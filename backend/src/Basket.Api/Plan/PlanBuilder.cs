@@ -1,6 +1,7 @@
 using Basket.Api.Data;
 using Basket.Api.Prices;
 using Basket.Api.Prices.Promotions;
+using Basket.Api.Walk;
 
 namespace Basket.Api.Plan;
 
@@ -114,10 +115,11 @@ public static class PlanBuilder
         ILookup<Guid, StoreListing> listings,
         IReadOnlyDictionary<Guid, PriceObservation> latest,
         DateOnly today,
-        IReadOnlyDictionary<(Guid ProductId, Store Store), PaidPrice>? paid = null)
+        IReadOnlyDictionary<(Guid ProductId, Store Store), PaidPrice>? paid = null,
+        WalkOrders? walk = null)
     {
         var items = lines.Select(line => Item(line, products, listings, latest, today, paid)).ToList();
-        return new PlanResponse(today, PromotionBuilder.StaleAfterDays, items, Coverage(items));
+        return new PlanResponse(today, PromotionBuilder.StaleAfterDays, items, Coverage(items, walk));
     }
 
     private static PlanItem Item(
@@ -218,7 +220,7 @@ public static class PlanBuilder
         return (null, first.Store);
     }
 
-    private static PlanCoverage Coverage(IReadOnlyList<PlanItem> items)
+    private static PlanCoverage Coverage(IReadOnlyList<PlanItem> items, WalkOrders? walk)
     {
         var counts = Stores.All
             .Select(store => (Slug: store.Slug(), Count: items.Count(i => PricedAt(i, store.Slug()))))
@@ -239,7 +241,7 @@ public static class PlanBuilder
             .Where(i => closest is null || !PricedAt(i, closest))
             .Select(i => new PlanBlocker(i.Id, i.Text, Reason(i, closest)))
             .ToList();
-        return new PlanCoverage(false, null, [], closest, blockers, PairSplitBuilder.Build(items));
+        return new PlanCoverage(false, null, [], closest, blockers, PairSplitBuilder.Build(items, walk));
     }
 
     private static bool PricedAt(PlanItem item, string store) =>
