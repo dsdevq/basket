@@ -29,6 +29,9 @@ if [[ ! -f $KEYFILE ]]; then
   echo "error: no age key at $KEYFILE - cannot decrypt docker/.env.sops (set SOPS_AGE_KEY_FILE to another recipient's key)" >&2
   exit 1
 fi
+# The self-hosted runner listener starts with a bare PATH; sops and age live in the user-local bin (appended so a system sops still wins).
+[[ -d "$HOME/.local/bin" ]] && PATH="$PATH:$HOME/.local/bin"
+
 if ! command -v sops >/dev/null 2>&1; then
   echo "error: sops missing on PATH. Install from https://github.com/getsops/sops/releases" >&2
   exit 1
