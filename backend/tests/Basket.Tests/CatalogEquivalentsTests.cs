@@ -179,6 +179,20 @@ public sealed class CatalogEquivalentsTests : IClassFixture<BasketFactory>
     }
 
     [Fact]
+    public async Task A_brand_written_in_the_name_finds_the_same_product_in_another_shop()
+    {
+        var owner = await SeedAsync();
+        var source = await AddAsync(Store.Lidl, "Heinz Baked Beans", 415, "g", brand: "Heinz");
+        await AddAsync(Store.Aldi, "Heinz Baked Beans", 415, "g");
+        await AddAsync(Store.Dunnes, "Branston Baked Beans", 415, "g");
+
+        var body = await GetAsync(owner, source.Id);
+
+        Names(Shop(body, "aldi")).Should().Equal("Heinz Baked Beans");
+        Shop(body, "dunnes").GetProperty("items").GetArrayLength().Should().Be(0);
+    }
+
+    [Fact]
     public async Task A_different_size_or_pack_is_never_an_equivalent()
     {
         var owner = await SeedAsync();
