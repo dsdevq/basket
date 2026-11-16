@@ -231,7 +231,9 @@ passkey accounts; the family sign-in pages (step A4, below) have landed, while t
   cross-site request has nothing to ride on, and a signed-in browser session alone is refused. A token sent to any other
   endpoint is refused too: nothing else looks at it.
 - **Test data.** Tesco and Aldi block the VPS, so the ingest fixture (`Fixtures/ingest-batch.json`) is a batch written to
-  the contract with realistic prices, not a page recorded from a shop.
+  the contract with realistic prices, not a page recorded from a shop. Its promo window is the placeholders
+  `{validFrom}` and `{validUntil}`, which the test fills relative to the factory clock so the promo price stays current
+  whatever day the suite runs.
 
 ## Tesco profile decision
 

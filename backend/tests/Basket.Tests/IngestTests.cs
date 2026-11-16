@@ -166,7 +166,13 @@ public sealed class IngestTests : IClassFixture<BasketFactory>
     {
         var owner = await SeedAsync();
         var (_, token) = await MintAsync(owner);
-        var batch = Fixtures.Read("ingest-batch.json");
+        // The promo window is relative to the factory clock, so the Clubcard price stays current whatever day the suite runs.
+        var today = PriceRecorder.DublinDay(_factory.Clock.GetUtcNow());
+        var promoFrom = today.AddDays(-13);
+        var promoUntil = today.AddDays(1);
+        var batch = Fixtures.Read("ingest-batch.json")
+            .Replace("{validFrom}", promoFrom.ToString("yyyy-MM-dd"))
+            .Replace("{validUntil}", promoUntil.ToString("yyyy-MM-dd"));
 
         var response = await Relay(token).PostAsync("/api/ingest/prices", new StringContent(batch, Encoding.UTF8, "application/json"));
 
@@ -175,7 +181,6 @@ public sealed class IngestTests : IClassFixture<BasketFactory>
         body.GetProperty("accepted").GetInt32().Should().Be(2);
         body.GetProperty("rejected").GetInt32().Should().Be(0);
 
-        var today = PriceRecorder.DublinDay(_factory.Clock.GetUtcNow());
         await _factory.WithDb(async db =>
         {
             var tesco = await db.PriceObservations.Join(db.StoreListings, o => o.ListingId, l => l.Id, (o, l) => new { o, l }).SingleAsync(x => x.l.Store == Store.Tesco);
@@ -186,8 +191,8 @@ public sealed class IngestTests : IClassFixture<BasketFactory>
             tesco.o.LoyaltyPrice.Should().Be(1.89m);
             tesco.o.LoyaltyScheme.Should().Be("Clubcard");
             tesco.o.PromoText.Should().Be("Clubcard Price");
-            tesco.o.ValidFrom.Should().Be(new DateOnly(2026, 11, 2));
-            tesco.o.ValidUntil.Should().Be(new DateOnly(2099, 12, 31));
+            tesco.o.ValidFrom.Should().Be(promoFrom);
+            tesco.o.ValidUntil.Should().Be(promoUntil);
             tesco.o.InStock.Should().BeTrue();
             tesco.l.Title.Should().Be("Tesco Fresh Whole Milk 2 Litre");
             tesco.l.ImageUrl.Should().Be("https://digitalcontent.api.tesco.com/v2/media/ghs/0a1b2c3d/tesco-fresh-whole-milk.jpeg?h=225&w=225");
