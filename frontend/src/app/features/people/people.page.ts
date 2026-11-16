@@ -45,12 +45,12 @@ import {InviteSheetComponent} from './invite.sheet';
 
       <cmn-async-state
         [status]="asyncStatus()"
+        [keepContent]="false"
+        [crossfade]="false"
         (retry)="load()"
         emptySubMessage="Invite someone to share this list."
         errorMessage="Could not load people. Check your connection."
         class="contents"
-        [keepContent]="false"
-        [crossfade]="false"
         retryable
       >
         <cmn-skeleton shape="section" skeleton />

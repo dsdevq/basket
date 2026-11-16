@@ -63,11 +63,11 @@ import {StoreLinkSheetComponent} from './store-link.sheet';
       <cmn-async-state
         [emptySubMessage]="emptyBody"
         [status]="asyncStatus()"
+        [keepContent]="false"
+        [crossfade]="false"
         (retry)="store.load()"
         errorMessage="The prices did not load. Check your connection."
         class="contents"
-        [keepContent]="false"
-        [crossfade]="false"
         retryable
       >
         <cmn-skeleton shape="section" skeleton />
