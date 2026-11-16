@@ -544,8 +544,8 @@ finance-sentry first had), bumped to 4.7.1.
   by a spec) and a `basket.whatsNew.lastSeen` marker. The sheet, the list, the dot and the seen marker are the library's.
 - **Notes.** `src/whats-new/notes.md`, plain second person; `lifekit-whats-new` runs before `start`, `build` and `build:prod`
   to generate `public/whats-new.json` (not committed; fed by `CHANGELOG.md`, see "Releases: release-please and the weekly release").
-  `npm run lint` runs `lint:whats-new` (`lifekit-whats-new --check --changelog ../CHANGELOG.md`), which checks the notes against the
-  changelog without needing the generated file. A line ending in `(owner)` is shown only to the owner (`includeOwnerNotes` reads
+  `npm run lint` runs `lint:whats-new` (`lifekit-whats-new --changelog ../CHANGELOG.md`), which regenerates the file and so fails on notes the
+  changelog cannot take; `--check` is not used, since it compares against a file CI does not have. A line ending in `(owner)` is shown only to the owner (`includeOwnerNotes` reads
   `SessionStore.isOwner()`, bumped to `@lifekit-hq/*` 5.6.0).
 - **Where it shows.** An account-menu item (`whatsNewMenuItem`) in the app shell and on the More page, with the dot until the
   sheet is opened. A first run on a device counts as seen, so a new person is not greeted with a dot.

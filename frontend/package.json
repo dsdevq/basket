@@ -14,7 +14,7 @@
     "test:ci": "ng test basket --configuration ci",
     "e2e": "playwright test",
     "lint": "lifekit-theme-sync --check --csp ../backend/src/Basket.Api/appsettings.json && npm run drift && npm run lint:whats-new && ng lint --max-warnings 0",
-    "lint:whats-new": "lifekit-whats-new --check --changelog ../CHANGELOG.md",
+    "lint:whats-new": "lifekit-whats-new --changelog ../CHANGELOG.md",
     "drift": "lifekit-chrome-check drift src public",
     "e2e:screens:update": "playwright test --grep \"screen baseline\" --update-snapshots=changed",
     "sync:theme": "lifekit-theme-sync --csp ../backend/src/Basket.Api/appsettings.json",
