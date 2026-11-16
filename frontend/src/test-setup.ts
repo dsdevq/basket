@@ -18,3 +18,17 @@ Object.defineProperty(window, 'matchMedia', {
     return list;
   },
 });
+
+// jsdom has no `DOMMatrixReadOnly`. The library's list motion reads a row's transform through it when rows
+// change, so a spec whose list fills after the first render needs an identity answer.
+if (!('DOMMatrixReadOnly' in globalThis)) {
+  class IdentityMatrix {
+    public readonly m41 = 0;
+    public readonly m42 = 0;
+  }
+  Object.defineProperty(globalThis, 'DOMMatrixReadOnly', {
+    writable: true,
+    configurable: true,
+    value: IdentityMatrix,
+  });
+}

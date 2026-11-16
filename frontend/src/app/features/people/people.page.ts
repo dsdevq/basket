@@ -1,9 +1,17 @@
 import {DatePipe} from '@angular/common';
-import {ChangeDetectionStrategy, Component, inject, type OnInit, signal} from '@angular/core';
 import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  type OnInit,
+  signal,
+} from '@angular/core';
+import {
+  AsyncStateComponent,
+  type AsyncStateStatus,
   ButtonComponent,
   CmnDrawerService,
-  EmptyStateComponent,
   ListItemRowComponent,
   ListSectionComponent,
   PageComponent,
@@ -21,8 +29,8 @@ import {InviteSheetComponent} from './invite.sheet';
   selector: 'bk-people-page',
   imports: [
     DatePipe,
+    AsyncStateComponent,
     ButtonComponent,
-    EmptyStateComponent,
     ListItemRowComponent,
     ListSectionComponent,
     PageComponent,
@@ -35,17 +43,17 @@ import {InviteSheetComponent} from './invite.sheet';
         Invite someone
       </cmn-button>
 
-      @if (loading()) {
-        <cmn-skeleton shape="section" />
-      } @else if (failed()) {
-        <cmn-empty-state
-          (action)="load()"
-          kind="error"
-          message="Could not load people"
-          subMessage="Check your connection."
-          actionLabel="Try again"
-        />
-      } @else {
+      <cmn-async-state
+        [status]="asyncStatus()"
+        [keepContent]="false"
+        [crossfade]="false"
+        (retry)="load()"
+        emptySubMessage="Invite someone to share this list."
+        errorMessage="Could not load people. Check your connection."
+        class="contents"
+        retryable
+      >
+        <cmn-skeleton shape="section" skeleton />
         <cmn-list-section heading="In basket" card>
           @for (member of members(); track member.id) {
             <cmn-list-item-row
@@ -73,7 +81,7 @@ import {InviteSheetComponent} from './invite.sheet';
             }
           </cmn-list-section>
         }
-      }
+      </cmn-async-state>
     </cmn-page>
   `,
 })
@@ -86,6 +94,13 @@ export class PeoplePage implements OnInit {
   protected readonly invites = signal<readonly PendingInvite[]>([]);
   protected readonly loading = signal(true);
   protected readonly failed = signal(false);
+
+  protected readonly asyncStatus = computed<AsyncStateStatus>(() => {
+    if (this.loading()) {
+      return 'loading';
+    }
+    return this.failed() ? 'error' : 'success';
+  });
 
   public ngOnInit(): void {
     void this.load();

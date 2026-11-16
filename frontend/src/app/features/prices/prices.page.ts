@@ -1,10 +1,19 @@
 import {DOCUMENT} from '@angular/common';
-import {ChangeDetectionStrategy, Component, DestroyRef, inject, type OnInit} from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  DestroyRef,
+  inject,
+  type OnInit,
+} from '@angular/core';
 import {takeUntilDestroyed} from '@angular/core/rxjs-interop';
 import {FormControl, FormGroup, ReactiveFormsModule} from '@angular/forms';
 import {ActivatedRoute} from '@angular/router';
 import {
   AlertComponent,
+  AsyncStateComponent,
+  type AsyncStateStatus,
   ButtonComponent,
   CmnDrawerService,
   EmptyStateComponent,
@@ -34,6 +43,7 @@ import {StoreLinkSheetComponent} from './store-link.sheet';
     ReactiveFormsModule,
     ComposerBarComponent,
     AlertComponent,
+    AsyncStateComponent,
     ButtonComponent,
     EmptyStateComponent,
     InputComponent,
@@ -50,69 +60,61 @@ import {StoreLinkSheetComponent} from './store-link.sheet';
         <cmn-alert [title]="problem" variant="warning" />
       }
 
-      @switch (store.status()) {
-        @case ('loading') {
-          <cmn-skeleton shape="section" />
+      <cmn-async-state
+        [emptySubMessage]="emptyBody"
+        [status]="asyncStatus()"
+        [keepContent]="false"
+        [crossfade]="false"
+        (retry)="store.load()"
+        errorMessage="The prices did not load. Check your connection."
+        class="contents"
+        retryable
+      >
+        <cmn-skeleton shape="section" skeleton />
+        @if (!store.products().length) {
+          <cmn-empty-state [subMessage]="emptyBody" icon="Tag" message="No products yet" />
         }
-        @case ('error') {
-          <cmn-empty-state
-            (action)="store.load()"
-            kind="error"
-            message="The prices did not load"
-            subMessage="Check your connection."
-            actionLabel="Try again"
-          />
-        }
-        @default {
-          @if (!store.products().length) {
-            <cmn-empty-state
-              icon="Tag"
-              message="No products yet"
-              subMessage="Search a shop by name and tap the right one, or type a name and link its page in each shop. basket reads the prices every night."
+        @for (product of store.products(); track product.id) {
+          <cmn-list-section [heading]="product.name" card>
+            <cmn-button
+              [aria-label]="'More for ' + product.name"
+              (clicked)="more(product)"
+              cmnListSectionAside
+              variant="ghost"
+              icon="Ellipsis"
             />
-          }
-          @for (product of store.products(); track product.id) {
-            <cmn-list-section [heading]="product.name" card>
-              <cmn-button
-                [aria-label]="'More for ' + product.name"
-                (clicked)="more(product)"
-                cmnListSectionAside
-                variant="ghost"
-                icon="Ellipsis"
-              />
-              @for (entry of product.stores; track entry.store) {
-                <cmn-list-item-row
-                  [label]="entry.name"
-                  [sublabel]="describe(entry)"
-                  [dimmed]="!entry.listing"
-                  [action]="true"
-                  (activated)="open(product, entry)"
-                  class="[&_.truncate]:overflow-visible [&_.truncate]:whitespace-pre-line [&_.truncate]:break-words"
-                >
-                  <span amount class="text-cmn-sm font-semibold text-text-primary">{{
-                    headline(entry)
-                  }}</span>
-                </cmn-list-item-row>
-              }
-            </cmn-list-section>
-          }
-          @if (store.stores().length) {
-            <cmn-list-section heading="Shop catalogs" card data-testid="catalog-health">
-              @for (status of store.stores(); track status.store) {
-                <cmn-list-item-row
-                  [label]="status.name"
-                  [sublabel]="healthText(status)"
-                  class="[&_.truncate]:overflow-visible [&_.truncate]:whitespace-pre-line [&_.truncate]:break-words"
-                >
-                  <cmn-tag [variant]="healthTag(status).variant" meta>{{
-                    healthTag(status).text
-                  }}</cmn-tag>
-                </cmn-list-item-row>
-              }
-            </cmn-list-section>
-          }
+            @for (entry of product.stores; track entry.store) {
+              <cmn-list-item-row
+                [label]="entry.name"
+                [sublabel]="describe(entry)"
+                [dimmed]="!entry.listing"
+                [action]="true"
+                (activated)="open(product, entry)"
+                class="[&_.truncate]:overflow-visible [&_.truncate]:whitespace-pre-line [&_.truncate]:break-words"
+              >
+                <span amount class="text-cmn-sm font-semibold text-text-primary">{{
+                  headline(entry)
+                }}</span>
+              </cmn-list-item-row>
+            }
+          </cmn-list-section>
         }
-      }
+        @if (store.stores().length) {
+          <cmn-list-section heading="Shop catalogs" card data-testid="catalog-health">
+            @for (status of store.stores(); track status.store) {
+              <cmn-list-item-row
+                [label]="status.name"
+                [sublabel]="healthText(status)"
+                class="[&_.truncate]:overflow-visible [&_.truncate]:whitespace-pre-line [&_.truncate]:break-words"
+              >
+                <cmn-tag [variant]="healthTag(status).variant" meta>{{
+                  healthTag(status).text
+                }}</cmn-tag>
+              </cmn-list-item-row>
+            }
+          </cmn-list-section>
+        }
+      </cmn-async-state>
       <bk-composer-bar>
         <form [formGroup]="form" (ngSubmit)="add()" class="flex items-center gap-cmn-2">
           <cmn-input
@@ -144,6 +146,15 @@ export class PricesPage implements OnInit {
   private readonly route = inject(ActivatedRoute);
 
   protected readonly store = inject(PricesStore);
+
+  protected readonly emptyBody =
+    'Search a shop by name and tap the right one, or type a name and link its page in each shop. basket reads the prices every night.';
+
+  /** The store's load state in the words `cmn-async-state` takes. */
+  protected readonly asyncStatus = computed<AsyncStateStatus>(() => {
+    const status = this.store.status();
+    return status === 'ready' ? 'success' : status;
+  });
 
   protected readonly name = new FormControl('', {nonNullable: true});
   protected readonly form = new FormGroup({name: this.name});

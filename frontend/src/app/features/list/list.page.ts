@@ -10,6 +10,8 @@ import {
 import {takeUntilDestroyed} from '@angular/core/rxjs-interop';
 import {FormControl, FormGroup, ReactiveFormsModule} from '@angular/forms';
 import {
+  AsyncStateComponent,
+  type AsyncStateStatus,
   ButtonComponent,
   CheckboxComponent,
   CmnDialogService,
@@ -43,6 +45,7 @@ const USUAL_SHOWN = 5;
   selector: 'bk-list-page',
   imports: [
     NgTemplateOutlet,
+    AsyncStateComponent,
     ReactiveFormsModule,
     ComposerBarComponent,
     ButtonComponent,
@@ -59,75 +62,71 @@ const USUAL_SHOWN = 5;
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <cmn-page [reload]="reload" kind="list" fill>
-      @switch (store.status()) {
-        @case ('loading') {
-          <cmn-skeleton shape="section" />
-        }
-        @case ('error') {
+      <cmn-async-state
+        [emptySubMessage]="emptyBody"
+        [status]="asyncStatus()"
+        [keepContent]="false"
+        [crossfade]="false"
+        (retry)="store.load()"
+        errorMessage="The list did not load. Check your connection."
+        class="contents"
+        retryable
+      >
+        <cmn-skeleton shape="section" skeleton />
+        @if (!store.items().length) {
           <cmn-empty-state
-            (action)="store.load()"
-            kind="error"
-            message="The list did not load"
-            subMessage="Check your connection."
-            actionLabel="Try again"
+            [subMessage]="emptyBody"
+            icon="ShoppingBasket"
+            message="Nothing on the list"
           />
         }
-        @default {
-          @if (!store.items().length) {
-            <cmn-empty-state
-              icon="ShoppingBasket"
-              message="Nothing on the list"
-              subMessage="Add the first thing you need. Everyone on the list sees it."
-            />
-          }
-          @if (store.toBuy().length) {
-            <cmn-list-section [heading]="'To buy · ' + store.toBuy().length" card>
-              @for (item of store.toBuy(); track item.id) {
-                <ng-container
-                  [ngTemplateOutlet]="row"
-                  [ngTemplateOutletContext]="{$implicit: item}"
-                />
-              }
-            </cmn-list-section>
-          }
-          @if (usually().length) {
-            <cmn-list-section heading="Usually bought" card>
-              @for (habit of usually(); track habit.productId) {
-                <cmn-list-item-row
-                  [label]="habit.name"
-                  [sublabel]="'Bought on ' + habit.boughtIn + ' trips'"
-                >
-                  <cmn-button
-                    [aria-label]="'Add ' + habit.name + ' to the list'"
-                    (clicked)="addUsual(habit.productId)"
-                    actions
-                    variant="ghost"
-                    icon="Plus"
-                  />
-                </cmn-list-item-row>
-              }
-            </cmn-list-section>
-          }
-          @if (store.done().length) {
-            <cmn-list-section [heading]="'Ticked · ' + store.done().length" card>
-              <cmn-button
-                [loading]="store.closing()"
-                (clicked)="finish()"
-                cmnListSectionAside
-                variant="primary"
-                icon="CheckCheck"
-                >Done shopping</cmn-button
-              >
-              @for (item of store.done(); track item.id) {
-                <ng-container
-                  [ngTemplateOutlet]="row"
-                  [ngTemplateOutletContext]="{$implicit: item}"
-                />
-              }
-            </cmn-list-section>
-          }
+        @if (store.toBuy().length) {
+          <cmn-list-section [heading]="'To buy · ' + store.toBuy().length" card>
+            @for (item of store.toBuy(); track item.id) {
+              <ng-container
+                [ngTemplateOutlet]="row"
+                [ngTemplateOutletContext]="{$implicit: item}"
+              />
+            }
+          </cmn-list-section>
         }
-      }
+        @if (usually().length) {
+          <cmn-list-section heading="Usually bought" card>
+            @for (habit of usually(); track habit.productId) {
+              <cmn-list-item-row
+                [label]="habit.name"
+                [sublabel]="'Bought on ' + habit.boughtIn + ' trips'"
+              >
+                <cmn-button
+                  [aria-label]="'Add ' + habit.name + ' to the list'"
+                  (clicked)="addUsual(habit.productId)"
+                  actions
+                  variant="ghost"
+                  icon="Plus"
+                />
+              </cmn-list-item-row>
+            }
+          </cmn-list-section>
+        }
+        @if (store.done().length) {
+          <cmn-list-section [heading]="'Ticked · ' + store.done().length" card>
+            <cmn-button
+              [loading]="store.closing()"
+              (clicked)="finish()"
+              cmnListSectionAside
+              variant="primary"
+              icon="CheckCheck"
+              >Done shopping</cmn-button
+            >
+            @for (item of store.done(); track item.id) {
+              <ng-container
+                [ngTemplateOutlet]="row"
+                [ngTemplateOutletContext]="{$implicit: item}"
+              />
+            }
+          </cmn-list-section>
+        }
+      </cmn-async-state>
       <bk-composer-bar>
         <form [formGroup]="form" (ngSubmit)="add()" class="flex items-center gap-cmn-2">
           <cmn-input
@@ -202,6 +201,14 @@ export class ListPage implements OnInit {
       .usual()
       .filter(habit => !waiting.has(habit.productId))
       .slice(0, USUAL_SHOWN);
+  });
+
+  protected readonly emptyBody = 'Add the first thing you need. Everyone on the list sees it.';
+
+  /** The store's load state in the words `cmn-async-state` takes. */
+  protected readonly asyncStatus = computed<AsyncStateStatus>(() => {
+    const status = this.store.status();
+    return status === 'ready' ? 'success' : status;
   });
 
   protected readonly text = new FormControl('', {nonNullable: true});

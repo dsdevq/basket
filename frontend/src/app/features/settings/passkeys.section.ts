@@ -1,10 +1,18 @@
 import {DatePipe} from '@angular/common';
-import {ChangeDetectionStrategy, Component, inject, type OnInit, signal} from '@angular/core';
 import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  type OnInit,
+  signal,
+} from '@angular/core';
+import {
+  AsyncStateComponent,
+  type AsyncStateStatus,
   ButtonComponent,
   CmnDialogService,
   CmnDrawerService,
-  EmptyStateComponent,
   ListItemRowComponent,
   SkeletonComponent,
   ToastService,
@@ -21,24 +29,21 @@ import {AddPasskeySheetComponent} from './add-passkey.sheet';
   selector: 'bk-passkeys-section',
   imports: [
     DatePipe,
+    AsyncStateComponent,
     ButtonComponent,
-    EmptyStateComponent,
     ListItemRowComponent,
     SkeletonComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    @if (loading()) {
-      <cmn-skeleton shape="section" />
-    } @else if (failed()) {
-      <cmn-empty-state
-        (action)="load()"
-        kind="error"
-        message="Could not load your passkeys"
-        subMessage="Check your connection."
-        actionLabel="Try again"
-      />
-    } @else {
+    <cmn-async-state
+      [status]="asyncStatus()"
+      (retry)="load()"
+      emptySubMessage="Add a passkey to sign in on this device."
+      errorMessage="Could not load your passkeys. Check your connection."
+      retryable
+    >
+      <cmn-skeleton shape="section" skeleton />
       <div class="flex flex-col gap-cmn-3">
         @for (passkey of passkeys(); track passkey.id) {
           <cmn-list-item-row
@@ -56,7 +61,7 @@ import {AddPasskeySheetComponent} from './add-passkey.sheet';
         }
         <cmn-button (clicked)="add()" variant="secondary" icon="Plus">Add a passkey</cmn-button>
       </div>
-    }
+    </cmn-async-state>
   `,
 })
 export class PasskeysSectionComponent implements OnInit {
@@ -68,6 +73,13 @@ export class PasskeysSectionComponent implements OnInit {
   protected readonly passkeys = signal<readonly Passkey[]>([]);
   protected readonly loading = signal(true);
   protected readonly failed = signal(false);
+
+  protected readonly asyncStatus = computed<AsyncStateStatus>(() => {
+    if (this.loading()) {
+      return 'loading';
+    }
+    return this.failed() ? 'error' : 'success';
+  });
 
   public ngOnInit(): void {
     void this.load();
