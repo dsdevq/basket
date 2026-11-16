@@ -6,7 +6,7 @@
 # The app runs the image CI published for one commit, ghcr.io/dsdevq/basket:<IMAGE_TAG>; the deploy pulls it and builds
 # nothing, so IMAGE_TAG is required. The secrets are docker/.env.sops (SOPS + age), which deploy.sh decrypts into the git-ignored
 # docker/.env; see docs/vps-setup.md and docker/.env.example.
-# The app listens on 127.0.0.1:3310 only; Tailscale Funnel (port 10000) is the one public way in.
+# The app listens on 127.0.0.1:3310 only; the tailnet edge (https, port 3310) is the one way in.
 name: basket
 
 services:

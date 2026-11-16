@@ -13,11 +13,9 @@ change itself: the Funnel needs root, the secrets file is created and encrypted 
 | Data Protection keys | volume `basket_keys`, mounted at `/keys` (keeps the sign-in cookie valid across deploys) |
 | Image | `ghcr.io/dsdevq/basket:<full commit SHA>`, built once per `main` commit by CI (`ci.yml`, job `image builds`, arm64) and pulled by the deploy; nothing is built on the box |
 | Secrets | `docker/.env.sops` in the repo, encrypted with SOPS + age; `docker/deploy.sh` decrypts it into the git-ignored `docker/.env` |
-| Public address | `https://lifekit-vps.tail1cb676.ts.net:10000` (Tailscale Funnel, port **10000**) |
+| Public address | `https://lifekit-vps.tail1cb676.ts.net:3310` (the tailnet address; `PUBLIC_ORIGIN` and the `basket-origin` meta in `frontend/src/index.html` hold it; the retired `:10000` Funnel address shows the unreachable page's "basket moved" link) |
 
 Port 3310 was free on the box when this was written (checked with `ss -ltn`); re-check before the first start.
-Funnel supports only 443, 8443 and 10000. 443 belongs to xui and must not change, and a `/basket` path on that mapping
-is not acceptable, so basket uses 10000.
 
 ## First start
 
@@ -85,7 +83,7 @@ entry is unchanged and a new `:10000` entry proxies to `http://127.0.0.1:3310`).
 
 ### 4. Register the owner
 
-Open `https://lifekit-vps.tail1cb676.ts.net:10000/join#<BOOTSTRAP_TOKEN>` on the owner's phone, enter a name, and
+Open `https://lifekit-vps.tail1cb676.ts.net:3310/join#<BOOTSTRAP_TOKEN>` on the owner's phone, enter a name, and
 create the passkey. The link works once and for 24 hours after the app started; if it lapsed, restart the app
 (`docker compose -p basket restart app`) to open a fresh 24 hours - it only does so while no user exists.
 
