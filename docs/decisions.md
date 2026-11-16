@@ -7,7 +7,7 @@ planning record so this repo carries its own reasons; the M1 section holds the c
 
 | # | Call | Effect on the code |
 |---|---|---|
-| Q1 | **Superseded 2026-11-12 (see "Org sign-in").** Her phone reaches basket over a **public Tailscale Funnel**, and the app does its own sign-in. | The app is on the open internet: sign-in, invite and write routes are hardened and rate limited (see M1 below). Funnel serves HTTPS on port **10000** (443 stays with xui). |
+| Q1 | **Superseded 2026-11-12 (see "Org sign-in").** Her phone reaches basket over a **public Tailscale Funnel**, and the app does its own sign-in. | The app is on the open internet: sign-in, invite and write routes are hardened and rate limited (see M1 below). Funnel served HTTPS on port **10000** (443 stays with xui); *retired 2026-11-15, the address is now the tailnet `:3310`*. |
 | Q2 | **Superseded 2026-11-12 (see "Org sign-in"): basket signs in through the org Logto.** Sign-in is a **one-time invite link, then a passkey** (ASP.NET Core Identity, .NET 10). | No passwords anywhere. Invites last 24 hours, work once and are stored hashed. |
 | Q3 | **One shared list.** Plan-a-shop is later a view of it, not a second list. | A single `list_item` table, no per-user lists. |
 | Q4 | A Lidl price is **this week's offer plus the last price paid**, shown with its date. | M3-M4. Lidl publishes no everyday prices online. |

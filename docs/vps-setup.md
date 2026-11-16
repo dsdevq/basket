@@ -109,7 +109,7 @@ database volume.
 
 ## Things to know
 
-- **Public surface.** Anyone on the internet can reach the sign-in page. The defences: passkey-only accounts, invite
+- **Tailnet surface.** The sign-in page is reachable only from devices on the tailnet. The defences: passkey-only accounts, invite
   links that work once for 24 hours, rate limits on sign-in and invite routes, identical answers for every kind of bad
   invite, an `Origin` allow-list on writes, strict cookie and security headers (see `docs/decisions.md`).
 - **Cookie scope.** Browsers share cookies between ports of one host. Other services on
