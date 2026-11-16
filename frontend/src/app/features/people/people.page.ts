@@ -48,6 +48,9 @@ import {InviteSheetComponent} from './invite.sheet';
         (retry)="load()"
         emptySubMessage="Invite someone to share this list."
         errorMessage="Could not load people. Check your connection."
+        class="contents"
+        [keepContent]="false"
+        [crossfade]="false"
         retryable
       >
         <cmn-skeleton shape="section" skeleton />
