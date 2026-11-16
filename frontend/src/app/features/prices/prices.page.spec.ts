@@ -97,6 +97,14 @@ function milk(): Product {
   };
 }
 
+/** `cmn-async-state` keeps a shown skeleton up for a moment, so wait until the loading notice is gone. */
+async function loaded(fixture: ComponentFixture<unknown>): Promise<void> {
+  await vi.waitFor(() => {
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).textContent).not.toContain('Loading');
+  });
+}
+
 async function render(response: PricesResponse, query: Record<string, string> = {}) {
   const api = {
     all: vi.fn().mockResolvedValue(response),
@@ -120,6 +128,7 @@ async function render(response: PricesResponse, query: Record<string, string> = 
   const fixture = TestBed.createComponent(PricesPage);
   fixture.detectChanges();
   await settle(fixture);
+  await loaded(fixture);
   return {fixture, api, drawer, host: fixture.nativeElement as HTMLElement};
 }
 

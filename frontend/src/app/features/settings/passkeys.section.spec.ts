@@ -1,4 +1,4 @@
-import {TestBed} from '@angular/core/testing';
+import {type ComponentFixture, TestBed} from '@angular/core/testing';
 import {CmnDialogService, CmnDrawerService, ToastService} from '@lifekit-hq/ui';
 import {of} from 'rxjs';
 
@@ -13,6 +13,14 @@ const LAPTOP: Passkey = {
   createdAt: '2026-11-04T09:00:00Z',
   backedUp: false,
 };
+
+/** `cmn-async-state` keeps a shown skeleton up for a moment, so wait until the loading notice is gone. */
+async function loaded(fixture: ComponentFixture<unknown>): Promise<void> {
+  await vi.waitFor(() => {
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).textContent).not.toContain('Loading');
+  });
+}
 
 interface Mocks {
   readonly api: Partial<Record<keyof AuthApi, ReturnType<typeof vi.fn>>>;
@@ -36,7 +44,7 @@ async function render(mocks: Partial<Mocks> = {}) {
   const fixture = TestBed.createComponent(PasskeysSectionComponent);
   fixture.detectChanges();
   await fixture.whenStable();
-  fixture.detectChanges();
+  await loaded(fixture);
   const host = fixture.nativeElement as HTMLElement;
   const settle = async (): Promise<void> => {
     await fixture.whenStable();

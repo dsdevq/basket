@@ -20,6 +20,14 @@ async function settle(fixture: ComponentFixture<unknown>): Promise<void> {
   fixture.detectChanges();
 }
 
+/** `cmn-async-state` keeps a shown skeleton up for a moment, so wait until the loading notice is gone. */
+async function loaded(fixture: ComponentFixture<unknown>): Promise<void> {
+  await vi.waitFor(() => {
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).textContent).not.toContain('Loading');
+  });
+}
+
 function item(id: string, text: string, over: Partial<ListItem> = {}): ListItem {
   return {
     id,
@@ -89,6 +97,7 @@ async function render(items: ListItem[], habits: Habit[] = []): Promise<Harness>
   const fixture = TestBed.createComponent(ListPage);
   fixture.detectChanges();
   await settle(fixture);
+  await loaded(fixture);
   return {fixture, api, habitsApi, dialog, drawer, host: fixture.nativeElement as HTMLElement};
 }
 

@@ -1,4 +1,4 @@
-import {TestBed} from '@angular/core/testing';
+import {type ComponentFixture, TestBed} from '@angular/core/testing';
 import {CmnDrawerService, ToastService} from '@lifekit-hq/ui';
 import {of} from 'rxjs';
 
@@ -18,6 +18,14 @@ const INVITES = [
   },
 ];
 
+/** `cmn-async-state` keeps a shown skeleton up for a moment, so wait until the loading notice is gone. */
+async function loaded(fixture: ComponentFixture<unknown>): Promise<void> {
+  await vi.waitFor(() => {
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).textContent).not.toContain('Loading');
+  });
+}
+
 async function render(api: Partial<AuthApi>, drawer: Partial<CmnDrawerService> = {}) {
   TestBed.configureTestingModule({
     providers: [
@@ -29,7 +37,7 @@ async function render(api: Partial<AuthApi>, drawer: Partial<CmnDrawerService> =
   const fixture = TestBed.createComponent(PeoplePage);
   fixture.detectChanges();
   await fixture.whenStable();
-  fixture.detectChanges();
+  await loaded(fixture);
   return {fixture, host: fixture.nativeElement as HTMLElement};
 }
 
