@@ -1,3 +1,4 @@
+import {DOCUMENT} from '@angular/common';
 import {ChangeDetectionStrategy, Component, inject, signal} from '@angular/core';
 import {Router} from '@angular/router';
 import {ButtonComponent, PageComponent} from '@lifekit-hq/ui';
@@ -17,6 +18,12 @@ import {SessionStore} from './session.store';
       <p class="text-cmn-sm text-text-secondary">
         Check your connection. A content blocker or a private-relay setting can also stop it.
       </p>
+      @if (movedTo; as address) {
+        <p class="text-cmn-sm" data-testid="moved">
+          basket moved. This is an old address; open it at
+          <a [href]="address" class="underline">{{ address }}</a>
+        </p>
+      }
       @if (session.loadFailure(); as failure) {
         <p class="text-cmn-xs text-text-secondary">Detail: {{ failure }}</p>
       }
@@ -31,6 +38,18 @@ export class UnreachablePage {
   protected readonly session = inject(SessionStore);
 
   protected readonly busy = signal(false);
+
+  /** The configured address when the app runs on another origin (a cached install of a retired address), else null. */
+  protected readonly movedTo = this.moved();
+
+  private moved(): string | null {
+    const doc = inject(DOCUMENT);
+    const configured = doc
+      .querySelector('meta[name="basket-origin"]')
+      ?.getAttribute('content')
+      ?.replace(/\/+$/, '');
+    return configured && configured !== doc.location.origin ? configured : null;
+  }
 
   protected async retry(): Promise<void> {
     this.busy.set(true);

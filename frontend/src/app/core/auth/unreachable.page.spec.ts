@@ -18,9 +18,41 @@ function setup(session: ReturnType<typeof vi.fn>) {
 const retryButton = (host: HTMLElement) =>
   [...host.querySelectorAll('button')].find(b => b.textContent?.includes('Try again'));
 
+function configureOrigin(content: string | null) {
+  document.head.querySelector('meta[name="basket-origin"]')?.remove();
+  if (content === null) {
+    return;
+  }
+  const meta = document.createElement('meta');
+  meta.name = 'basket-origin';
+  meta.content = content;
+  document.head.append(meta);
+}
+
 describe('UnreachablePage', () => {
   afterEach(() => {
+    configureOrigin(null);
     TestBed.resetTestingModule();
+  });
+
+  it('says the app moved and links the configured address when run on another origin', () => {
+    configureOrigin('https://basket.example.ts.net:3310');
+    const {fixture, host} = setup(vi.fn().mockRejectedValue({status: 0}));
+    fixture.detectChanges();
+
+    expect(host.textContent).toContain('basket moved');
+    expect(host.querySelector('a')?.getAttribute('href')).toBe(
+      'https://basket.example.ts.net:3310'
+    );
+  });
+
+  it('stays unchanged on the configured origin', () => {
+    configureOrigin(`${location.origin}/`);
+    const {fixture, host} = setup(vi.fn().mockRejectedValue({status: 0}));
+    fixture.detectChanges();
+
+    expect(host.textContent).not.toContain('moved');
+    expect(host.querySelector('a')).toBeNull();
   });
 
   it('says basket cannot be reached, why, and offers Try again', async () => {
