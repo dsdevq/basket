@@ -54,7 +54,7 @@ Node verifies it without any setting.
 ok   issuer address: https://<vps>.<tailnet>.ts.net:3001/oidc (https, not a loopback address)
 ok   discovery: answers, and reports the issuer https://<vps>.<tailnet>.ts.net:3001/oidc
 ok   token: granted; iss https://<vps>.<tailnet>.ts.net:3001/oidc, audience https://fleet.lifekit.internal/api, scope basket:price-ingest basket:catalog-read
-ok   basket: https://<vps>.<tailnet>.ts.net:10000 accepts the token (GET /api/products, HTTP 200)
+ok   basket: https://<vps>.<tailnet>.ts.net:3310 accepts the token (GET /api/products, HTTP 200)
 ```
 
 It stops at the first step that fails and says why: a loopback issuer (tunnel-dependent), an issuer that differs from what

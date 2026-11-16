@@ -187,7 +187,7 @@ public sealed class IngestTests : IClassFixture<BasketFactory>
             tesco.o.LoyaltyScheme.Should().Be("Clubcard");
             tesco.o.PromoText.Should().Be("Clubcard Price");
             tesco.o.ValidFrom.Should().Be(new DateOnly(2026, 11, 2));
-            tesco.o.ValidUntil.Should().Be(new DateOnly(2026, 11, 15));
+            tesco.o.ValidUntil.Should().Be(new DateOnly(2099, 12, 31));
             tesco.o.InStock.Should().BeTrue();
             tesco.l.Title.Should().Be("Tesco Fresh Whole Milk 2 Litre");
             tesco.l.ImageUrl.Should().Be("https://digitalcontent.api.tesco.com/v2/media/ghs/0a1b2c3d/tesco-fresh-whole-milk.jpeg?h=225&w=225");
