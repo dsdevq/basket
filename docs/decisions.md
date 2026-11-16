@@ -7,7 +7,7 @@ planning record so this repo carries its own reasons; the M1 section holds the c
 
 | # | Call | Effect on the code |
 |---|---|---|
-| Q1 | **Superseded 2026-11-12 (see "Org sign-in").** Her phone reaches basket over a **public Tailscale Funnel**, and the app does its own sign-in. | The app is on the open internet: sign-in, invite and write routes are hardened and rate limited (see M1 below). Funnel serves HTTPS on port **10000** (443 stays with xui). |
+| Q1 | **Superseded 2026-11-12 (see "Org sign-in").** Her phone reaches basket over a **public Tailscale Funnel**, and the app does its own sign-in. | The app is on the open internet: sign-in, invite and write routes are hardened and rate limited (see M1 below). Funnel served HTTPS on port **10000** (443 stays with xui); *retired 2026-11-15, the address is now the tailnet `:3310`*. |
 | Q2 | **Superseded 2026-11-12 (see "Org sign-in"): basket signs in through the org Logto.** Sign-in is a **one-time invite link, then a passkey** (ASP.NET Core Identity, .NET 10). | No passwords anywhere. Invites last 24 hours, work once and are stored hashed. |
 | Q3 | **One shared list.** Plan-a-shop is later a view of it, not a second list. | A single `list_item` table, no per-user lists. |
 | Q4 | A Lidl price is **this week's offer plus the last price paid**, shown with its date. | M3-M4. Lidl publishes no everyday prices online. |
@@ -53,8 +53,9 @@ planning record so this repo carries its own reasons; the M1 section holds the c
   (later) removes the caveat.
 - **Funnel on port 10000, not a path on 443.** Funnel supports 443, 8443 and 10000. 443 is xui's, and a `/basket` path
   on that mapping is not acceptable, so basket takes 10000. WebAuthn's relying-party id is the host without the port;
-  the allowed origin includes `:10000`. **Superseded 2026-11-15:** the public address is the tailnet `:3310`; an app opened on any other
-  origin than the `basket-origin` meta (`frontend/src/index.html`, equal to `PUBLIC_ORIGIN`) shows "basket moved" and links it on the unreachable page.
+  the allowed origin includes `:10000`.
+  *Retired 2026-11-15: the Funnel was switched off; the address is now the tailnet `:3310`. An app opened on any other origin than the `basket-origin` meta
+  (`frontend/src/index.html`, equal to `PUBLIC_ORIGIN`) shows "basket moved" and links it on the unreachable page.*
 - **One container serves both.** The .NET API serves the Angular build from `wwwroot` (one image, one port 3310, no
   nginx). Hashed assets are cached immutably; `index.html` is not.
 - **Deploy secrets are SOPS + age** (`docker/.env.sops`, committed encrypted; `docker/deploy.sh` decrypts it on the box
