@@ -54,7 +54,8 @@ planning record so this repo carries its own reasons; the M1 section holds the c
 - **Funnel on port 10000, not a path on 443.** Funnel supports 443, 8443 and 10000. 443 is xui's, and a `/basket` path
   on that mapping is not acceptable, so basket takes 10000. WebAuthn's relying-party id is the host without the port;
   the allowed origin includes `:10000`.
-  *Retired 2026-11-15: the Funnel was switched off; the address is now the tailnet `:3310`.*
+  *Retired 2026-11-15: the Funnel was switched off; the address is now the tailnet `:3310`. An app opened on any other origin than the `basket-origin` meta
+  (`frontend/src/index.html`, equal to `PUBLIC_ORIGIN`) shows "basket moved" and links it on the unreachable page.*
 - **One container serves both.** The .NET API serves the Angular build from `wwwroot` (one image, one port 3310, no
   nginx). Hashed assets are cached immutably; `index.html` is not.
 - **Deploy secrets are SOPS + age** (`docker/.env.sops`, committed encrypted; `docker/deploy.sh` decrypts it on the box

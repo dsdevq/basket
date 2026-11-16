@@ -1180,8 +1180,34 @@ export const ROUTES: readonly Route[] = [
     },
   },
   {
+    // On the configured address: the page without the moved notice.
     name: 'unreachable',
     path: '/unreachable',
-    setup: page => page.route('**/api/session', r => r.abort('failed')),
+    setup: page => unreachableOn(page, origin => origin),
+  },
+  {
+    // Opened on an address other than the configured one (a cached install of a retired address): the page says the app moved.
+    name: 'unreachable-moved',
+    path: '/unreachable',
+    setup: page => unreachableOn(page, () => null),
   },
 ];
+
+/** The unreachable page with the configured address (the build's `basket-origin` meta) set to `configured(servedOrigin)`; null keeps the build's. */
+async function unreachableOn(page: Page, configured: (origin: string) => string | null) {
+  await page.route('**/api/session', r => r.abort('failed'));
+  await page.route(
+    url => url.pathname === '/unreachable',
+    async route => {
+      const response = await route.fetch();
+      const set = configured(new URL(route.request().url()).origin);
+      const body = set
+        ? (await response.text()).replace(
+            /(<meta name="basket-origin" content=")[^"]*"/,
+            `$1${set}"`
+          )
+        : await response.text();
+      await route.fulfill({response, body});
+    }
+  );
+}
