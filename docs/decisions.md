@@ -543,8 +543,10 @@ finance-sentry first had), bumped to 4.7.1.
 - **No app-local copy.** `provideWhatsNew` gets basket's version (`src/app/core/version.ts`, checked against `package.json`
   by a spec) and a `basket.whatsNew.lastSeen` marker. The sheet, the list, the dot and the seen marker are the library's.
 - **Notes.** `src/whats-new/notes.md`, plain second person; `lifekit-whats-new` runs before `start`, `build` and `build:prod`
-  to generate `public/whats-new.json` (no longer committed or linted, and fed by `CHANGELOG.md`: see "Releases: release-please and the
-  weekly release").
+  to generate `public/whats-new.json` (not committed; fed by `CHANGELOG.md`, see "Releases: release-please and the weekly release").
+  `npm run lint` runs `lint:whats-new` (`lifekit-whats-new --check --changelog ../CHANGELOG.md`), which checks the notes against the
+  changelog without needing the generated file. A line ending in `(owner)` is shown only to the owner (`includeOwnerNotes` reads
+  `SessionStore.isOwner()`, bumped to `@lifekit-hq/*` 5.6.0).
 - **Where it shows.** An account-menu item (`whatsNewMenuItem`) in the app shell and on the More page, with the dot until the
   sheet is opened. A first run on a device counts as seen, so a new person is not greeted with a dot.
 - No database change.
@@ -1216,7 +1218,8 @@ dashboard's do, instead of staying at 0.1.0.
   bare `## 0.1.0` so the current release keeps its entry, and the Docker web stage copies it to `/CHANGELOG.md`.
 - **`public/whats-new.json` is generated and no longer committed.** A committed copy would go stale on every release PR (it changes
   only the changelog and versions), so `npm run lint` could not stay green on it; the file is rebuilt before `start`, `build` and
-  `build:prod`, and `lifekit-whats-new --check` left the lint chain with it.
+  `build:prod`. The `--check` step that compared the committed copy left the lint chain with it; the notes-against-changelog check
+  returned later as `lint:whats-new` (see "What's new comes from lifekit-common").
 - **Off until the bot is installed.** Both jobs run only when the `RELEASE_APP_ID` variable is set; they also need the
   `RELEASE_APP_PRIVATE_KEY` secret and the release bot GitHub App installed on this repo. That is an owner step; until then the jobs
   are skipped, not failed. A `GITHUB_TOKEN` fallback is deliberately absent: a release PR pushed with it never gets its checks.
