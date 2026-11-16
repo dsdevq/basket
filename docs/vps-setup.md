@@ -1,7 +1,7 @@
 # VPS setup (runbook)
 
 How basket runs on the lifekit VPS and what is left to do for the first start. Nothing here is done by the code
-change itself: the Funnel needs root, the secrets file is created and encrypted on the box side, the first deploy runs there.
+change itself: the secrets file is created and encrypted on the box side, the first deploy runs there.
 
 ## Shape
 
@@ -13,11 +13,11 @@ change itself: the Funnel needs root, the secrets file is created and encrypted 
 | Data Protection keys | volume `basket_keys`, mounted at `/keys` (keeps the sign-in cookie valid across deploys) |
 | Image | `ghcr.io/dsdevq/basket:<full commit SHA>`, built once per `main` commit by CI (`ci.yml`, job `image builds`, arm64) and pulled by the deploy; nothing is built on the box |
 | Secrets | `docker/.env.sops` in the repo, encrypted with SOPS + age; `docker/deploy.sh` decrypts it into the git-ignored `docker/.env` |
-| Public address | `https://lifekit-vps.tail1cb676.ts.net:10000` (Tailscale Funnel, port **10000**) |
+| Address | `https://lifekit-vps.tail1cb676.ts.net:3310` (tailnet only; the public Funnel on :10000 was retired in the 2026-11-15 tailnet cutover) |
 
 Port 3310 was free on the box when this was written (checked with `ss -ltn`); re-check before the first start.
-Funnel supports only 443, 8443 and 10000. 443 belongs to xui and must not change, and a `/basket` path on that mapping
-is not acceptable, so basket uses 10000.
+Historical: until the 2026-11-15 tailnet cutover basket was public through a Tailscale Funnel on port 10000 (443 belongs to xui).
+That address is retired and unreachable; use the tailnet address above.
 
 ## First start
 
@@ -67,25 +67,13 @@ back, run it by hand (`workflow_dispatch`) with an older full SHA in `sha`, or r
 Check: `curl -s http://127.0.0.1:3310/api/health/ready` returns `Healthy`, and
 `docker stats --no-stream basket-app basket-db` stays under 256 MB / 192 MB.
 
-### 3. Turn the Funnel on (needs root - one command)
+### 3. Funnel (retired)
 
-```sh
-sudo tailscale funnel --bg --https=10000 http://127.0.0.1:3310
-```
-
-SHA-256 of that exact line (no trailing newline), so the command that runs can be matched to the one reviewed:
-
-```
-bbe81e1c396927c6a8bc6b7a7abb34ae54136bce0482dd0efd87bd247e3657f8
-```
-
-It adds a mapping on port 10000 only; the 443 mapping is untouched. Verify with `tailscale funnel status` (the 443
-entry is unchanged and a new `:10000` entry proxies to `http://127.0.0.1:3310`). To undo:
-`sudo tailscale funnel --https=10000 off`. Do not run `tailscale funnel reset` - it clears every mapping, 443 included.
+The public Funnel on port 10000 was switched off in the 2026-11-15 tailnet cutover; there is nothing to turn on here. basket answers on the tailnet address `https://lifekit-vps.tail1cb676.ts.net:3310`.
 
 ### 4. Register the owner
 
-Open `https://lifekit-vps.tail1cb676.ts.net:10000/join#<BOOTSTRAP_TOKEN>` on the owner's phone, enter a name, and
+Open `https://lifekit-vps.tail1cb676.ts.net:3310/join#<BOOTSTRAP_TOKEN>` on the owner's phone, enter a name, and
 create the passkey. The link works once and for 24 hours after the app started; if it lapsed, restart the app
 (`docker compose -p basket restart app`) to open a fresh 24 hours - it only does so while no user exists.
 

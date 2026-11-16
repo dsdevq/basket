@@ -57,4 +57,4 @@ images (`frontend/e2e/screens.spec.ts-snapshots`) that only the **Update screen 
 
 ## Run it for real
 
-[docs/vps-setup.md](docs/vps-setup.md): secrets, first start, the Tailscale Funnel command and the owner sign-up.
+[docs/vps-setup.md](docs/vps-setup.md): secrets, first start, the tailnet address and the owner sign-up.
