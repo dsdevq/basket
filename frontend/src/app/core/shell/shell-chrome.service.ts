@@ -5,6 +5,7 @@ import {
   accountMenu,
   APPEARANCE_PALETTE_ITEMS,
   type AppLayoutAccount,
+  CmnPullRefreshService,
   CmnWhatsNewService,
   type CommandPaletteItem,
   type NavItem,
@@ -25,6 +26,9 @@ const SCORECARD: NavItem = {label: 'Scorecard', icon: 'Trophy', route: '/scoreca
 const CARDS: NavItem = {label: 'Cards', icon: 'WalletCards', route: '/cards'};
 const PEOPLE: NavItem = {label: 'People', icon: 'Users', route: '/people'};
 const SETTINGS_ROUTE = '/settings';
+
+/** Reloads the page on show: the keyboard and screen reader way to do what pull to refresh does. */
+export const REFRESH_ID = 'refresh';
 
 /** The routes shown as phone tabs; everything else in the nav lists on the More page. */
 export const PHONE_TAB_ROUTES: readonly string[] = [
@@ -57,6 +61,7 @@ export class ShellChromeService {
   private readonly router = inject(Router);
   private readonly navigation = inject(BrowserNavigation);
   private readonly whatsNew = inject(CmnWhatsNewService);
+  private readonly pullRefresh = inject(CmnPullRefreshService);
 
   /** The sidebar and More footer line; the click opens What's new. */
   public readonly versionLabel = `v${APP_VERSION} · What's new`;
@@ -78,7 +83,10 @@ export class ShellChromeService {
           email: user.email ?? undefined,
           menuItems: accountMenu({
             settingsRoute: SETTINGS_ROUTE,
-            extras: [whatsNewMenuItem(this.whatsNew.hasUnread())],
+            extras: [
+              {id: REFRESH_ID, label: 'Refresh', icon: 'RefreshCw'},
+              whatsNewMenuItem(this.whatsNew.hasUnread()),
+            ],
           }),
         }
       : undefined;
@@ -93,6 +101,7 @@ export class ShellChromeService {
       group: 'Pages',
     })),
     {id: SETTINGS_ROUTE, label: 'Settings', icon: 'Settings2', group: 'Pages'},
+    {id: REFRESH_ID, label: 'Refresh this page', icon: 'RefreshCw', group: 'Actions'},
     ...APPEARANCE_PALETTE_ITEMS,
     {id: ACCOUNT_SIGN_OUT_ID, label: 'Sign out', icon: 'LogOut', group: 'Actions'},
   ]);
@@ -102,10 +111,14 @@ export class ShellChromeService {
   }
 
   /**
-   * Handles an account item or palette action the app owns: What's new and Sign out. Pages, Settings
+   * Handles an account item or palette action the app owns: Refresh, What's new and Sign out. Pages, Settings
    * and the appearance entries are applied by the layout itself. Returns false for any other id.
    */
   public async handle(id: string): Promise<boolean> {
+    if (id === REFRESH_ID) {
+      await this.pullRefresh.refresh();
+      return true;
+    }
     if (id === WHATS_NEW_MENU_ID) {
       this.openWhatsNew();
       return true;
