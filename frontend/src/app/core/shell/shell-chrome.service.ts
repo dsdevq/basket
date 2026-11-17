@@ -27,8 +27,11 @@ const CARDS: NavItem = {label: 'Cards', icon: 'WalletCards', route: '/cards'};
 const PEOPLE: NavItem = {label: 'People', icon: 'Users', route: '/people'};
 const SETTINGS_ROUTE = '/settings';
 
-/** Reloads the page on show: the keyboard and screen reader way to do what pull to refresh does. */
-export const REFRESH_ID = 'refresh';
+/**
+ * Reloads the page on show: the keyboard and screen reader way to do what pull to refresh does. The
+ * leading underscore is the layout's mark for an action: the command palette navigates to any other id.
+ */
+export const REFRESH_ID = '_refresh';
 
 /** The routes shown as phone tabs; everything else in the nav lists on the More page. */
 export const PHONE_TAB_ROUTES: readonly string[] = [
