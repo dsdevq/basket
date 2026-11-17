@@ -387,8 +387,11 @@ change borrows one named pattern; the audit is the 2026-11-07 phone UX audit (39
   own load, which returns a promise, so the shell's indicator stays until the fetch settles and no `reloading` flag is
   needed. The Shelf reloads what it shows: the prices, the list and the habits. Failure and offline stay with the page's
   error state ("Try again") or its toast (a failed pull keeps the cards or plan already loaded); the pull adds no error UI
-  of its own, and it is not the only way to reload, since List, Shelf and Plan also re-read on returning to the tab (List
-  every 15 seconds too) and the error state has a button. More
+  of its own, and it is not the only way to reload: List, Shelf and Plan also re-read on returning to the tab (List
+  every 15 seconds too), the error state has a button, and a keyboard or screen reader user, who has no pull, always has
+  **Refresh** in the account menu and **Refresh this page** in the command palette (`ShellChromeService`, id `_refresh`; the
+  leading underscore marks an app action, so the palette does not navigate). Both call `CmnPullRefreshService.refresh()`,
+  which runs the reload the page on screen registered, so they reload exactly what a pull does. More
   is a kit menu with nothing to fetch, and People and Settings are pushed screens, so none of them registers a reload.
   `PricesStore.load` drops a response that a later load or a local remove has overtaken (as `ListStore.load` does), so a
   slow pull cannot bring a deleted product back.

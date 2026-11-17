@@ -4,6 +4,7 @@ import {Router} from '@angular/router';
 import {
   ACCOUNT_SIGN_OUT_ID,
   APPEARANCE_PALETTE_ITEMS,
+  CmnPullRefreshService,
   CmnWhatsNewService,
   WHATS_NEW_MENU_ID,
 } from '@lifekit-hq/ui';
@@ -12,7 +13,7 @@ import {BrowserNavigation} from '../auth/browser-navigation';
 import type {SessionUser} from '../auth/session.model';
 import {SessionStore} from '../auth/session.store';
 import {APP_VERSION} from '../version';
-import {ShellChromeService} from './shell-chrome.service';
+import {REFRESH_ID, ShellChromeService} from './shell-chrome.service';
 
 describe('ShellChromeService', () => {
   const user = signal<SessionUser | null>(null);
@@ -21,6 +22,7 @@ describe('ShellChromeService', () => {
   const assign = vi.fn();
   const open = vi.fn();
   const hasUnread = signal(false);
+  const refresh = vi.fn().mockResolvedValue(undefined);
 
   function service(): ShellChromeService {
     TestBed.configureTestingModule({
@@ -32,6 +34,7 @@ describe('ShellChromeService', () => {
         {provide: Router, useValue: {navigateByUrl}},
         {provide: BrowserNavigation, useValue: {assign}},
         {provide: CmnWhatsNewService, useValue: {open, hasUnread}},
+        {provide: CmnPullRefreshService, useValue: {refresh}},
       ],
     });
     return TestBed.inject(ShellChromeService);
@@ -45,6 +48,7 @@ describe('ShellChromeService', () => {
     assign.mockClear();
     signOut.mockResolvedValue(null);
     open.mockClear();
+    refresh.mockClear();
   });
 
   afterEach(() => {
@@ -93,6 +97,20 @@ describe('ShellChromeService', () => {
     );
     expect(ids).not.toContain('/people');
     expect(items.find(item => item.id === '/list')?.group).toBe('Pages');
+  });
+
+  it('offers Refresh in the account menu and the palette', () => {
+    const chrome = service();
+
+    expect(chrome.account()?.menuItems.map(item => item.id)).toContain(REFRESH_ID);
+    expect(chrome.paletteItems().map(item => item.id)).toContain(REFRESH_ID);
+  });
+
+  it('runs the registered reload for Refresh and reports the id handled', async () => {
+    const handled = await service().handle(REFRESH_ID);
+
+    expect(handled).toBe(true);
+    expect(refresh).toHaveBeenCalledOnce();
   });
 
   it("labels the version with What's new", () => {
