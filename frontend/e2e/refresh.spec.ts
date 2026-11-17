@@ -35,7 +35,10 @@ test('the command palette Refresh reloads the page on screen instead of navigati
   const listCalls = await open(page);
 
   await page.keyboard.press('Control+k');
-  await page.keyboard.type('Refresh');
+  // The palette focuses its search box after a short delay: wait for it, or the typing is lost.
+  const search = page.getByPlaceholder('Search pages, actions…');
+  await expect(search).toBeFocused();
+  await search.fill('Refresh');
   await page.keyboard.press('Enter');
 
   await expect.poll(listCalls).toBe(2);
