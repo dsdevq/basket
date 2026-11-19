@@ -12,7 +12,7 @@ namespace Basket.Api.Prices.Catalog;
 /// range reader: the food listing pages found in the page sitemap are walked with <c>?offset=</c> in steps of 12, each tile is
 /// stored as a catalog product through <see cref="CatalogRecorder"/> (the path the PC reader's endpoint also ends in). A sweep that
 /// read every category to its end is closed through <see cref="CatalogIngest.CompleteAsync"/>, so the discontinued guard and the
-/// run row are the ones every shop has; a sweep that missed any page is recorded as it was and delists nothing. Then the product
+/// run row are the ones every shop has; a sweep that missed any page is recorded as it was, delists nothing and still hands the shop to matching. Then the product
 /// pages of at most <see cref="PricesOptions.LidlBarcodePagesPerNight"/> products with no stored barcode are opened to read the
 /// GTIN. It never calls Lidl's search API, and a refusal ends the sweep (nothing is tried again or worked around).
 /// </summary>
@@ -73,10 +73,10 @@ public sealed class LidlCatalogSweep(
                 var tiles = LidlParser.ParseCatalogTiles(result.Body!);
                 if (tiles.Count == 0)
                 {
-                    walked = page > 0; // an empty first page is a layout that changed or a page that failed, not a category with nothing in it
-                    if (!walked)
+                    walked = true;
+                    if (page == 0)
                     {
-                        note ??= $"A Lidl listing page showed no products ({category.AbsolutePath}).";
+                        log.LogWarning("A Lidl listing page showed no products, treated as an empty category ({Category})", category.AbsolutePath);
                     }
 
                     break;
@@ -119,10 +119,20 @@ public sealed class LidlCatalogSweep(
 
                 if (newHere == 0)
                 {
-                    walked = repeatedHere > 0; // past the last page: it only repeats what this category already listed; tiles with no product number are a failed read
-                    if (!walked)
+                    // Past the last page it only repeats what this category already listed. A category's first page with no usable
+                    // product is an empty category: logged, and the sweep goes on. Further in, tiles with no product number are a
+                    // failed read of a category that still has products, so the sweep is incomplete.
+                    walked = repeatedHere > 0 || page == 0;
+                    if (repeatedHere == 0)
                     {
-                        note ??= $"A Lidl listing page showed no usable products ({category.AbsolutePath}).";
+                        if (walked)
+                        {
+                            log.LogWarning("A Lidl listing page showed no usable products, treated as an empty category ({Category})", category.AbsolutePath);
+                        }
+                        else
+                        {
+                            note ??= $"A Lidl listing page showed no usable products ({category.AbsolutePath}).";
+                        }
                     }
 
                     break;
@@ -154,6 +164,11 @@ public sealed class LidlCatalogSweep(
             log.LogWarning("Lidl catalog sweep incomplete, nothing marked discontinued: {Note}", note);
             await RecordRunAsync(
                 started, readings.Count == 0 ? PullOutcome.Failed : PullOutcome.Partial, readings.Count, $"{note} Nothing was marked discontinued.", ct);
+            if (readings.Count > 0)
+            {
+                // The rows this night did read are new to the shelf all the same: match them, as the Aldi sweep does on a partial night.
+                await ingest.MatchAsync(Store.Lidl, ct);
+            }
         }
         else
         {

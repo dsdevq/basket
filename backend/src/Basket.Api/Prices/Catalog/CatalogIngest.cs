@@ -126,6 +126,19 @@ public sealed class CatalogIngest(AppDbContext db, CatalogRecorder recorder, Tim
     }
 
     /// <summary>
+    /// The matching half of a closed sweep, also for a sweep that did not finish (it delists nothing). The sweep brought rows the
+    /// shelf may have been waiting for: look for the equivalents of every product with an open gap in this shop. Best effort inside
+    /// (a failure is logged, never raised), so a closed sweep stays closed.
+    /// </summary>
+    public async Task MatchAsync(Store store, CancellationToken ct)
+    {
+        if (candidates is not null)
+        {
+            await candidates.RunForStoreAsync(store, ct);
+        }
+    }
+
+    /// <summary>
     /// The delisting half of <see cref="CompleteAsync"/>, with the guard, for a caller that writes its own run row (the nightly
     /// Aldi sweep, whose run row is the job's). Marks the products and returns what happened; the run row is the caller's.
     /// </summary>
@@ -161,11 +174,9 @@ public sealed class CatalogIngest(AppDbContext db, CatalogRecorder recorder, Tim
                     : $"The catalog sweep listed {touched} products (the reader counted {seen}); nothing was marked discontinued.",
                 500);
 
-        if (touched > 0 && candidates is not null)
+        if (touched > 0)
         {
-            // The sweep brought rows the shelf may have been waiting for: look for the equivalents of every product with an open gap
-            // in this shop. Best effort inside (a failure is logged, never raised), so a closed sweep stays closed.
-            await candidates.RunForStoreAsync(store, ct);
+            await MatchAsync(store, ct);
         }
 
         return new CatalogClose(passes, previousLive, discontinued, live, touched, outcome, message);

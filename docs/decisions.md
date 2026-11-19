@@ -1880,11 +1880,18 @@ So this sweep reads the range; the paid price keeps coming from the Lidl Plus re
   the `/c/<slug>/s<id>` category pages, and a page is food when its hyphenated slug contains a word of a fixed list in `LidlParser` as a whole word
   ("fresh-fruit-and-vegetables", not "garden-furniture"). A product is stored once however many categories list it. A `.xml.gz` sitemap is
   a file, not a transfer encoding, so `PoliteFetcher` unpacks an address that ends in `.gz` (bounded at 20 MB unpacked).
-- **A sweep that missed something delists nothing.** A listing page or sitemap that is down, a first page of a category that shows no
-  product, or a page where no tile names a product and none repeats (a changed layout reads the same as a failed page), or a category still listing new products at the 120-page ceiling makes the
-  sweep incomplete. It is not closed through `CatalogIngest.CompleteAsync`: its `price_pull_run` row is `Partial` (`Failed` when it read
-  nothing) with the reason, and no product is marked discontinued, however small the gap (the 90 percent guard only catches large ones).
-  The products it did read are still stored. Only a sweep that walked every category to its end is closed and may delist.
+- **A sweep that missed something delists nothing.** A listing page or sitemap that is down, a later page of a category where no tile
+  names a product and none repeats (a changed layout reads the same as a failed page), or a category still listing new products at the
+  120-page ceiling makes the sweep incomplete. It is not closed through `CatalogIngest.CompleteAsync`: its `price_pull_run` row is
+  `Partial` (`Failed` when it read nothing) with the reason, and no product is marked discontinued, however small the gap (the 90 percent
+  guard only catches large ones). The products it did read are still stored, and the shop is still handed to matching
+  (`CatalogIngest.MatchAsync`, as the Aldi sweep does on a partial night), so the rows it brought are not left linked to nothing. Only a
+  sweep that walked every category to its end is closed and may delist.
+- **A first page with no product is an empty category.** A category's first listing page that has no tiles, or where no tile names a
+  product, is logged and the sweep goes on to the next category; it no longer makes the sweep incomplete, because one such page stalled
+  every night as `Partial` and so never ran matching. The cost: if a layout change leaves a category with nothing readable on its first
+  page, the sweep can close `Ok` and delist that category's products, whenever the 90 percent guard still passes. A later page of that
+  kind (the category had products before it) still makes the sweep incomplete.
 - **Barcodes.** Tiles carry no GTIN; the product page's JSON-LD does (`gtin13`, a list with one entry per variant). After the sweep,
   the product pages of products with no stored barcode are opened, at most `Prices:LidlBarcodePagesPerNight` (200) a night, and the first
   valid GTIN is stored (as GTIN-14, through `CatalogRecorder`, which never lets a thinner reading erase one). A first sweep therefore takes about four nights to fill the food range (about 690 products); afterwards only products new to the catalog are opened.
@@ -2116,7 +2123,7 @@ The match sheet only ever had what a person or the PC reader posted to `POST /ap
   that product, every shop. (2) A listing is confirmed (a person pastes a page, or accepts a proposal): that product, the shops where it
   still has no confirmed page, now that it may know a barcode, a size and a category. (3) A sweep is closed
   (`CatalogIngest.CloseAsync`, which the PC reader's `.../complete`, the Lidl sweep and the Aldi sweep all close through, and only when the
-  sweep touched a product): every product with an open gap in that shop, in batches of 25 products, one save per product. An open gap is a shop where
+  sweep touched a product; a Lidl sweep that ended `Partial` after reading something also runs it, through `CatalogIngest.MatchAsync`, without delisting): every product with an open gap in that shop, in batches of 25 products, one save per product. An open gap is a shop where
   the product has no confirmed page. A failure is logged and swallowed per product: a proposal is a convenience, it must not fail the
   add, the confirm or the closing of a sweep. The whole run is inside that guard, the id and batch loads included. A product the user deletes takes its proposals with it, as before.
 - **What a run looks at.** SQL narrows each shop's live (not discontinued) rows to (a) those with the product's barcode, plus (b) those that
