@@ -48,10 +48,14 @@ public sealed class CentraOffersSource(
         var offers = CentraParser.Parse(page.Body!, PriceRecorder.DublinDay(startedAt));
         var readings = new List<CatalogReading>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
+        var rejected = new HashSet<string>(StringComparer.Ordinal);
+        var unusable = offers.Unusable;
         foreach (var item in offers.Items)
         {
             if (!CatalogReading.TryCreate(Store.Centra, item, out var reading, out var reason))
             {
+                unusable++;
+                rejected.Add(item.ExternalId ?? string.Empty);
                 log.LogDebug("A Centra offer was not usable: {Reason}", reason);
             }
             else if (seen.Add(reading!.ExternalId))
@@ -71,9 +75,9 @@ public sealed class CentraOffersSource(
 
         var close = await sweeps.CloseAsync(Store.Centra, seen.Count, startedAt, ct, guarded: false);
         var message = close.Message;
-        if (offers.Unusable > 0)
+        if (unusable > 0)
         {
-            message = PriceRecorder.Truncate($"{offers.Unusable} offers on the page had no name, price or end date and were skipped. {message}".Trim(), 500);
+            message = PriceRecorder.Truncate($"{unusable} offers on the page had no name, price or end date and were skipped. {message}".Trim(), 500);
         }
 
         await RecordSweepAsync(startedAt, close.Outcome, close.Touched, message, ct, close.Live);
@@ -83,7 +87,9 @@ public sealed class CentraOffersSource(
         foreach (var listing in listings)
         {
             var id = Stores.ProductId(Store.Centra, listing.Url.ToString());
-            results[listing.ListingId] = id is not null && byId.TryGetValue(id, out var reading) && reading.Price.Price is not null
+            results[listing.ListingId] = id is not null && rejected.Contains(id)
+                ? ListingPull.Failed("Centra lists this product but basket could not read its offer.")
+                : id is not null && byId.TryGetValue(id, out var reading) && reading.Price.Price is not null
                 ? ListingPull.Priced(new PriceQuote(
                     reading.Name,
                     reading.Price.Price,
@@ -99,7 +105,7 @@ public sealed class CentraOffersSource(
                 : ListingPull.Failed("Centra's offers no longer list this product. Offers last a week or two.");
         }
 
-        log.LogInformation("Centra: {Offers} offers listed, {Skipped} skipped", readings.Count, offers.Unusable);
+        log.LogInformation("Centra: {Offers} offers listed, {Skipped} skipped", readings.Count, unusable);
         return new StorePull(close.Outcome, message, results);
     }
 

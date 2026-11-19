@@ -82,6 +82,21 @@ public sealed class CentraOffersTests : IClassFixture<BasketFactory>
     }
 
     [Theory]
+    [InlineData("99c", "")]
+    [InlineData("€3,50", "")]
+    [InlineData("3 for €10", "")]
+    [InlineData("Half price", "")]
+    public void A_tile_whose_price_cannot_be_read_is_counted_never_recorded_without_one(string message, string each)
+    {
+        var tile = $"""<a href="/offers/odd-one" class="item product-id-1"><p class="message">{message}</p><p class="price ">{each}</p><h4 class="product-name"><span>Odd One 1kg</span></h4><p class="offer-valid">Offer valid until <span class="date">25th November</span></p></a>""";
+
+        var offers = CentraParser.Parse(tile, Today);
+
+        offers.Items.Should().BeEmpty();
+        offers.Unusable.Should().Be(1);
+    }
+
+    [Theory]
     [InlineData("2026-11-19", "2026-11-25")]
     [InlineData("2026-11-25", "2026-11-25")]
     [InlineData("2026-11-26", "2026-11-25")]

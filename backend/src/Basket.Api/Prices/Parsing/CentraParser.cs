@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Net;
 using System.Text.RegularExpressions;
 using Basket.Api.Prices.Catalog;
+using Basket.Api.Prices.Promotions;
 
 namespace Basket.Api.Prices.Parsing;
 
@@ -22,7 +23,7 @@ public sealed record CentraOffers(IReadOnlyList<CatalogItem> Items, int Unusable
 /// &lt;/a&gt;
 /// </code>
 /// Every offer is an offer, never an everyday shelf price: it carries <see cref="PromoPrefix"/> as its promo text and the day it is
-/// valid until. A tile that cannot be used (no name, no address, no readable end date) is counted, never guessed at: an offer
+/// valid until. A tile that cannot be used (no name, no address, no readable end date, no euro price or multibuy with its single price) is counted, never guessed at: an offer
 /// without an end date would never stop counting.
 /// </summary>
 public static partial class CentraParser
@@ -85,10 +86,9 @@ public static partial class CentraParser
             price = single;
             promo = PromoPrefix;
         }
-        else if (message.Length > 0)
+        else if (PromoText.ParseMultiBuy(message) is not null && Money(each) is { } one)
         {
-            // "3 for €10": the single price is the "€4 Each" beside it; with none the offer states no price of one, and none is made up.
-            price = Money(each);
+            price = one;
             promo = $"{PromoPrefix}: {message}";
         }
         else
