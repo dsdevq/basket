@@ -43,8 +43,8 @@ import {PriceTokenSheetComponent} from './price-token.sheet';
           />
         } @empty {
           <p class="text-cmn-sm text-text-secondary">
-            No tokens yet. Dunnes (and Tesco once #59 lands) block basket's server, so your PC reads their prices and
-            sends them here with a token.
+            No tokens yet. Dunnes (and Tesco once #59 lands) block basket's server, so your PC reads
+            their prices and sends them here with a token.
           </p>
         }
         <cmn-button (clicked)="add()" variant="secondary" icon="Plus">Make a token</cmn-button>

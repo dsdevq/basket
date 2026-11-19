@@ -70,7 +70,9 @@ import {PriceRelaySectionComponent} from './price-relay.section';
             </div>
             <div class="flex flex-col gap-cmn-3">
               <h3 class="text-cmn-base font-semibold">Price reader</h3>
-              <p class="text-cmn-sm text-text-secondary">Lets your PC send Dunnes (and Tesco once #59 lands) prices</p>
+              <p class="text-cmn-sm text-text-secondary">
+                Lets your PC send Dunnes (and Tesco once #59 lands) prices
+              </p>
               <bk-price-relay-section />
             </div>
           </div>
