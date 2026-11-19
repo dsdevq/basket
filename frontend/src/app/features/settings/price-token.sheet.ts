@@ -29,7 +29,7 @@ import {PriceRelayApi} from './price-relay.api';
       <div class="flex flex-col gap-cmn-3 px-cmn-6 pt-cmn-4 pb-cmn-6">
         <p class="text-cmn-sm text-text-primary">
           Paste this into the price reader on {{ made.label || 'your PC' }}. basket will not show it
-          again, so copy it now. It can only send Tesco and Aldi prices; it can read nothing.
+          again, so copy it now. It can only send Dunnes (and Tesco once #59 lands) prices; it can read nothing.
         </p>
         <p
           class="break-all rounded-cmn-md bg-surface-raised p-cmn-3 text-cmn-xs text-text-secondary"

@@ -35,7 +35,7 @@ All must be green before merge:
 backend/src/Basket.Api/   .NET 10 minimal API: Auth, Lists, Cards, Prices (+Ingest, Promotions), Matching, Plan, Scorecard, LidlPlus, Data (EF Core, Postgres)
 backend/tests/Basket.Tests  xUnit; shop pages are recorded fixtures, never the network
 frontend/                 Angular 22 on lifekit-common, phone-first with bottom sheets
-pc-reader/                Node program on the owner's PC: reads Aldi and Dunnes pages, posts them to the ingest endpoint
+pc-reader/                Node program on the owner's PC: reads Dunnes (and Tesco once #59 lands) pages, posts them to the ingest endpoint
 docker/                   one image (API serves the Angular build), prod compose project `basket`, dev database, SOPS deploy scripts
 docs/                     decisions.md (the why of each rule), vps-setup.md (runbook)
 ```

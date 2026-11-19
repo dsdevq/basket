@@ -15,7 +15,7 @@ import type {IngestToken} from '../../core/auth/session.model';
 import {PriceRelayApi} from './price-relay.api';
 import {PriceTokenSheetComponent} from './price-token.sheet';
 
-/** Owner only: the tokens the PC price reader posts Tesco and Aldi prices with. Make one, revoke one. */
+/** Owner only: the tokens the PC price reader posts Dunnes (and Tesco once #59 lands) prices with. Make one, revoke one. */
 @Component({
   selector: 'bk-price-relay-section',
   imports: [ButtonComponent, EmptyStateComponent, ListItemRowComponent, SkeletonComponent],
@@ -43,7 +43,7 @@ import {PriceTokenSheetComponent} from './price-token.sheet';
           />
         } @empty {
           <p class="text-cmn-sm text-text-secondary">
-            No tokens yet. Tesco and Aldi block basket's server, so your PC reads their prices and
+            No tokens yet. Dunnes (and Tesco once #59 lands) block basket's server, so your PC reads their prices and
             sends them here with a token.
           </p>
         }
