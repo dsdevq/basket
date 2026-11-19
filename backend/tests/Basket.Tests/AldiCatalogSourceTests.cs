@@ -415,19 +415,28 @@ public sealed class AldiCatalogSourceTests : IClassFixture<BasketFactory>
     }
 
     [Fact]
-    public async Task A_start_beyond_a_range_that_shrank_and_does_not_answer_wraps_to_the_top_instead_of_stepping_on()
+    public async Task A_start_beyond_a_range_that_shrank_and_does_not_answer_is_stepped_over_until_an_empty_page_sends_it_to_the_top()
     {
         await CleanAsync();
 
         await PullAsync(LongRange());
         _factory.Clock.Advance(TimeSpan.FromDays(1));
 
-        var shrunk = new FakeFetcher().Serve(TreeUrl, Fixtures.Read("aldi-category-tree.json"));
-        var pull = await PullAsync(shrunk);
+        var silent = new FakeFetcher().Serve(TreeUrl, Fixtures.Read("aldi-category-tree.json"));
+        var pull = await PullAsync(silent);
+        _factory.Clock.Advance(TimeSpan.FromDays(1));
 
-        shrunk.Requested.Should().Equal(TreeUrl, SearchUrl(3600));
+        var shrunk = new FakeFetcher()
+            .Serve(TreeUrl, Fixtures.Read("aldi-category-tree.json"))
+            .Serve(SearchUrl(0), Page(1, 60, 200))
+            .Serve(SearchUrl(3660), "{\"meta\":{\"pagination\":{\"totalCount\":200}},\"data\":[]}");
+        var pull2 = await PullAsync(shrunk);
+
+        silent.Requested.Should().Equal(TreeUrl, SearchUrl(3600));
         pull.Outcome.Should().Be(PullOutcome.Failed);
-        (await SweepRunsAsync()).Select(r => r.NextOffset).Should().Equal(3600, 0);
+        shrunk.Requested.Should().StartWith(new[] { TreeUrl, SearchUrl(3660), SearchUrl(0) });
+        pull2.Outcome.Should().Be(PullOutcome.Partial);
+        (await SweepRunsAsync()).Select(r => r.NextOffset).Should().Equal(3600, 3660, 60);
     }
 
     [Fact]
