@@ -440,6 +440,22 @@ public sealed class AldiCatalogSourceTests : IClassFixture<BasketFactory>
     }
 
     [Fact]
+    public async Task A_start_beyond_a_range_that_shrank_and_never_answers_wraps_to_the_top_after_a_second_failed_night()
+    {
+        await CleanAsync();
+
+        await PullAsync(LongRange());
+        for (var night = 0; night < 2; night++)
+        {
+            _factory.Clock.Advance(TimeSpan.FromDays(1));
+            var silent = new FakeFetcher().Serve(TreeUrl, Fixtures.Read("aldi-category-tree.json"));
+            (await PullAsync(silent)).Outcome.Should().Be(PullOutcome.Failed);
+        }
+
+        (await SweepRunsAsync()).Select(r => r.NextOffset).Should().Equal(3600, 3660, 0);
+    }
+
+    [Fact]
     public async Task The_whole_range_of_about_3554_products_is_sixty_pages_and_closes_within_the_limit()
     {
         await CleanAsync();

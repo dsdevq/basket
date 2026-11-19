@@ -2088,7 +2088,8 @@ Owner direction, 2026-11-14: per-store catalog readers feed one combined catalog
   yet means offset 0. The end of the range wraps to its top, so every product is read at least every second night. A start beyond a
   range that shrank (an empty page at an offset past `totalCount`) goes back to 0. A page that cannot be read at the start, with
   nothing read before it, is stepped over (the next night starts one page on) so a single bad page cannot hold the range back; a
-  step that lands past the end of the range answers with an empty page and the following sweep starts at the top.
+  step that lands past the end of the range answers with an empty page and the following sweep starts at the top. This assumes Aldi
+  answers a past-the-end offset with an empty page, not an error; if it errors, the next night's run wraps to 0 after a Failed run.
 - **Closing the sweep.** A sweep that reached `totalCount` (from offset 0), or wrapped round to the page it began on, is closed with the same 90 percent guard as the PC reader's
   (`CatalogIngest.CloseAsync`, which `/complete` also uses): what Aldi no longer lists is marked `discontinued_at` only if the
   sweep saw nearly all of what was known. A sweep that stopped early (refusal, error, request limit, shape change) is never closed. While the range is longer than the cap

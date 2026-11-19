@@ -56,11 +56,13 @@ public sealed partial class AldiCatalogSource(
         var anyPriced = false;
 
         // Where the last sweep stopped; the first ever sweep, and one that finished the range, start at the top.
-        var start = await db.PricePullRuns
+        var last = await db.PricePullRuns
             .Where(r => r.Store == Store.Aldi && r.Kind == RunKind.Sweep && r.NextOffset != null)
             .OrderByDescending(r => r.FinishedAt)
-            .Select(r => r.NextOffset)
-            .FirstOrDefaultAsync(ct) ?? 0;
+            .Select(r => new { r.NextOffset, r.Outcome })
+            .FirstOrDefaultAsync(ct);
+        var start = last?.NextOffset ?? 0;
+        var afterFailure = last?.Outcome == PullOutcome.Failed;
         var resume = start;
         var wrapped = false;
 
@@ -123,6 +125,7 @@ public sealed partial class AldiCatalogSource(
                 // The range is shorter than where the last sweep stopped: read it from the top.
                 start = 0;
                 resume = 0;
+                afterFailure = false;
                 continue;
             }
 
@@ -200,8 +203,8 @@ public sealed partial class AldiCatalogSource(
         {
             var reason = stopped ?? "Aldi's product list was empty, the API may have changed.";
             // A page that cannot be read with nothing read before it is stepped over, so one bad page cannot hold the whole range back;
-            // a step past the end of the range answers with an empty page, which sends the next sweep to the top.
-            var next = badPage is { } bad ? bad + PageSize : resume;
+            // if the page it stepped to fails too, the cursor may be past the end of the range, so the next sweep starts at the top.
+            var next = badPage is { } bad ? (afterFailure ? 0 : bad + PageSize) : resume;
 
             await RecordSweepAsync(startedAt, PullOutcome.Failed, 0, reason, next, ct);
             return Failed(listings, reason);
