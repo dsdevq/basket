@@ -1,4 +1,8 @@
+using System.Net;
+using System.Net.Http.Json;
+using System.Text.Json;
 using Basket.Api.Data;
+using Basket.Api.Matching;
 using Basket.Api.Prices;
 using Basket.Api.Prices.Catalog;
 using Basket.Api.Prices.Fetching;
@@ -52,7 +56,7 @@ public sealed class LidlCatalogSweepTests : IClassFixture<BasketFactory>
         return fetcher;
     }
 
-    private Task SweepAsync(FakeFetcher fetcher, int barcodeCap = 200) =>
+    private Task SweepAsync(FakeFetcher fetcher, int barcodeCap = 200, bool matching = false) =>
         _factory.WithDb(async db =>
         {
             var recorder = new CatalogRecorder(db, new PriceRecorder(db));
@@ -60,8 +64,11 @@ public sealed class LidlCatalogSweepTests : IClassFixture<BasketFactory>
             {
                 LidlBarcodePagesPerNight = barcodeCap,
             });
+            var candidates = matching
+                ? new ServerCandidates(db, _clock, NullLogger<ServerCandidates>.Instance)
+                : null;
             var sweep = new LidlCatalogSweep(
-                fetcher, db, recorder, new CatalogIngest(db, recorder, _clock), options, _clock, NullLogger<LidlCatalogSweep>.Instance);
+                fetcher, db, recorder, new CatalogIngest(db, recorder, _clock, candidates), options, _clock, NullLogger<LidlCatalogSweep>.Instance);
             await sweep.RunAsync(CancellationToken.None);
             return 0;
         });
@@ -306,13 +313,63 @@ public sealed class LidlCatalogSweepTests : IClassFixture<BasketFactory>
             Shop().Serve(Chilled, Fixtures.Read("lidl-catalog-page-empty.html")), "showed no products");
 
     [Fact]
-    public Task A_page_of_tiles_that_are_all_unusable_delists_nothing() =>
-        AssertIncompleteSweepDelistsNothingAsync(
-            Shop().Serve(
-                Chilled,
-                Fixtures.Read("lidl-catalog-page-2.html").Replace("erpNumber&quot;: &quot;90000003&quot;", "erpNumber&quot;: &quot;&quot;")
-                    .Replace("erpNumber&quot;: &quot;90000004&quot;", "erpNumber&quot;: &quot;&quot;")),
-            "no usable products");
+    public async Task A_page_of_tiles_that_are_all_unusable_is_an_empty_category_and_the_sweep_goes_on()
+    {
+        await CleanAsync();
+        await SweepAsync(Shop());
+        _clock.Advance(TimeSpan.FromDays(1));
+        var unusable = Fixtures.Read("lidl-catalog-page-2.html")
+            .Replace("erpNumber&quot;: &quot;90000003&quot;", "erpNumber&quot;: &quot;&quot;")
+            .Replace("erpNumber&quot;: &quot;90000004&quot;", "erpNumber&quot;: &quot;&quot;");
+
+        var fetcher = Shop().Serve(Chilled, unusable);
+        await SweepAsync(fetcher);
+
+        fetcher.Requested.Should().Contain(Root).And.Contain(FruitVeg, "the category after the empty one is still walked");
+        await _factory.WithDb(async db =>
+        {
+            (await db.StoreProducts.CountAsync(p => p.DiscontinuedAt != null)).Should().Be(0);
+            var run = await db.PricePullRuns.Where(r => r.Store == Store.Lidl).OrderByDescending(r => r.StartedAt).FirstAsync();
+            run.Outcome.Should().Be(PullOutcome.Ok);
+            return 0;
+        });
+    }
+
+    [Fact]
+    public async Task A_partial_night_with_an_empty_listing_page_still_matches_and_marks_nothing_discontinued()
+    {
+        await CleanAsync();
+        var (owner, _) = await _factory.OwnerAsync();
+        await _factory.WithDb(async db =>
+        {
+            await db.ListItems.ExecuteDeleteAsync();
+            await db.Products.ExecuteDeleteAsync();
+            return 0;
+        });
+        var response = await owner.PostAsJsonAsync("/api/products", new { name = "Dairyfield unsalted butter 250g" });
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        var product = (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        await SweepAsync(Shop(), matching: true);
+        await _factory.WithDb(async db =>
+        {
+            await db.MatchCandidates.ExecuteDeleteAsync();
+            return 0;
+        });
+        _clock.Advance(TimeSpan.FromDays(1));
+
+        await SweepAsync(Shop().Serve(Chilled, Fixtures.Read("lidl-catalog-page-empty.html")), matching: true);
+
+        await _factory.WithDb(async db =>
+        {
+            var run = await db.PricePullRuns.Where(r => r.Store == Store.Lidl).OrderByDescending(r => r.StartedAt).FirstAsync();
+            run.Outcome.Should().Be(PullOutcome.Partial);
+            run.Message.Should().Contain("showed no products");
+            (await db.StoreProducts.CountAsync(p => p.DiscontinuedAt != null)).Should().Be(0);
+            (await db.MatchCandidates.CountAsync(c => c.ProductId == product && c.Store == Store.Lidl))
+                .Should().BeGreaterThan(0, "matching runs on a partial night too");
+            return 0;
+        });
+    }
 
     [Fact]
     public async Task A_category_whose_first_page_only_repeats_another_category_is_still_walked_to_its_end()
