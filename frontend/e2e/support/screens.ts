@@ -1115,7 +1115,27 @@ export const ROUTES: readonly Route[] = [
       await page.route('**/api/plan/by-shop', r => r.fulfill({json: BY_SHOP_EMPTY}));
     },
   },
-  {name: 'prices', path: '/prices', setup: signedIn},
+  {
+    name: 'prices',
+    path: '/prices',
+    // Aldi has a suggested page for the first product, so the To check section is part of the baseline.
+    setup: async page => {
+      await signedIn(page);
+      await page.route('**/api/products', r =>
+        r.fulfill({
+          json: {
+            ...PRODUCTS,
+            products: PRODUCTS.products.map((product, index) => ({
+              ...product,
+              stores: product.stores.map(shop =>
+                index === 0 && shop.store === 'aldi' ? {...shop, candidates: 1} : shop
+              ),
+            })),
+          },
+        })
+      );
+    },
+  },
   {name: 'promotions', path: '/promotions', setup: signedIn},
   {name: 'scorecard', path: '/scorecard', setup: signedIn},
   {

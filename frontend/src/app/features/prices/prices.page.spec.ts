@@ -3,6 +3,7 @@ import {ActivatedRoute, convertToParamMap} from '@angular/router';
 import {CmnDrawerService, ToastService} from '@lifekit-hq/ui';
 import {of} from 'rxjs';
 
+import {HabitsApi} from '../habits/habits.api';
 import {health, neverSwept} from './catalog-health-fixtures';
 import {MatchSheetComponent} from './match.sheet';
 import {PricesApi} from './prices.api';
@@ -105,7 +106,17 @@ async function loaded(fixture: ComponentFixture<unknown>): Promise<void> {
   });
 }
 
-async function render(response: PricesResponse, query: Record<string, string> = {}) {
+async function render(
+  response: PricesResponse,
+  query: Record<string, string> = {},
+  habits: {
+    productId: string;
+    name: string;
+    boughtIn: number;
+    lastBoughtAt: string;
+    usual: boolean;
+  }[] = []
+) {
   const api = {
     all: vi.fn().mockResolvedValue(response),
     add: vi.fn(),
@@ -121,6 +132,7 @@ async function render(response: PricesResponse, query: Record<string, string> = 
     providers: [
       {provide: PricesApi, useValue: api},
       {provide: CmnDrawerService, useValue: drawer},
+      {provide: HabitsApi, useValue: {all: vi.fn().mockResolvedValue(habits)}},
       {provide: ActivatedRoute, useValue: {snapshot: {queryParamMap: convertToParamMap(query)}}},
       {provide: ToastService, useValue: {error: vi.fn(), success: vi.fn()}},
     ],
@@ -153,7 +165,8 @@ describe('PricesPage', () => {
     expect(text).toContain('Seen 5 Nov');
     expect(text).toContain('€1.19');
     expect(text).toContain('Seen 4 Nov');
-    expect(text).toContain('No page linked yet');
+    expect(text).not.toContain('No page linked yet');
+    expect(text).toContain('1 shop with no page linked yet');
     expect(text).not.toContain('Waiting for the next PC read');
     expect(text).not.toContain('unavailable');
     expect(text).toContain('Last paid: not yet connected');
@@ -281,8 +294,14 @@ describe('PricesPage', () => {
   });
 
   it('opens the link sheet for the shop that was tapped', async () => {
-    const {host, drawer} = await render({products: [milk()], stores: []});
+    const {fixture, host, drawer} = await render({products: [milk()], stores: []});
 
+    host
+      .querySelector<HTMLElement>(
+        '[data-testid="unlinked-toggle"] button, [data-testid="unlinked-toggle"] [role="button"]'
+      )
+      ?.click();
+    fixture.detectChanges();
     const rows = host.querySelectorAll<HTMLElement>(
       'cmn-list-item-row button, cmn-list-item-row [role="button"]'
     );
@@ -313,13 +332,53 @@ describe('PricesPage', () => {
     expect(host.textContent).toContain('2 suggested pages to check');
     host
       .querySelectorAll<HTMLElement>(
-        'cmn-list-item-row button, cmn-list-item-row [role="button"]'
-      )[2]
+        '[data-testid="to-check"] cmn-list-item-row button, [data-testid="to-check"] cmn-list-item-row [role="button"]'
+      )[0]
       ?.click();
 
     expect(drawer.open).toHaveBeenCalledTimes(1);
     expect(drawer.open.mock.calls[0]?.[0]).toBe(MatchSheetComponent);
     expect(drawer.open.mock.calls[0]?.[1]).toMatchObject({title: 'Whole milk 2L at Tesco'});
+  });
+
+  it('lists suggestions in a To check section, most-bought product first, one row each', async () => {
+    const withCandidates = (id: string, name: string, count: number): Product => ({
+      id,
+      name,
+      stores: [{...ALDI, candidates: count}, TESCO],
+    });
+    const {host} = await render(
+      {
+        products: [
+          withCandidates('p1', 'Pistachios', 1),
+          withCandidates('p2', 'Carrots', 1),
+          withCandidates('p3', 'Soy sauce', 3),
+        ],
+        stores: [],
+      },
+      {},
+      [
+        {productId: 'p3', name: 'Soy sauce', boughtIn: 4, lastBoughtAt: '2026-11-10', usual: true},
+        {productId: 'p2', name: 'Carrots', boughtIn: 1, lastBoughtAt: '2026-11-01', usual: false},
+      ]
+    );
+
+    const section = host.querySelector('[data-testid="to-check"]');
+    expect(section?.textContent).toContain('To check (3)');
+    const rows = Array.from(section?.querySelectorAll('cmn-list-item-row') ?? []).map(
+      row => row.textContent ?? ''
+    );
+    expect(rows).toHaveLength(3);
+    expect(rows[0]).toContain('Soy sauce');
+    expect(rows[0]).toContain('3 suggested pages to check');
+    expect(rows[1]).toContain('Carrots');
+    expect(rows[2]).toContain('Pistachios');
+  });
+
+  it('shows no To check section when nothing is waiting', async () => {
+    const {host} = await render({products: [milk()], stores: []});
+
+    expect(host.querySelector('[data-testid="to-check"]')).toBeNull();
   });
 
   it('fills the add box with the typed item that History sent, and adds nothing until Add is tapped', async () => {
@@ -334,6 +393,7 @@ describe('PricesPage', () => {
       providers: [
         {provide: PricesApi, useValue: {all: vi.fn().mockRejectedValue(new Error('offline'))}},
         {provide: CmnDrawerService, useValue: {open: vi.fn()}},
+        {provide: HabitsApi, useValue: {all: vi.fn().mockResolvedValue([])}},
         {provide: ActivatedRoute, useValue: {snapshot: {queryParamMap: convertToParamMap({})}}},
         {provide: ToastService, useValue: {error: vi.fn()}},
       ],
