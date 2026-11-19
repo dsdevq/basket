@@ -553,6 +553,10 @@ namespace Basket.Api.Data.Migrations
                         .HasColumnType("character varying(500)")
                         .HasColumnName("message");
 
+                    b.Property<int?>("NextOffset")
+                        .HasColumnType("integer")
+                        .HasColumnName("next_offset");
+
                     b.Property<string>("Outcome")
                         .IsRequired()
                         .HasMaxLength(16)

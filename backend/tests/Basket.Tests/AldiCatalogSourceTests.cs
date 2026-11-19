@@ -328,6 +328,133 @@ public sealed class AldiCatalogSourceTests : IClassFixture<BasketFactory>
         pull.Message.Should().Contain("request limit");
     }
 
+    /// <summary>The invented range of 3,708 products: 62 pages, two more than a night's budget.</summary>
+    private static FakeFetcher LongRange()
+    {
+        const int total = 3708;
+        var fetcher = new FakeFetcher().Serve(TreeUrl, Fixtures.Read("aldi-category-tree.json"));
+        for (var offset = 0; offset < total; offset += 60)
+        {
+            fetcher.Serve(SearchUrl(offset), Page(offset + 1, Math.Min(60, total - offset), total));
+        }
+
+        return fetcher;
+    }
+
+    [Fact]
+    public async Task A_range_longer_than_the_page_budget_is_read_from_where_the_last_sweep_stopped_and_wraps()
+    {
+        await CleanAsync();
+
+        var first = LongRange();
+        var night1 = await PullAsync(first);
+        _factory.Clock.Advance(TimeSpan.FromDays(1));
+        var second = LongRange();
+        var night2 = await PullAsync(second);
+        _factory.Clock.Advance(TimeSpan.FromDays(1));
+        var third = LongRange();
+        await PullAsync(third);
+
+        // Night 1 reads offsets 0..3540 and stops; night 2 begins at 3600, wraps past the last page to 0 and stops at 3420.
+        first.Requested.Should().HaveCount(61).And.Contain(SearchUrl(3540)).And.NotContain(SearchUrl(3600));
+        night1.Outcome.Should().Be(PullOutcome.Partial);
+        second.Requested.Skip(1).Take(3).Should().Equal(SearchUrl(3600), SearchUrl(3660), SearchUrl(0));
+        second.Requested.Should().HaveCount(61).And.Contain(SearchUrl(3420)).And.NotContain(SearchUrl(3480));
+        night2.Outcome.Should().Be(PullOutcome.Partial);
+        third.Requested[1].Should().Be(SearchUrl(3480), "night 3 carries on where night 2 stopped");
+
+        (await SweepRunsAsync()).Select(r => r.NextOffset).Should().Equal(3600, 3480, 3360);
+    }
+
+    [Fact]
+    public async Task A_page_that_cannot_be_read_at_the_start_is_stepped_over_so_it_does_not_hold_the_range_back()
+    {
+        await CleanAsync();
+
+        // 200 products; the page at offset 60 never answers.
+        FakeFetcher Range200() => new FakeFetcher()
+            .Serve(TreeUrl, Fixtures.Read("aldi-category-tree.json"))
+            .Serve(SearchUrl(0), Page(1, 60, 200))
+            .Serve(SearchUrl(120), Page(121, 60, 200))
+            .Serve(SearchUrl(180), Page(181, 20, 200));
+
+        var night1 = Range200();
+        await PullAsync(night1);
+        _factory.Clock.Advance(TimeSpan.FromDays(1));
+        var night2 = Range200();
+        var pull2 = await PullAsync(night2);
+        _factory.Clock.Advance(TimeSpan.FromDays(1));
+        var night3 = Range200();
+        var pull3 = await PullAsync(night3);
+
+        night1.Requested.Should().Equal(TreeUrl, SearchUrl(0), SearchUrl(60));
+        night2.Requested.Should().Equal(TreeUrl, SearchUrl(60));
+        pull2.Outcome.Should().Be(PullOutcome.Failed);
+        night3.Requested.Should().StartWith(new[] { TreeUrl, SearchUrl(120), SearchUrl(180) }, "night 3 starts past the bad page");
+        pull3.Outcome.Should().Be(PullOutcome.Partial);
+        (await SweepRunsAsync()).Select(r => r.NextOffset).Should().Equal(60, 120, 60);
+    }
+
+    [Fact]
+    public async Task A_start_beyond_a_range_that_shrank_is_read_from_the_top()
+    {
+        await CleanAsync();
+
+        await PullAsync(LongRange());
+        (await SweepRunsAsync()).Single().NextOffset.Should().Be(3600);
+        _factory.Clock.Advance(TimeSpan.FromDays(1));
+
+        var shrunk = new FakeFetcher()
+            .Serve(TreeUrl, Fixtures.Read("aldi-category-tree.json"))
+            .Serve(SearchUrl(0), Page(1, 60, 200))
+            .Serve(SearchUrl(3600), "{\"meta\":{\"pagination\":{\"totalCount\":200}},\"data\":[]}");
+        var pull = await PullAsync(shrunk);
+
+        shrunk.Requested.Should().StartWith(new[] { TreeUrl, SearchUrl(3600), SearchUrl(0) });
+        pull.Outcome.Should().Be(PullOutcome.Partial);
+    }
+
+    [Fact]
+    public async Task A_start_beyond_a_range_that_shrank_and_does_not_answer_is_stepped_over_until_an_empty_page_sends_it_to_the_top()
+    {
+        await CleanAsync();
+
+        await PullAsync(LongRange());
+        _factory.Clock.Advance(TimeSpan.FromDays(1));
+
+        var silent = new FakeFetcher().Serve(TreeUrl, Fixtures.Read("aldi-category-tree.json"));
+        var pull = await PullAsync(silent);
+        _factory.Clock.Advance(TimeSpan.FromDays(1));
+
+        var shrunk = new FakeFetcher()
+            .Serve(TreeUrl, Fixtures.Read("aldi-category-tree.json"))
+            .Serve(SearchUrl(0), Page(1, 60, 200))
+            .Serve(SearchUrl(3660), "{\"meta\":{\"pagination\":{\"totalCount\":200}},\"data\":[]}");
+        var pull2 = await PullAsync(shrunk);
+
+        silent.Requested.Should().Equal(TreeUrl, SearchUrl(3600));
+        pull.Outcome.Should().Be(PullOutcome.Failed);
+        shrunk.Requested.Should().StartWith(new[] { TreeUrl, SearchUrl(3660), SearchUrl(0) });
+        pull2.Outcome.Should().Be(PullOutcome.Partial);
+        (await SweepRunsAsync()).Select(r => r.NextOffset).Should().Equal(3600, 3660, 60);
+    }
+
+    [Fact]
+    public async Task A_start_beyond_a_range_that_shrank_and_never_answers_wraps_to_the_top_after_a_second_failed_night()
+    {
+        await CleanAsync();
+
+        await PullAsync(LongRange());
+        for (var night = 0; night < 2; night++)
+        {
+            _factory.Clock.Advance(TimeSpan.FromDays(1));
+            var silent = new FakeFetcher().Serve(TreeUrl, Fixtures.Read("aldi-category-tree.json"));
+            (await PullAsync(silent)).Outcome.Should().Be(PullOutcome.Failed);
+        }
+
+        (await SweepRunsAsync()).Select(r => r.NextOffset).Should().Equal(3600, 3660, 0);
+    }
+
     [Fact]
     public async Task The_whole_range_of_about_3554_products_is_sixty_pages_and_closes_within_the_limit()
     {

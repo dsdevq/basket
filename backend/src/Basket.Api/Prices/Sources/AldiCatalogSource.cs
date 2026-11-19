@@ -14,7 +14,9 @@ namespace Basket.Api.Prices.Sources;
 /// <c>totalCount</c>, through the polite fetcher: honest user agent, a gap between requests, and a 403 or 429 ends the sweep
 /// with no retry. Every page is recorded in the combined catalog as it arrives (so a refusal half way keeps what was read), a
 /// finished sweep delists what Aldi no longer lists (behind the same 90 percent guard as the PC reader's), and a linked product's
-/// price comes out of the same read, so Aldi pages are never opened one by one.
+/// price comes out of the same read, so Aldi pages are never opened one by one. When the range is longer than the request budget a
+/// sweep starts where the last one stopped (the offset is kept on its run row) and wraps to the start of the range, so each
+/// product is read at least every second night.
 /// </summary>
 public sealed partial class AldiCatalogSource(
     IPageFetcher fetcher,
@@ -33,7 +35,8 @@ public sealed partial class AldiCatalogSource(
 
     /// <summary>
     /// The most product-search pages one sweep reads, the single category tree request not counted: the 60 polite requests a day
-    /// the owner accepted for Aldi's terms, which is the whole range (about 3,554 products) in pages of 60.
+    /// the owner accepted for Aldi's terms: 3,600 products, which is less than the whole range (3,708 rows), so each night starts
+    /// where the last stopped.
     /// </summary>
     private const int MaxPages = 60;
 
@@ -52,10 +55,21 @@ public sealed partial class AldiCatalogSource(
         var pages = 0;
         var anyPriced = false;
 
+        // Where the last sweep stopped; the first ever sweep, and one that finished the range, start at the top.
+        var last = await db.PricePullRuns
+            .Where(r => r.Store == Store.Aldi && r.Kind == RunKind.Sweep && r.NextOffset != null)
+            .OrderByDescending(r => r.FinishedAt)
+            .Select(r => new { r.NextOffset, r.Outcome })
+            .FirstOrDefaultAsync(ct);
+        var start = last?.NextOffset ?? 0;
+        var afterFailure = last?.Outcome == PullOutcome.Failed;
+        var resume = start;
+        var wrapped = false;
+
         var tree = await fetcher.GetAsync(new Uri(TreeUrl), ct);
         if (tree.Status == FetchStatus.Blocked)
         {
-            await RecordSweepAsync(startedAt, PullOutcome.Blocked, 0, StorePulls.BlockedMessage(tree.Detail!), ct);
+            await RecordSweepAsync(startedAt, PullOutcome.Blocked, 0, StorePulls.BlockedMessage(tree.Detail!), resume, ct);
             return StorePulls.Blocked(listings, tree.Detail!);
         }
 
@@ -65,12 +79,13 @@ public sealed partial class AldiCatalogSource(
             : $"Aldi's category tree was not read ({tree.Detail ?? "no detail"}), so products are filed without a category.";
 
         var complete = false;
+        int? badPage = null;
         string? stopped = null;
-        for (var offset = 0; ; offset += PageSize)
+        for (var offset = start; ; offset = resume)
         {
             if (pages >= MaxPages)
             {
-                stopped = $"The sweep stopped at the request limit ({MaxPages} pages) before the end of Aldi's range.";
+                stopped = $"The sweep stopped at the request limit ({MaxPages} pages) before the end of Aldi's range; the next one starts at offset {resume}.";
                 break;
             }
 
@@ -81,13 +96,14 @@ public sealed partial class AldiCatalogSource(
             if (page.Status == FetchStatus.Blocked)
             {
                 // What the earlier pages recorded stays; nothing is delisted and nothing is retried.
-                await RecordSweepAsync(startedAt, PullOutcome.Blocked, seen.Count, StorePulls.BlockedMessage(page.Detail!), ct);
+                await RecordSweepAsync(startedAt, PullOutcome.Blocked, seen.Count, StorePulls.BlockedMessage(page.Detail!), resume, ct);
                 return StorePulls.Blocked(listings, page.Detail!);
             }
 
             if (page.Status != FetchStatus.Ok)
             {
                 stopped = $"Aldi's product list stopped at offset {offset} ({page.Detail ?? "no detail"}).";
+                badPage = offset;
                 break;
             }
 
@@ -100,7 +116,17 @@ public sealed partial class AldiCatalogSource(
             {
                 log.LogWarning(ex, "Aldi's product list at offset {Offset} was not in the expected shape", offset);
                 stopped = $"Aldi's product list at offset {offset} was not in the shape basket reads, the API may have changed.";
+                badPage = offset;
                 break;
+            }
+
+            if (offset > 0 && offset >= parsed.TotalCount)
+            {
+                // The range is shorter than where the last sweep stopped: read it from the top.
+                start = 0;
+                resume = 0;
+                afterFailure = false;
+                continue;
             }
 
             var live = parsed.Products.Where(p => !p.Discontinued).ToList();
@@ -108,6 +134,7 @@ public sealed partial class AldiCatalogSource(
             {
                 log.LogWarning("None of the {Count} Aldi products at offset {Offset} carried a price", live.Count, offset);
                 stopped = $"Aldi's product list at offset {offset} was not in the shape basket reads (no product had a price), the API may have changed.";
+                badPage = offset;
                 break;
             }
 
@@ -151,7 +178,15 @@ public sealed partial class AldiCatalogSource(
             await db.SaveChangesAsync(ct);
             db.ChangeTracker.Clear();
 
-            if (offset + PageSize >= parsed.TotalCount)
+            // The end of the range wraps to its top; the sweep is whole once it is back at the page it began on.
+            resume = offset + PageSize;
+            if (resume >= parsed.TotalCount)
+            {
+                resume = 0;
+                wrapped = true;
+            }
+
+            if (wrapped && resume >= start)
             {
                 complete = true;
                 break;
@@ -167,7 +202,11 @@ public sealed partial class AldiCatalogSource(
         if (seen.Count == 0)
         {
             var reason = stopped ?? "Aldi's product list was empty, the API may have changed.";
-            await RecordSweepAsync(startedAt, PullOutcome.Failed, 0, reason, ct);
+            // A page that cannot be read with nothing read before it is stepped over, so one bad page cannot hold the whole range back;
+            // if the page it stepped to fails too, the cursor may be past the end of the range, so the next sweep starts at the top.
+            var next = badPage is { } bad ? (afterFailure ? 0 : bad + PageSize) : resume;
+
+            await RecordSweepAsync(startedAt, PullOutcome.Failed, 0, reason, next, ct);
             return Failed(listings, reason);
         }
 
@@ -178,11 +217,11 @@ public sealed partial class AldiCatalogSource(
             var close = await sweeps.CloseAsync(Store.Aldi, seen.Count, startedAt, ct);
             outcome = close.Outcome;
             message = close.Message ?? note;
-            await RecordSweepAsync(startedAt, close.Outcome, close.Touched, message, ct, close.Live);
+            await RecordSweepAsync(startedAt, close.Outcome, close.Touched, message, resume, ct, close.Live);
         }
         else
         {
-            await RecordSweepAsync(startedAt, PullOutcome.Partial, seen.Count, message, ct);
+            await RecordSweepAsync(startedAt, PullOutcome.Partial, seen.Count, message, resume, ct);
         }
 
         var results = new Dictionary<Guid, ListingPull>();
@@ -224,9 +263,10 @@ public sealed partial class AldiCatalogSource(
 
     /// <summary>
     /// The sweep's own run row, beside the shelf row the nightly job writes for the shop (whose counts are the linked pages'):
-    /// <c>Read</c> is what the sweep listed, <c>Listings</c> the live catalog after it, which the catalog health view compares.
+    /// <c>Read</c> is what the sweep listed, <c>Listings</c> the live catalog after it, which the catalog health view compares;
+    /// <c>NextOffset</c> is where the next sweep starts.
     /// </summary>
-    private async Task RecordSweepAsync(DateTimeOffset startedAt, PullOutcome outcome, int read, string? message, CancellationToken ct, int? live = null)
+    private async Task RecordSweepAsync(DateTimeOffset startedAt, PullOutcome outcome, int read, string? message, int nextOffset, CancellationToken ct, int? live = null)
     {
         db.PricePullRuns.Add(new PricePullRun
         {
@@ -238,6 +278,7 @@ public sealed partial class AldiCatalogSource(
             Kind = RunKind.Sweep,
             Listings = live ?? await db.StoreProducts.CountAsync(p => p.Store == Store.Aldi && p.DiscontinuedAt == null, ct),
             Read = read,
+            NextOffset = nextOffset,
             Message = PriceRecorder.Truncate(message, 500),
         });
         await db.SaveChangesAsync(ct);

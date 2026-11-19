@@ -2067,9 +2067,9 @@ Owner direction, 2026-11-14: per-store catalog readers feed one combined catalog
   separate public host that serves anyone. Product addresses stay the `www.aldi.ie/product/<slug>-<sku>` pages (what a listing
   links to and the shelf shows); they are built, never fetched.
 - **Terms note.** Aldi's terms are not an invitation to automated reading; the owner accepted that risk on the footing of 60 polite
-  requests a day for a two-person household (issue 129, "accept Aldi terms risk"). The budget is about 60 requests a day: the range in
-  pages of 60 (about 3,554 products), a fixed cap of 60 product-search pages a sweep, plus the one category tree request, which the cap does not count
-  (a constant, not a setting), 5 s apart (`MinRequestIntervalSeconds`, per host), honest user agent
+  requests a day for a two-person household (issue 129, "accept Aldi terms risk"). The budget is about 60 requests a day: a fixed cap of 60 product-search pages
+  of 60 a sweep (3,600 products), plus the one category tree request, which the cap does not count
+  (a constant, not a setting; raising it is the owner's call), 5 s apart (`MinRequestIntervalSeconds`, per host), honest user agent
   (`basket-price-check/1.0 (a household app ...)`), one sweep a night, no retry. A sweep stops, it never goes round: a 403 or 429
   (`FetchStatus.Blocked`) ends it at once, keeps what the earlier pages recorded, delists nothing and shows on the Prices page as
   blocked. If the owner or Aldi withdraws the acceptance, the fix is to set the source off, not to change how it asks.
@@ -2093,9 +2093,20 @@ Owner direction, 2026-11-14: per-store catalog readers feed one combined catalog
 - **One door, one matcher.** The sweep writes through the same `CatalogRecorder` as `POST /api/ingest/catalog` (write-on-change
   prices, thinner readings never erase), on the same tables, so the fleet identity, the ingest token scopes and the matcher built
   for issue 128 are reused unchanged; nothing was restarted. Each page is recorded as it arrives.
-- **Closing the sweep.** A sweep that reached `totalCount` is closed with the same 90 percent guard as the PC reader's
+- **Where a night starts.** The range outgrew the cap (3,708 rows against 3,600), so a sweep that always began at offset 0 never
+  refreshed the same tail, which aged past the Plan's 3-day window. Each sweep starts where the last stopped: the next offset is
+  kept on the sweep's `price_pull_run` row (`next_offset`, null on every other row) and read from the latest Aldi `Sweep` row; no row
+  yet means offset 0. The end of the range wraps to its top, so every product is read at least every second night. A start beyond a
+  range that shrank (an empty page at an offset past `totalCount`) goes back to 0. A page that cannot be read at the start, with
+  nothing read before it, is stepped over (the next night starts one page on) so a single bad page cannot hold the range back; if
+  the night after a Failed one fails at its start too, the cursor may have stepped past the end of the range, so the next sweep
+  starts at the top. A step that lands past the end and is answered with an empty page also goes back to the top. Whether Aldi
+  answers a past-the-end offset with an empty page or an error is not known; either way the range wraps within two Failed nights.
+- **Closing the sweep.** A sweep that reached `totalCount` (from offset 0), or wrapped round to the page it began on, is closed with the same 90 percent guard as the PC reader's
   (`CatalogIngest.CloseAsync`, which `/complete` also uses): what Aldi no longer lists is marked `discontinued_at` only if the
-  sweep saw nearly all of what was known. A sweep that stopped early (refusal, error, request limit, shape change) is never closed.
+  sweep saw nearly all of what was known. A sweep that stopped early (refusal, error, request limit, shape change) is never closed. While the range is longer than the cap
+  no sweep gets back to the page it began on, so none closes and this sweep delists nothing; a product Aldi withdrew stays
+  listed until the range fits the cap again, or Aldi marks it `discontinued` itself.
   The job writes the one `price_pull_run` row for Aldi (outcome, the reason in the message), as for Lidl.
 - **Linked products are priced from the sweep.** The nightly job runs the Aldi source even with nothing linked
   (`IStorePriceSource.SweepsCatalog`); a linked listing is matched by the sku at the end of its address, not the slug, and priced from
@@ -2104,10 +2115,11 @@ Owner direction, 2026-11-14: per-store catalog readers feed one combined catalog
 - **`ReadBy(Aldi)` is `nightly`.** The PC reader's work list takes only `pc` shops, so it stops reading Aldi by itself; `POST
   /api/ingest/prices` and `/api/ingest/catalog` answer `store_not_ingested` for Aldi from now on. The PC reader's own Aldi parser is left for a
   later change. (The Settings copy that said the PC sends "Tesco and Aldi" prices now says "Dunnes (and Tesco once #59 lands)".)
-- **No migration.** The tables are issue 128's. Runs on the VPS only.
+- **One column.** The tables are issue 128's; the only migration is `next_offset` on `price_pull_run` (`AldiSweepCursor`). Runs on the VPS only.
 - **Tests.** `AldiCatalogSourceTests` on invented pages (`Fixtures/aldi-category-tree.json`, `aldi-product-search.json`) with a fake fetcher:
   request order and paging, field mapping, category paths, refusals (403 and 429 on the tree, 429 part way), the guard, the request limit,
-  a changed shape, linked products priced by sku. No test reaches Aldi; the repository holds no real catalog data.
+  a changed shape, linked products priced by sku, a range longer than the cap read from where the last sweep stopped
+  and wrapping, a bad page at the start stepped over, a start beyond a shrunken range. No test reaches Aldi; the repository holds no real catalog data.
 
 ## Catalog 7/14: server-side candidates (2026-11-14, issue 133 of epic 126)
 
