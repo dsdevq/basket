@@ -367,6 +367,35 @@ public sealed class AldiCatalogSourceTests : IClassFixture<BasketFactory>
     }
 
     [Fact]
+    public async Task A_page_that_cannot_be_read_at_the_start_is_stepped_over_so_it_does_not_hold_the_range_back()
+    {
+        await CleanAsync();
+
+        // 200 products; the page at offset 60 never answers.
+        FakeFetcher Range200() => new FakeFetcher()
+            .Serve(TreeUrl, Fixtures.Read("aldi-category-tree.json"))
+            .Serve(SearchUrl(0), Page(1, 60, 200))
+            .Serve(SearchUrl(120), Page(121, 60, 200))
+            .Serve(SearchUrl(180), Page(181, 20, 200));
+
+        var night1 = Range200();
+        await PullAsync(night1);
+        _factory.Clock.Advance(TimeSpan.FromDays(1));
+        var night2 = Range200();
+        var pull2 = await PullAsync(night2);
+        _factory.Clock.Advance(TimeSpan.FromDays(1));
+        var night3 = Range200();
+        var pull3 = await PullAsync(night3);
+
+        night1.Requested.Should().Equal(TreeUrl, SearchUrl(0), SearchUrl(60));
+        night2.Requested.Should().Equal(TreeUrl, SearchUrl(60));
+        pull2.Outcome.Should().Be(PullOutcome.Failed);
+        night3.Requested.Should().StartWith(new[] { TreeUrl, SearchUrl(120), SearchUrl(180) }, "night 3 starts past the bad page");
+        pull3.Outcome.Should().Be(PullOutcome.Partial);
+        (await SweepRunsAsync()).Select(r => r.NextOffset).Should().Equal(60, 120, 60);
+    }
+
+    [Fact]
     public async Task The_whole_range_of_about_3554_products_is_sixty_pages_and_closes_within_the_limit()
     {
         await CleanAsync();

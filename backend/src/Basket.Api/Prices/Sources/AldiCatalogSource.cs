@@ -77,6 +77,7 @@ public sealed partial class AldiCatalogSource(
             : $"Aldi's category tree was not read ({tree.Detail ?? "no detail"}), so products are filed without a category.";
 
         var complete = false;
+        int? badPage = null;
         string? stopped = null;
         for (var offset = start; ; offset = resume)
         {
@@ -100,6 +101,7 @@ public sealed partial class AldiCatalogSource(
             if (page.Status != FetchStatus.Ok)
             {
                 stopped = $"Aldi's product list stopped at offset {offset} ({page.Detail ?? "no detail"}).";
+                badPage = offset;
                 break;
             }
 
@@ -112,6 +114,7 @@ public sealed partial class AldiCatalogSource(
             {
                 log.LogWarning(ex, "Aldi's product list at offset {Offset} was not in the expected shape", offset);
                 stopped = $"Aldi's product list at offset {offset} was not in the shape basket reads, the API may have changed.";
+                badPage = offset;
                 break;
             }
 
@@ -128,6 +131,7 @@ public sealed partial class AldiCatalogSource(
             {
                 log.LogWarning("None of the {Count} Aldi products at offset {Offset} carried a price", live.Count, offset);
                 stopped = $"Aldi's product list at offset {offset} was not in the shape basket reads (no product had a price), the API may have changed.";
+                badPage = offset;
                 break;
             }
 
@@ -195,7 +199,9 @@ public sealed partial class AldiCatalogSource(
         if (seen.Count == 0)
         {
             var reason = stopped ?? "Aldi's product list was empty, the API may have changed.";
-            await RecordSweepAsync(startedAt, PullOutcome.Failed, 0, reason, resume, ct);
+            // A page that cannot be read with nothing read before it is stepped over, so one bad page cannot hold the whole range back;
+            // a start beyond the end of the range is read from the top by the next sweep.
+            await RecordSweepAsync(startedAt, PullOutcome.Failed, 0, reason, badPage is { } bad ? bad + PageSize : resume, ct);
             return Failed(listings, reason);
         }
 
