@@ -2415,3 +2415,11 @@ fixed in the shared component, not in this app: "We dont create unique buttons p
   and nothing else changes in `frontend/src`. Frontend only: no endpoint, schema or migration changes.
 - **Baselines.** Screens that show these controls change colour, so their images are redrawn by the **Update screen baselines** workflow
   on the adopting branch, never locally.
+
+## Prices opens with the suggestions to check (2026-11-19, issue #179)
+
+Owner's words: proposed shop matches sat unreviewed (19 proposals in production, none confirmed), each shown only inside its own product row. Most proposals are right, a few are wrong, so confirming stays a human step.
+
+- **To check section.** The top of Prices lists every shop with unanswered suggested pages, one row per product and shop, the most-bought product first (closed-trip count, then latest trip, as in the `habits` response; never-bought products after, in the Shelf's order). A row opens the existing match sheet (`match.sheet.ts`), whose Yes and No are the one-tap answer; nothing is confirmed without a person.
+- **No page linked yet folds.** A shop row with no page and no suggestion is hidden in its product's card behind "N shops with no page linked yet"; tapping it shows them (and their link sheet) for that product.
+- **Unchanged.** The matching rule, the endpoints and the schema. The product grid still shows a suggestion's own row. Frontend only; the `prices` baseline is redrawn by the **Update screen baselines** workflow, never locally.

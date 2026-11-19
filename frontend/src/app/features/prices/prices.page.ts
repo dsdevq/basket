@@ -6,6 +6,7 @@ import {
   DestroyRef,
   inject,
   type OnInit,
+  signal,
 } from '@angular/core';
 import {takeUntilDestroyed} from '@angular/core/rxjs-interop';
 import {FormControl, FormGroup, ReactiveFormsModule} from '@angular/forms';
@@ -27,6 +28,7 @@ import {
 import {firstValueFrom, fromEvent} from 'rxjs';
 
 import {ComposerBarComponent} from '../../core/shell/composer-bar.component';
+import {HabitsStore} from '../habits/habits.store';
 import {healthLines, healthTag, healthWarnings} from './catalog-health-format';
 import {MatchSheetComponent, type MatchSheetData, type MatchSheetResult} from './match.sheet';
 import {detailLines, headline, storeProblem, suggestionLine} from './price-format';
@@ -35,6 +37,7 @@ import {PricesStore} from './prices.store';
 import {type ProductAction, ProductActionsSheetComponent} from './product-actions.sheet';
 import {ProductSearchSheetComponent} from './product-search.sheet';
 import {StoreLinkSheetComponent} from './store-link.sheet';
+import {isUnlinked, toCheckRows, unlinkedText} from './to-check';
 
 /** Prices change once a night, so the page re-reads only when it comes back into view. */
 @Component({
@@ -74,6 +77,22 @@ import {StoreLinkSheetComponent} from './store-link.sheet';
         @if (!store.products().length) {
           <cmn-empty-state [subMessage]="emptyBody" icon="Tag" message="No products yet" />
         }
+        @if (toCheck().length) {
+          <cmn-list-section
+            [heading]="'To check (' + toCheck().length + ')'"
+            card
+            data-testid="to-check"
+          >
+            @for (row of toCheck(); track row.product.id + row.entry.store) {
+              <cmn-list-item-row
+                [label]="row.product.name"
+                [sublabel]="row.entry.name + ' · ' + suggestionText(row.entry)"
+                [action]="true"
+                (activated)="open(row.product, row.entry)"
+              />
+            }
+          </cmn-list-section>
+        }
         @for (product of store.products(); track product.id) {
           <cmn-list-section [heading]="product.name" card>
             <cmn-button
@@ -83,7 +102,7 @@ import {StoreLinkSheetComponent} from './store-link.sheet';
               variant="ghost"
               icon="Ellipsis"
             />
-            @for (entry of product.stores; track entry.store) {
+            @for (entry of shown(product); track entry.store) {
               <cmn-list-item-row
                 [label]="entry.name"
                 [sublabel]="describe(entry)"
@@ -96,6 +115,15 @@ import {StoreLinkSheetComponent} from './store-link.sheet';
                   headline(entry)
                 }}</span>
               </cmn-list-item-row>
+            }
+            @if (unlinkedCount(product); as count) {
+              <cmn-list-item-row
+                [label]="expanded().has(product.id) ? 'Hide them' : unlinkedText(count)"
+                [action]="true"
+                [dimmed]="true"
+                (activated)="toggle(product)"
+                data-testid="unlinked-toggle"
+              />
             }
           </cmn-list-section>
         }
@@ -144,8 +172,16 @@ export class PricesPage implements OnInit {
   private readonly document = inject(DOCUMENT);
   private readonly destroyRef = inject(DestroyRef);
   private readonly route = inject(ActivatedRoute);
+  private readonly habits = inject(HabitsStore);
 
   protected readonly store = inject(PricesStore);
+
+  /** The suggested pages waiting for a yes or no, one row per product and shop, the most-bought product first. */
+  protected readonly toCheck = computed(() =>
+    toCheckRows(this.store.products(), this.habits.byProduct())
+  );
+  protected readonly expanded = signal<ReadonlySet<string>>(new Set());
+  protected readonly unlinkedText = unlinkedText;
 
   protected readonly emptyBody =
     'Search a shop by name and tap the right one, or type a name and link its page in each shop. basket reads the prices every night.';
@@ -161,7 +197,8 @@ export class PricesPage implements OnInit {
   protected readonly headline = headline;
 
   /** Pull to refresh on this tab root: the shell's pull gesture calls it and waits for the promise. */
-  protected readonly reload = (): Promise<void> => this.store.load();
+  protected readonly reload = (): Promise<void> =>
+    Promise.all([this.store.load(), this.habits.load()]).then(() => undefined);
 
   public ngOnInit(): void {
     // "Add to shelf" on a History item arrives with the typed text; it fills the box, a person still confirms with Add.
@@ -170,11 +207,13 @@ export class PricesPage implements OnInit {
       this.name.setValue(typed);
     }
     void this.store.load();
+    void this.habits.load();
     fromEvent(this.document, 'visibilitychange')
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => {
         if (this.document.visibilityState === 'visible') {
           void this.store.load(true);
+          void this.habits.load();
         }
       });
   }
@@ -201,6 +240,31 @@ export class PricesPage implements OnInit {
   /** When the shop's catalog was last swept and how it stands, one line per fact group. */
   protected healthText(status: StoreStatus): string {
     return healthLines(status.catalog, new Date()).join('\n');
+  }
+
+  /** The shop's rows of a product: those with no page and no suggestion are folded until the product's count is tapped. */
+  protected shown(product: Product): readonly ProductStore[] {
+    return this.expanded().has(product.id)
+      ? product.stores
+      : product.stores.filter(entry => !isUnlinked(entry));
+  }
+
+  protected unlinkedCount(product: Product): number {
+    return product.stores.filter(isUnlinked).length;
+  }
+
+  protected toggle(product: Product): void {
+    this.expanded.update(open => {
+      const next = new Set(open);
+      if (!next.delete(product.id)) {
+        next.add(product.id);
+      }
+      return next;
+    });
+  }
+
+  protected suggestionText(entry: ProductStore): string {
+    return suggestionLine(entry).join('');
   }
 
   /** One line per fact group; the row keeps the line breaks. */
