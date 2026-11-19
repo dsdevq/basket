@@ -155,6 +155,37 @@ public class GenericMatcherTests
     private static MatchVerdict? Verdict(string product, string title, string? productCategory = null, string? category = null) =>
         CandidateMatcher.Evaluate(new ProductFacts(product, null, productCategory), new CandidateFacts(title, null, category));
 
+    [Theory]
+    [InlineData("Orange Juice Smooth", "SPECIALLY SELECTED Smooth Orange Juice 1 l")]
+    [InlineData("Fresh Chicken Breast Fillets", "Tesco Fresh Chicken Breast Fillets 640g")]
+    [InlineData("Apple Juice", "Tesco Pure Apple Juice 1 l")]
+    [InlineData("Cucumber", "Nature's Pick Cucumber each")]
+    [InlineData("Red Pepper", "Nature's Pick Red Pepper 1 each")]
+    [InlineData("Wholewheat Fusilli", "Deluxe Wholewheat Fusilli 500g")]
+    public void A_receipt_name_with_no_size_is_proposed_when_only_the_label_differs(string receipt, string title)
+    {
+        var verdict = Verdict(receipt, title)!;
+
+        verdict.Basis.Should().Be(MatchBasis.NameOnly);
+        verdict.Score.Should().BeInRange(15, 40, "below a strict name-only match (40-45) and any name-and-size match");
+    }
+
+    [Theory]
+    [InlineData("Orange Juice Smooth", "SPECIALLY SELECTED Smooth Apple Juice 1 l")]
+    [InlineData("Red Pepper", "Nature's Pick Green Pepper 1 each")]
+    [InlineData("Whole milk", "Fresh whole milk 2L")]
+    [InlineData("7up Free", "Tesco Cola Free 2 l")]
+    public void A_label_alone_does_not_make_different_products_match(string receipt, string title) =>
+        Verdict(receipt, title).Should().BeNull();
+
+    [Fact]
+    public void The_loose_name_match_ranks_below_a_strict_one_and_a_name_and_size_match()
+    {
+        var loose = Verdict("Orange Juice Smooth", "SPECIALLY SELECTED Smooth Orange Juice 1 l")!;
+        Verdict("Whole milk", "Whole milk 2L")!.Score.Should().BeGreaterThan(loose.Score);
+        Verdict("Orange Juice 1 l", "Smooth Orange Juice 1 l")!.Score.Should().BeGreaterThan(loose.Score);
+    }
+
     [Fact]
     public void The_same_kind_of_product_under_two_shops_labels_matches_below_a_name_match()
     {
@@ -186,12 +217,19 @@ public class GenericMatcherTests
         Verdict("Tesco brown bread 800g", "Milbona white bread 800g").Should().BeNull();
     }
 
+    [Fact]
+    public void The_generic_comparison_needs_equal_sizes_when_both_are_stated() =>
+        Verdict("Tesco whole milk 2L", "Milbona whole milk 1L").Should().BeNull();
+
     [Theory]
-    [InlineData("Tesco whole milk 2L", "Milbona whole milk 1L")]
     [InlineData("Tesco whole milk", "Milbona whole milk 2L")]
     [InlineData("Tesco whole milk 2L", "Milbona whole milk")]
-    public void The_generic_comparison_needs_both_sizes_stated_and_equal(string product, string title) =>
-        Verdict(product, title).Should().BeNull();
+    public void A_missing_size_is_only_a_low_ranked_name_proposal_never_generic(string product, string title)
+    {
+        var verdict = Verdict(product, title)!;
+        verdict.Basis.Should().Be(MatchBasis.NameOnly);
+        verdict.Score.Should().BeLessThan(40);
+    }
 
     // The "6 x 330 ml is not 330 ml" rules: a multipack is not one bottle, whatever the labels and the words say.
     [Theory]

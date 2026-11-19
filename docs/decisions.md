@@ -2134,6 +2134,13 @@ The match sheet only ever had what a person or the PC reader posted to `POST /ap
   "Branston baked beans" do not match; that is why a catalog row is compared under its brand and name together, as the shops keep the
   brand in a field of its own. A shelf name that carries only a shop's label ("Tesco baked beans") accepts any brand of the same
   beans as a low-ranked proposal; a person decides. The list of labels is data in the matcher, easy to extend.
+- **Matcher: a name with no size, own label ignored (issue 180).** A receipt line carries no size, so the name-only rule (Jaccard
+  similarity of at least 0.8) never proposed "Orange Juice Smooth" for "SPECIALLY SELECTED Smooth Orange Juice 1 l" (3 of 5 words, 0.6),
+  and only 3 of the 38 most-bought products had any proposal. When a size is missing and the strict rule fails, the names are compared
+  again with each shop's own-label words removed, by containment as in the generic rule. It applies only when a label word was actually
+  removed from a name: "Whole milk" is still not "Fresh whole milk 2L". Basis stays `name`, score 15-35, below a strict name-only
+  match (40-45) and any name-and-size match; the match sheet needs no change. It is a proposal a person confirms and nothing auto-links
+  (a loose word check once matched "7up Free" to 56 rows). Tests in `MatcherTests`.
 - **Matcher: size and pack rules unchanged and tested in the new rule.** `6 x 330 ml` is not `330 ml`, not `1980 ml`, not `4 x 330 ml`
   and not `6 pack`; the same multipack written two ways (`6 x 330ml`, `6x33cl`) is the same size. A catalog row's size comes from its
   own fields (`size_amount`, `size_unit`, `size_packs`), with the name as the fallback, and is compared as if the name stated it.
