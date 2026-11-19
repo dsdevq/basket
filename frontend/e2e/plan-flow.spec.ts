@@ -29,6 +29,8 @@ test('the Plan tab is in the tab bar, Prices is behind More, and the plan says w
   // Lidl's offer sits beside what was last paid there, with the day.
   await expect(page.getByText('Lidl Plus price').first()).toBeVisible();
   await expect(page.getByText('Last paid €1.19 on 3 Nov')).toBeVisible();
+  // A shop with no reading still shows what was paid there.
+  await expect(page.getByText('Last paid €2.49 on 28 Oct')).toBeVisible();
 
   await tabs.getByRole('button', {name: 'More'}).click();
   await expect(page.getByRole('link', {name: 'Prices'})).toBeVisible();
