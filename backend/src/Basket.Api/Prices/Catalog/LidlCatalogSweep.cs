@@ -73,10 +73,10 @@ public sealed class LidlCatalogSweep(
                 var tiles = LidlParser.ParseCatalogTiles(result.Body!);
                 if (tiles.Count == 0)
                 {
-                    walked = page > 0; // an empty first page is a layout that changed or a page that failed, not a category with nothing in it
-                    if (!walked)
+                    walked = true;
+                    if (page == 0)
                     {
-                        note ??= $"A Lidl listing page showed no products ({category.AbsolutePath}).";
+                        log.LogWarning("A Lidl listing page showed no products, treated as an empty category ({Category})", category.AbsolutePath);
                     }
 
                     break;

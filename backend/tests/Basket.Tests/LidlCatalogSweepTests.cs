@@ -308,9 +308,24 @@ public sealed class LidlCatalogSweepTests : IClassFixture<BasketFactory>
             Shop().Serve(Root + "?offset=12", new FetchResult(FetchStatus.Failed, null, "HTTP 500")), "was not read");
 
     [Fact]
-    public Task A_first_page_with_no_products_delists_nothing() =>
-        AssertIncompleteSweepDelistsNothingAsync(
-            Shop().Serve(Chilled, Fixtures.Read("lidl-catalog-page-empty.html")), "showed no products");
+    public async Task A_first_page_with_no_products_is_an_empty_category_and_the_sweep_goes_on()
+    {
+        await CleanAsync();
+        await SweepAsync(Shop());
+        _clock.Advance(TimeSpan.FromDays(1));
+
+        var fetcher = Shop().Serve(FruitVeg, Fixtures.Read("lidl-catalog-page-empty.html"));
+        await SweepAsync(fetcher);
+
+        fetcher.Requested.Should().Contain(Chilled, "the category after the empty one is still walked");
+        await _factory.WithDb(async db =>
+        {
+            (await db.StoreProducts.CountAsync(p => p.DiscontinuedAt != null)).Should().Be(0);
+            var run = await db.PricePullRuns.Where(r => r.Store == Store.Lidl).OrderByDescending(r => r.StartedAt).FirstAsync();
+            run.Outcome.Should().Be(PullOutcome.Ok);
+            return 0;
+        });
+    }
 
     [Fact]
     public async Task A_page_of_tiles_that_are_all_unusable_is_an_empty_category_and_the_sweep_goes_on()
@@ -322,10 +337,10 @@ public sealed class LidlCatalogSweepTests : IClassFixture<BasketFactory>
             .Replace("erpNumber&quot;: &quot;90000003&quot;", "erpNumber&quot;: &quot;&quot;")
             .Replace("erpNumber&quot;: &quot;90000004&quot;", "erpNumber&quot;: &quot;&quot;");
 
-        var fetcher = Shop().Serve(Chilled, unusable);
+        var fetcher = Shop().Serve(FruitVeg, unusable);
         await SweepAsync(fetcher);
 
-        fetcher.Requested.Should().Contain(Root).And.Contain(FruitVeg, "the category after the empty one is still walked");
+        fetcher.Requested.Should().Contain(Chilled, "the category after the empty one is still walked");
         await _factory.WithDb(async db =>
         {
             (await db.StoreProducts.CountAsync(p => p.DiscontinuedAt != null)).Should().Be(0);
@@ -345,7 +360,16 @@ public sealed class LidlCatalogSweepTests : IClassFixture<BasketFactory>
             "no usable products");
 
     [Fact]
-    public async Task A_partial_night_with_an_empty_listing_page_still_matches_and_marks_nothing_discontinued()
+    public Task A_night_with_an_empty_listing_page_matches_and_marks_nothing_discontinued() =>
+        AssertNightMatchesAndMarksNothingDiscontinuedAsync(
+            Shop().Serve(Chilled, Fixtures.Read("lidl-catalog-page-empty.html")), PullOutcome.Ok);
+
+    [Fact]
+    public Task A_partial_night_still_matches_and_marks_nothing_discontinued() =>
+        AssertNightMatchesAndMarksNothingDiscontinuedAsync(
+            Shop().Serve(Root + "?offset=12", new FetchResult(FetchStatus.Failed, null, "HTTP 500")), PullOutcome.Partial);
+
+    private async Task AssertNightMatchesAndMarksNothingDiscontinuedAsync(FakeFetcher night, PullOutcome expected)
     {
         await CleanAsync();
         var (owner, _) = await _factory.OwnerAsync();
@@ -366,16 +390,15 @@ public sealed class LidlCatalogSweepTests : IClassFixture<BasketFactory>
         });
         _clock.Advance(TimeSpan.FromDays(1));
 
-        await SweepAsync(Shop().Serve(Chilled, Fixtures.Read("lidl-catalog-page-empty.html")), matching: true);
+        await SweepAsync(night, matching: true);
 
         await _factory.WithDb(async db =>
         {
             var run = await db.PricePullRuns.Where(r => r.Store == Store.Lidl).OrderByDescending(r => r.StartedAt).FirstAsync();
-            run.Outcome.Should().Be(PullOutcome.Partial);
-            run.Message.Should().Contain("showed no products");
+            run.Outcome.Should().Be(expected);
             (await db.StoreProducts.CountAsync(p => p.DiscontinuedAt != null)).Should().Be(0);
             (await db.MatchCandidates.CountAsync(c => c.ProductId == product && c.Store == Store.Lidl))
-                .Should().BeGreaterThan(0, "matching runs on a partial night too");
+                .Should().BeGreaterThan(0, "matching ran");
             return 0;
         });
     }
