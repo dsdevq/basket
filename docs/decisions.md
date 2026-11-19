@@ -1881,10 +1881,15 @@ So this sweep reads the range; the paid price keeps coming from the Lidl Plus re
   ("fresh-fruit-and-vegetables", not "garden-furniture"). A product is stored once however many categories list it. A `.xml.gz` sitemap is
   a file, not a transfer encoding, so `PoliteFetcher` unpacks an address that ends in `.gz` (bounded at 20 MB unpacked).
 - **A sweep that missed something delists nothing.** A listing page or sitemap that is down, a first page of a category that shows no
-  product, or a page where no tile names a product and none repeats (a changed layout reads the same as a failed page), or a category still listing new products at the 120-page ceiling makes the
-  sweep incomplete. It is not closed through `CatalogIngest.CompleteAsync`: its `price_pull_run` row is `Partial` (`Failed` when it read
-  nothing) with the reason, and no product is marked discontinued, however small the gap (the 90 percent guard only catches large ones).
-  The products it did read are still stored. Only a sweep that walked every category to its end is closed and may delist.
+  product, or a category still listing new products at the 120-page ceiling makes the sweep incomplete. It is not closed through
+  `CatalogIngest.CompleteAsync`: its `price_pull_run` row is `Partial` (`Failed` when it read nothing) with the reason, and no product is
+  marked discontinued, however small the gap (the 90 percent guard only catches large ones). The products it did read are still stored,
+  and the shop is still handed to matching (`CatalogIngest.MatchAsync`, as the Aldi sweep does on a partial night), so the rows it
+  brought are not left linked to nothing. Only a sweep that walked every category to its end is closed and may delist.
+- **A page with no usable product is an empty category.** A listing page where no tile names a product and none repeats the category's
+  own is logged and the sweep goes on to the next category; it no longer makes the sweep incomplete, because one such page stalled every
+  night as `Partial` and so never ran matching. The cost: if a layout change leaves a category with only tiles that name no product, the
+  sweep can close `Ok` and delist that category's products, whenever the 90 percent guard still passes.
 - **Barcodes.** Tiles carry no GTIN; the product page's JSON-LD does (`gtin13`, a list with one entry per variant). After the sweep,
   the product pages of products with no stored barcode are opened, at most `Prices:LidlBarcodePagesPerNight` (200) a night, and the first
   valid GTIN is stored (as GTIN-14, through `CatalogRecorder`, which never lets a thinner reading erase one). A first sweep therefore takes about four nights to fill the food range (about 690 products); afterwards only products new to the catalog are opened.
