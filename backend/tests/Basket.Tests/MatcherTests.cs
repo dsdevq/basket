@@ -157,7 +157,7 @@ public class GenericMatcherTests
 
     [Theory]
     [InlineData("Orange Juice Smooth", "SPECIALLY SELECTED Smooth Orange Juice 1 l")]
-    [InlineData("Fresh Chicken Breast Fillets", "Tesco Fresh Chicken Breast Fillets 640g")]
+    [InlineData("Fresh Chicken Breast Fillets", "Tesco Finest Fresh Chicken Breast Fillets 640g")]
     [InlineData("Apple Juice", "Tesco Pure Apple Juice 1 l")]
     [InlineData("Cucumber", "Nature's Pick Cucumber each")]
     [InlineData("Red Pepper", "Nature's Pick Red Pepper 1 each")]
@@ -167,7 +167,7 @@ public class GenericMatcherTests
         var verdict = Verdict(receipt, title)!;
 
         verdict.Basis.Should().Be(MatchBasis.NameOnly);
-        verdict.Score.Should().BeInRange(15, 40, "below a strict name-only match (40-45) and any name-and-size match");
+        verdict.Score.Should().BeInRange(10, 35, "below a strict name-only match (40-45) and any name-and-size match");
     }
 
     [Theory]

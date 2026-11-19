@@ -112,7 +112,7 @@ public static partial class CandidateMatcher
     /// Rule 5, for a size missing on either side (a receipt line carries none): the names with own-label words left out, compared by
     /// containment as rule 2 does. "Orange Juice Smooth" is "SPECIALLY SELECTED Smooth Orange Juice 1 l" once the label is gone, though
     /// their Jaccard similarity is 0.6. It applies only when a label was actually removed from a name, so "Whole milk" is still not
-    /// "Fresh whole milk 2L" (the extra word is not a label). Basis <see cref="MatchBasis.NameOnly"/>, score 15-35, below every strict name-only match (40-45)
+    /// "Fresh whole milk 2L" (the extra word is not a label). Basis <see cref="MatchBasis.NameOnly"/>, score 10-35, below every strict name-only match (40-45)
     /// and every name-and-size match; only ever a proposal.
     /// </summary>
     private static MatchVerdict? LooseNameVerdict(string productName, string candidateTitle, int bonus)
@@ -125,7 +125,7 @@ public static partial class CandidateMatcher
             return null;
         }
 
-        return new MatchVerdict(MatchBasis.NameOnly, 15 + (int)Math.Round(20 * Similarity(wanted, offered), MidpointRounding.AwayFromZero) + bonus);
+        return new MatchVerdict(MatchBasis.NameOnly, 10 + (int)Math.Round(20 * Similarity(wanted, offered), MidpointRounding.AwayFromZero) + bonus);
     }
 
     /// <summary>
