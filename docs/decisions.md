@@ -364,8 +364,8 @@ passkey accounts; the family sign-in pages (step A4, below) have landed, while t
   page that loads `challenges.cloudflare.com` count as a refusal, as the 403 itself already does.
 - **The reader's JSON-LD-only parse is shared** (`parseJsonLdOnly`) by Tesco and Dunnes instead of copied.
 - **Follow-up, deliberately not here:** the Settings copy ("Lets your PC send Tesco and Aldi prices", and the same in the
-  token sheet and relay section) still names two shops. Changing it moves the settings screen baselines, which this change
-  keeps still; the app's own copy should name Dunnes when those baselines are next regenerated.
+  token sheet and relay section) named two shops. Changing it moves the settings screen baselines, which this change
+  keeps still. Done later: it now says "Dunnes (and Tesco once #59 lands)", the shops `ENABLED_STORES` in the reader reads.
 
 ## Phone fixes from the 390px audit (issue #51, items 1-4)
 
@@ -2091,9 +2091,8 @@ Owner direction, 2026-11-14: per-store catalog readers feed one combined catalog
   the same read, so Aldi pages are never opened one by one. A listing the range no longer lists, or Aldi marks discontinued, says so
   and keeps its last price.
 - **`ReadBy(Aldi)` is `nightly`.** The PC reader's work list takes only `pc` shops, so it stops reading Aldi by itself; `POST
-  /api/ingest/prices` and `/api/ingest/catalog` answer `store_not_ingested` for Aldi from now on. The Settings copy that still says the
-  PC sends "Tesco and Aldi" prices, and the PC reader's own Aldi parser, are left for a later change (a copy change moves screen baselines,
-  which only the Update screen baselines workflow regenerates).
+  /api/ingest/prices` and `/api/ingest/catalog` answer `store_not_ingested` for Aldi from now on. The PC reader's own Aldi parser is left for a
+  later change. (The Settings copy that said the PC sends "Tesco and Aldi" prices now says "Dunnes (and Tesco once #59 lands)".)
 - **No migration.** The tables are issue 128's. Runs on the VPS only.
 - **Tests.** `AldiCatalogSourceTests` on invented pages (`Fixtures/aldi-category-tree.json`, `aldi-product-search.json`) with a fake fetcher:
   request order and paging, field mapping, category paths, refusals (403 and 429 on the tree, 429 part way), the guard, the request limit,
