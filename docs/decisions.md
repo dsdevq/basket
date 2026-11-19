@@ -2124,7 +2124,7 @@ The match sheet only ever had what a person or the PC reader posted to `POST /ap
   that product, every shop. (2) A listing is confirmed (a person pastes a page, or accepts a proposal): that product, the shops where it
   still has no confirmed page, now that it may know a barcode, a size and a category. (3) A sweep is closed
   (`CatalogIngest.CloseAsync`, which the PC reader's `.../complete`, the Lidl sweep and the Aldi sweep all close through, and only when the
-  sweep touched a product): every product with an open gap in that shop, in batches of 25 products, one save per product. An open gap is a shop where
+  sweep touched a product; a Lidl sweep that ended `Partial` after reading something also runs it, through `CatalogIngest.MatchAsync`, without delisting): every product with an open gap in that shop, in batches of 25 products, one save per product. An open gap is a shop where
   the product has no confirmed page. A failure is logged and swallowed per product: a proposal is a convenience, it must not fail the
   add, the confirm or the closing of a sweep. The whole run is inside that guard, the id and batch loads included. A product the user deletes takes its proposals with it, as before.
 - **What a run looks at.** SQL narrows each shop's live (not discontinued) rows to (a) those with the product's barcode, plus (b) those that
