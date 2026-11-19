@@ -1196,8 +1196,8 @@ Epic #24: "I want to know what promotions are in the store and which promotion i
   the rule card at the bottom says so. A weighed product's paid price is a kilo's, like on the Shelf. The date is the receipt's Dublin
   day (`paidOn`), never shifted by a time zone.
 - **Tests.** Unit: the wording and the row building (`plan-format.spec.ts`: offer beside last paid, a shop never
-  bought at, no rows) and the page against a recorded response (`plan.page.spec.ts`). E2E: `plan-flow.spec.ts` asserts
-  the offer line, both paid lines and their days on a phone; the `plan` mock gains a milk `lastPaid`, so the screen
+  bought at, a paid-only shop after the shops with a reading, no rows) and the page against a recorded response (`plan.page.spec.ts`). E2E: `plan-flow.spec.ts` asserts
+  the offer line, both paid lines and their days on a phone, and a paid line at a shop with no reading; the `plan` mock gains a milk `lastPaid`, so the screen
   check (both templates, 390 and 1280) covers it. The `plan` baselines change and are rendered by the Update
   screen baselines workflow on the PR branch after the pipeline's push is final, never committed by hand; `plan-covered` changes with the
   shared milk line, `plan-empty` does not.
