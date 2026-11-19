@@ -200,8 +200,15 @@ public sealed partial class AldiCatalogSource(
         {
             var reason = stopped ?? "Aldi's product list was empty, the API may have changed.";
             // A page that cannot be read with nothing read before it is stepped over, so one bad page cannot hold the whole range back;
-            // a start beyond the end of the range is read from the top by the next sweep.
-            await RecordSweepAsync(startedAt, PullOutcome.Failed, 0, reason, badPage is { } bad ? bad + PageSize : resume, ct);
+            // stepping past the end of the known range (or a start already beyond it) goes back to the top.
+            var next = resume;
+            if (badPage is { } bad)
+            {
+                var known = await db.StoreProducts.CountAsync(p => p.Store == Store.Aldi, ct);
+                next = bad + PageSize < known ? bad + PageSize : 0;
+            }
+
+            await RecordSweepAsync(startedAt, PullOutcome.Failed, 0, reason, next, ct);
             return Failed(listings, reason);
         }
 

@@ -396,6 +396,41 @@ public sealed class AldiCatalogSourceTests : IClassFixture<BasketFactory>
     }
 
     [Fact]
+    public async Task A_start_beyond_a_range_that_shrank_is_read_from_the_top()
+    {
+        await CleanAsync();
+
+        await PullAsync(LongRange());
+        (await SweepRunsAsync()).Single().NextOffset.Should().Be(3600);
+        _factory.Clock.Advance(TimeSpan.FromDays(1));
+
+        var shrunk = new FakeFetcher()
+            .Serve(TreeUrl, Fixtures.Read("aldi-category-tree.json"))
+            .Serve(SearchUrl(0), Page(1, 60, 200))
+            .Serve(SearchUrl(3600), "{\"meta\":{\"pagination\":{\"totalCount\":200}},\"data\":[]}");
+        var pull = await PullAsync(shrunk);
+
+        shrunk.Requested.Should().StartWith(new[] { TreeUrl, SearchUrl(3600), SearchUrl(0) });
+        pull.Outcome.Should().Be(PullOutcome.Partial);
+    }
+
+    [Fact]
+    public async Task A_start_beyond_a_range_that_shrank_and_does_not_answer_wraps_to_the_top_instead_of_stepping_on()
+    {
+        await CleanAsync();
+
+        await PullAsync(LongRange());
+        _factory.Clock.Advance(TimeSpan.FromDays(1));
+
+        var shrunk = new FakeFetcher().Serve(TreeUrl, Fixtures.Read("aldi-category-tree.json"));
+        var pull = await PullAsync(shrunk);
+
+        shrunk.Requested.Should().Equal(TreeUrl, SearchUrl(3600));
+        pull.Outcome.Should().Be(PullOutcome.Failed);
+        (await SweepRunsAsync()).Select(r => r.NextOffset).Should().Equal(3600, 0);
+    }
+
+    [Fact]
     public async Task The_whole_range_of_about_3554_products_is_sixty_pages_and_closes_within_the_limit()
     {
         await CleanAsync();
