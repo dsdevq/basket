@@ -48,7 +48,8 @@ public sealed record MatchVerdict(string Basis, int Score);
 /// a match. Both stated and equal: the shorter name's words must all appear in the other ("Whole milk 2L" is contained in
 /// "Milbona fresh whole milk 2 L"; a shop adds brand and filler words), and the score falls with every extra word
 /// (Jaccard similarity). A size missing on either side needs a Jaccard similarity of at least 0.8 and ranks lower, because
-/// the size rule could not be applied.</item>
+/// the size rule could not be applied. A name that falls short of 0.8 only because of a shop's own label still matches by containment
+/// (rule 5, below) and ranks lower again.</item>
 /// <item>When rule 2 finds no match with both sizes stated, the names are compared again as <i>generic</i> names: the words of each shop's own label
 /// (<see cref="OwnLabel"/>: "Milbona", "Tesco", "Dunnes Stores Simply Better", ...) are left out of both, so the same kind of
 /// product under two shops' labels agrees ("Tesco whole milk 2L", "Milbona whole milk 2L"). It needs both sizes stated and equal
@@ -57,6 +58,7 @@ public sealed record MatchVerdict(string Basis, int Score);
 /// <item>Categories, when both sides have one, are a second opinion. Shops file things differently, so two category paths that
 /// share a word agree and add 5 to the score; paths with no word in common disagree, which rejects the loose matches (a generic one,
 /// and one with a size missing) but not one that states the same name and size.</item>
+/// <item>When a size is missing and rule 2 falls short of 0.8, the names are compared as generic names by containment (see <see cref="LooseNameVerdict"/>).</item>
 /// </list>
 /// </summary>
 public static partial class CandidateMatcher
@@ -97,9 +99,34 @@ public static partial class CandidateMatcher
             return agreement == Agreement.Disagree ? null : GenericVerdict(product.Name, candidate.Title, bonus);
         }
 
-        return similarity >= NameOnlyThreshold && agreement != Agreement.Disagree
+        if (agreement == Agreement.Disagree)
+        {
+            return null;
+        }
+
+        return similarity >= NameOnlyThreshold
             ? new MatchVerdict(MatchBasis.NameOnly, 20 + (int)Math.Round(25 * similarity, MidpointRounding.AwayFromZero) + bonus)
-            : null;
+            : LooseNameVerdict(product.Name, candidate.Title, bonus);
+    }
+
+    /// <summary>
+    /// Rule 5, for a size missing on either side (a receipt line carries none): the names with own-label words left out, compared by
+    /// containment as rule 2 does. "Orange Juice Smooth" is "SPECIALLY SELECTED Smooth Orange Juice 1 l" once the label is gone, though
+    /// their Jaccard similarity is 0.6. It applies only when a label was actually removed from a name, so "Whole milk" is still not
+    /// "Fresh whole milk 2L" (the extra word is not a label). Basis <see cref="MatchBasis.NameOnly"/>, score 10-35, below every strict name-only match (40-45)
+    /// and every name-and-size match; only ever a proposal.
+    /// </summary>
+    private static MatchVerdict? LooseNameVerdict(string productName, string candidateTitle, int bonus)
+    {
+        var wanted = GenericWords(productName);
+        var offered = GenericWords(candidateTitle);
+        var labelled = wanted.Count != Words(productName).Count || offered.Count != Words(candidateTitle).Count;
+        if (!labelled || !Contains(wanted, offered))
+        {
+            return null;
+        }
+
+        return new MatchVerdict(MatchBasis.NameOnly, 10 + (int)Math.Round(20 * Similarity(wanted, offered), MidpointRounding.AwayFromZero) + bonus);
     }
 
     /// <summary>
