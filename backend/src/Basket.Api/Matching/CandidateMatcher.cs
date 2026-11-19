@@ -58,6 +58,7 @@ public sealed record MatchVerdict(string Basis, int Score);
 /// <item>Categories, when both sides have one, are a second opinion. Shops file things differently, so two category paths that
 /// share a word agree and add 5 to the score; paths with no word in common disagree, which rejects the loose matches (a generic one,
 /// and one with a size missing) but not one that states the same name and size.</item>
+/// <item>When a size is missing and rule 2 falls short of 0.8, the names are compared as generic names by containment (see <see cref="LooseNameVerdict"/>).</item>
 /// </list>
 /// </summary>
 public static partial class CandidateMatcher
