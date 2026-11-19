@@ -12,7 +12,7 @@ export const STALE_AFTER_DAYS = 3;
 const MS_PER_DAY = 86_400_000;
 
 /** The shops in the order the app always lists them. */
-const SHOP_ORDER: readonly StoreId[] = ['lidl', 'aldi', 'tesco', 'dunnes'];
+const SHOP_ORDER: readonly StoreId[] = ['lidl', 'aldi', 'tesco', 'dunnes', 'centra'];
 
 /**
  * What a shop can say about the product today. `priced` is a usable price; every other state is a reason the row carries a

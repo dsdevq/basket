@@ -68,7 +68,7 @@ public static class MatchEndpoints
     {
         if (!Stores.TryParse(request.Store, out var store))
         {
-            return Results.Json(new { error = "unknown_store", message = "Name one of lidl, aldi, tesco or dunnes." }, statusCode: 400);
+            return Results.Json(new { error = "unknown_store", message = "Name one of lidl, aldi, tesco, dunnes or centra." }, statusCode: 400);
         }
 
         if (request.Results is not { Count: > 0 and <= MaxResults } results)

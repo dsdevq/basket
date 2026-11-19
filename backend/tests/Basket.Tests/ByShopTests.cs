@@ -74,7 +74,7 @@ public sealed class ByShopTests : IClassFixture<BasketFactory>
         var response = shelf.Build();
 
         response.LineCount.Should().Be(2);
-        response.Stores.Select(s => s.Store).Should().Equal("lidl", "aldi", "tesco", "dunnes");
+        response.Stores.Select(s => s.Store).Should().Equal("lidl", "aldi", "tesco", "dunnes", "centra");
         At(response, "lidl").Total.Should().Be(3.70m);
         At(response, "aldi").Total.Should().Be(3.50m);
         At(response, "tesco").Total.Should().Be(3.90m);

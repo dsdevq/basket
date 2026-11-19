@@ -75,11 +75,11 @@ test('pick Tesco, tap three products, and they are on the list with the Tesco ch
   await expect(page.getByText('Whole milk 2L')).toBeVisible();
 });
 
-// The partner forms the list and compares: the scale button on a tile opens the product at all four shops, a tap on a shop
+// The partner forms the list and compares: the scale button on a tile opens the product at all five shops, a tap on a shop
 // puts the line there (its chip), and "Leave it to the plan" puts it on with no shop. Prices are dated 5 Nov in the mock, so
 // the clock sits on 6 Nov: one day old, fresh.
 
-test('the compare sheet shows the four shops with price, day and flags, and a tap on a shop sets its chip', async ({
+test('the compare sheet shows the five shops with price, day and flags, and a tap on a shop sets its chip', async ({
   page,
 }) => {
   await page.clock.setFixedTime(new Date('2026-11-06T10:00:00Z'));
@@ -122,7 +122,7 @@ test('the compare sheet shows the four shops with price, day and flags, and a ta
   const sheet = page.locator('bk-compare-sheet');
   await expect(sheet).toBeVisible();
   const rows = sheet.locator('cmn-list-item-row');
-  await expect(rows).toHaveCount(5);
+  await expect(rows).toHaveCount(6);
   await expect(rows.nth(0)).toContainText('Leave it to the plan');
   await expect(rows.nth(1)).toContainText('Lidl');
   await expect(rows.nth(1)).toContainText('€0.99');
@@ -132,6 +132,7 @@ test('the compare sheet shows the four shops with price, day and flags, and a ta
   await expect(rows.nth(2)).toContainText('No page there');
   await expect(rows.nth(3)).toContainText('€1.89');
   await expect(rows.nth(4)).toContainText('No page there');
+  await expect(rows.nth(5)).toContainText('No page there');
 
   await rows.nth(3).locator('button').click();
   await expect(sheet).toHaveCount(0);

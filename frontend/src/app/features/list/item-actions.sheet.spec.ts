@@ -61,7 +61,7 @@ describe('ItemActionsSheetComponent', () => {
     expect(host.textContent).not.toContain('Bought at');
   });
 
-  it('lists the four shops for a ticked item and marks the one it was bought at', async () => {
+  it('lists the five shops for a ticked item and marks the one it was bought at', async () => {
     const {rows} = await render(item({checked: true, boughtStore: 'aldi'}));
     const text = rows().map(row => (row.textContent ?? '').replace(/\s+/g, ' ').trim());
 
@@ -70,6 +70,7 @@ describe('ItemActionsSheetComponent', () => {
       'Aldi',
       'Tesco',
       'Dunnes',
+      'Centra',
     ]);
     expect(text[1]).toContain('Bought here');
     expect(text.filter(t => t.includes('Bought here'))).toHaveLength(1);

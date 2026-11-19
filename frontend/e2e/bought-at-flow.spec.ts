@@ -39,7 +39,7 @@ test('a ticked item shows the shop it was bought at, and the item sheet changes 
 
   await row.getByRole('button', {name: 'More for Rice'}).click();
   const rows = page.locator('bk-item-actions-sheet cmn-list-item-row');
-  await expect(rows).toHaveCount(4);
+  await expect(rows).toHaveCount(5);
   await expect(rows.nth(0)).toContainText('Bought here');
   await rows.nth(1).locator('button').click();
 

@@ -61,6 +61,7 @@ builder.Services.AddHttpClient<IPageFetcher, PoliteFetcher>((services, client) =
 });
 builder.Services.AddScoped<IStorePriceSource, LidlPriceSource>();
 builder.Services.AddScoped<IStorePriceSource, AldiCatalogSource>();
+builder.Services.AddScoped<IStorePriceSource, CentraOffersSource>();
 builder.Services.AddScoped<PriceRecorder>();
 builder.Services.AddScoped<PricePullJob>();
 builder.Services.AddScoped<IngestTokenService>();

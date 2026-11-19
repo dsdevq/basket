@@ -41,7 +41,7 @@ function entry(
 }
 
 function product(id: string, stores: ProductStore[]): Product {
-  const all: StoreId[] = ['lidl', 'aldi', 'tesco', 'dunnes'];
+  const all: StoreId[] = ['lidl', 'aldi', 'tesco', 'dunnes', 'centra'];
   return {
     id,
     name: `Product ${id}`,
@@ -59,13 +59,14 @@ describe('shelf tiles', () => {
   const nothing = product('nothing', []);
   const all = [milk, bread, eggs, nothing];
 
-  it('offers All and the four shops, in that order', () => {
+  it('offers All and the five shops, in that order', () => {
     expect(SHELF_OPTIONS.map(option => option.value)).toEqual([
       'all',
       'lidl',
       'aldi',
       'tesco',
       'dunnes',
+      'centra',
     ]);
     expect(SHELF_OPTIONS.map(option => option.label)).toEqual([
       'All',
@@ -73,6 +74,7 @@ describe('shelf tiles', () => {
       'Aldi',
       'Tesco',
       'Dunnes',
+      'Centra',
     ]);
   });
 

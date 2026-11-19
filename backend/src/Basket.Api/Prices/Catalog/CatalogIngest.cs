@@ -142,7 +142,12 @@ public sealed class CatalogIngest(AppDbContext db, CatalogRecorder recorder, Tim
     /// The delisting half of <see cref="CompleteAsync"/>, with the guard, for a caller that writes its own run row (the nightly
     /// Aldi sweep, whose run row is the job's). Marks the products and returns what happened; the run row is the caller's.
     /// </summary>
-    public async Task<CatalogClose> CloseAsync(Store store, int seen, DateTimeOffset startedAt, CancellationToken ct)
+    /// <param name="guarded">
+    /// False for a shop whose one page is the whole truth and turns over by design (Centra's weekly offers: about half the page is new
+    /// every other Wednesday, which the 90 percent guard would read as a sweep that lost half the shop). The sweep still has to
+    /// have listed something, so an empty or unreadable page delists nothing.
+    /// </param>
+    public async Task<CatalogClose> CloseAsync(Store store, int seen, DateTimeOffset startedAt, CancellationToken ct, bool guarded = true)
     {
         var now = clock.GetUtcNow();
         var shop = db.StoreProducts.Where(p => p.Store == store);
@@ -154,9 +159,10 @@ public sealed class CatalogIngest(AppDbContext db, CatalogRecorder recorder, Tim
         // reader that counts more than the server saw is not trusted; once products are known, `seen` is only the lower bound
         // of the 90 percent guard (a rejected or repeated item must not stop a healthy sweep from ever delisting anything).
         var passes = touched > 0
-            && (previousLive == 0
-                ? seen <= touched
-                : seen * 100L >= previousLive * (long)DiscontinueGuardPercent && seenKnown * 100L >= previousLive * (long)DiscontinueGuardPercent);
+            && (!guarded
+                || (previousLive == 0
+                    ? seen <= touched
+                    : seen * 100L >= previousLive * (long)DiscontinueGuardPercent && seenKnown * 100L >= previousLive * (long)DiscontinueGuardPercent));
         var discontinued = passes
             ? await shop.Where(p => p.DiscontinuedAt == null && p.LastSeenAt < startedAt)
                 .ExecuteUpdateAsync(s => s.SetProperty(p => p.DiscontinuedAt, now), ct)

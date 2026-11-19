@@ -207,6 +207,29 @@ public sealed class PlanTests : IClassFixture<BasketFactory>
     }
 
     [Fact]
+    public void An_expired_centra_offer_is_not_used_by_the_plan_and_one_ending_today_still_is()
+    {
+        var shelf = new Shelf();
+        var lager = shelf.Product("Lager 620ml");
+        var line = shelf.Line(lager);
+        shelf.Read(lager, Store.Lidl, o => o.Price = 3.00m);
+        shelf.Read(lager, Store.Centra, o => { o.Price = 1.00m; o.PromoText = "Weekly offer"; o.ValidUntil = Today.AddDays(-1); });
+
+        var expired = Of(shelf.Build(), line);
+
+        expired.BestStore.Should().Be("lidl");
+        At(expired, "centra").State.Should().Be(PlanStoreStates.Ended);
+
+        var other = new Shelf();
+        var stout = other.Product("Stout 500ml");
+        var stoutLine = other.Line(stout);
+        other.Read(stout, Store.Lidl, o => o.Price = 3.00m);
+        other.Read(stout, Store.Centra, o => { o.Price = 1.00m; o.PromoText = "Weekly offer"; o.ValidUntil = Today; });
+
+        Of(other.Build(), stoutLine).BestStore.Should().Be("centra");
+    }
+
+    [Fact]
     public void When_the_newest_price_is_older_than_the_window_the_line_is_stale_with_no_best_store()
     {
         var shelf = new Shelf();

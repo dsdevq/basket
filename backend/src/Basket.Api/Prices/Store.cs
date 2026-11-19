@@ -9,11 +9,12 @@ public enum Store
     Aldi,
     Tesco,
     Dunnes,
+    Centra,
 }
 
 public static partial class Stores
 {
-    public static IReadOnlyList<Store> All { get; } = [Store.Lidl, Store.Aldi, Store.Tesco, Store.Dunnes];
+    public static IReadOnlyList<Store> All { get; } = [Store.Lidl, Store.Aldi, Store.Tesco, Store.Dunnes, Store.Centra];
 
     /// <summary>The shop named by <paramref name="value"/> (any case), as it appears in an address or a posted batch.</summary>
     public static bool TryParse(string? value, out Store store)
@@ -40,6 +41,7 @@ public static partial class Stores
         Store.Aldi => "Aldi",
         Store.Tesco => "Tesco",
         Store.Dunnes => "Dunnes",
+        Store.Centra => "Centra",
         _ => throw new ArgumentOutOfRangeException(nameof(store)),
     };
 
@@ -49,6 +51,8 @@ public static partial class Stores
         Store.Aldi => "www.aldi.ie",
         Store.Tesco => "www.tesco.ie",
         Store.Dunnes => "www.dunnesstoresgrocery.com",
+        // centra.ie, not www: the www address answers 301 to it, and the polite fetcher does not follow a redirect to another host name.
+        Store.Centra => "centra.ie",
         _ => throw new ArgumentOutOfRangeException(nameof(store)),
     };
 
@@ -59,9 +63,10 @@ public static partial class Stores
     /// basket does not try to get round either. A shop read by <c>pc</c> also posts its whole catalog to
     /// <c>POST /api/ingest/catalog</c>; a <c>nightly</c> shop's catalog is read by the server in process through the same
     /// <c>CatalogRecorder</c>. Aldi is <c>nightly</c> too: its product API on asl.api.aldi.ie is open to the server, only www.aldi.ie is not
-    /// (<c>AldiCatalogSource</c>, docs/decisions.md).
+    /// (<c>AldiCatalogSource</c>, docs/decisions.md). Centra is <c>nightly</c> as well: its public Special Offers page is plain HTTP
+    /// (<c>CentraOffersSource</c>); it has no catalog beyond that page.
     /// </summary>
-    public static string ReadBy(this Store store) => store is Store.Lidl or Store.Aldi ? "nightly" : "pc";
+    public static string ReadBy(this Store store) => store is Store.Lidl or Store.Aldi or Store.Centra ? "nightly" : "pc";
 
     /// <summary>The card whose price counts for this shop (Q7 of the plan).</summary>
     public static string LoyaltyScheme(this Store store) => store switch
@@ -78,6 +83,7 @@ public static partial class Stores
         Store.Aldi => "https://www.aldi.ie/product/clonbawn-protein-milk-000000000000422541",
         Store.Tesco => "https://www.tesco.ie/groceries/en-IE/products/254317390",
         Store.Dunnes => "https://www.dunnesstoresgrocery.com/product/dunnes-stores-swede-100317581",
+        Store.Centra => "https://centra.ie/offers/dairygold-lighter-454g",
         _ => throw new ArgumentOutOfRangeException(nameof(store)),
     };
 
@@ -95,7 +101,7 @@ public static partial class Stores
         }
 
         var host = store.Host();
-        if (parsed.Scheme != Uri.UriSchemeHttps || !(parsed.Host == host || host == "www." + parsed.Host) || !parsed.IsDefaultPort)
+        if (parsed.Scheme != Uri.UriSchemeHttps || !(parsed.Host == host || host == "www." + parsed.Host || (store == Store.Centra && parsed.Host == "www." + host)) || !parsed.IsDefaultPort)
         {
             return false;
         }
@@ -107,6 +113,7 @@ public static partial class Stores
             Store.Aldi => AldiPath().IsMatch(path),
             Store.Tesco => TescoPath().IsMatch(path),
             Store.Dunnes => DunnesPath().IsMatch(path),
+            Store.Centra => CentraPath().IsMatch(path),
             _ => false,
         };
         if (!matches)
@@ -126,8 +133,8 @@ public static partial class Stores
     }
 
     /// <summary>
-    /// The shop's own product id off a normalized product address: Aldi's and Dunnes' trailing number, Lidl's <c>p&lt;number&gt;</c>
-    /// and Tesco's <c>/products/&lt;id&gt;</c>. It is the <c>external_id</c> the catalog keys the product under, so it is how a
+    /// The shop's own product id off a normalized product address: Aldi's and Dunnes' trailing number, Lidl's <c>p&lt;number&gt;</c>,
+    /// Tesco's <c>/products/&lt;id&gt;</c> and Centra's offer slug (or the number of its <c>/page/&lt;number&gt;</c> address). It is the <c>external_id</c> the catalog keys the product under, so it is how a
     /// listing finds its catalog row. Null for an address that is not a product page of that shop.
     /// </summary>
     public static string? ProductId(Store store, string? url)
@@ -144,6 +151,7 @@ public static partial class Stores
             Store.Aldi => AldiPath().Match(path),
             Store.Tesco => TescoPath().Match(path),
             Store.Dunnes => DunnesPath().Match(path),
+            Store.Centra => CentraPath().Match(path),
             _ => Match.Empty,
         };
         return match.Success ? match.Groups["id"].Value : null;
@@ -167,4 +175,13 @@ public static partial class Stores
 
     [GeneratedRegex(@"^/(?:groceries|shop)/en-IE/products/(?<id>\d{4,12})$", RegexOptions.IgnoreCase)]
     private static partial Regex TescoPath();
+
+    /// <summary>
+    /// Centra's offer addresses come in three shapes (the Special Offers page links <c>/offers/&lt;slug&gt;</c>, <c>/page/&lt;number&gt;</c>
+    /// and, for a few, <c>/&lt;slug&gt;</c> straight off the root), and nothing in them is a separate product number, so the slug or
+    /// the number is the id. A root address has to carry a digit (the pack size in every offer's slug), which keeps /offers, /app and
+    /// /careers from passing for products; <c>/offers/all-offers</c> is the listing, not an offer.
+    /// </summary>
+    [GeneratedRegex(@"^/(?:offers/(?!all-offers$)(?<id>[a-z0-9-]+)|page/(?<id>\d{1,9})|(?<id>(?=[a-z0-9-]*\d)[a-z0-9-]+))$", RegexOptions.IgnoreCase)]
+    private static partial Regex CentraPath();
 }

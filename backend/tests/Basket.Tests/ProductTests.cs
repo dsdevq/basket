@@ -37,21 +37,21 @@ public sealed class ProductTests : IClassFixture<BasketFactory>
         await _factory.WithDb(db => db.StoreListings.Where(l => l.ProductId == productId && l.Store == store).Select(l => l.Id).SingleAsync());
 
     [Fact]
-    public async Task A_new_product_starts_unlinked_in_all_four_shops_and_lidl_says_last_paid_is_not_connected()
+    public async Task A_new_product_starts_unlinked_in_all_five_shops_and_lidl_says_last_paid_is_not_connected()
     {
         var (owner, id) = await WithProductAsync("  Whole   milk 2L ");
 
         var product = await ProductAsync(owner, id);
 
         product.GetProperty("name").GetString().Should().Be("Whole milk 2L");
-        product.GetProperty("stores").EnumerateArray().Select(s => s.GetProperty("store").GetString()).Should().Equal("lidl", "aldi", "tesco", "dunnes");
+        product.GetProperty("stores").EnumerateArray().Select(s => s.GetProperty("store").GetString()).Should().Equal("lidl", "aldi", "tesco", "dunnes", "centra");
         foreach (var store in product.GetProperty("stores").EnumerateArray())
         {
             store.GetProperty("listing").ValueKind.Should().Be(JsonValueKind.Null);
             store.GetProperty("price").ValueKind.Should().Be(JsonValueKind.Null);
         }
 
-        product.GetProperty("stores").EnumerateArray().Select(s => s.GetProperty("readBy").GetString()).Should().Equal("nightly", "nightly", "pc", "pc");
+        product.GetProperty("stores").EnumerateArray().Select(s => s.GetProperty("readBy").GetString()).Should().Equal("nightly", "nightly", "pc", "pc", "nightly");
         Entry(product, "lidl").GetProperty("lastPaid").GetProperty("state").GetString().Should().Be("not_connected");
         Entry(product, "aldi").GetProperty("lastPaid").ValueKind.Should().Be(JsonValueKind.Null);
     }
