@@ -43,7 +43,7 @@ function product(
   shops: StoreId[],
   imageUrl: string | null = null
 ): Product {
-  const all: StoreId[] = ['lidl', 'aldi', 'tesco', 'dunnes'];
+  const all: StoreId[] = ['lidl', 'aldi', 'tesco', 'dunnes', 'centra'];
   return {id, name, stores: all.map(shop => entry(shop, shops.includes(shop), imageUrl))};
 }
 

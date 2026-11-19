@@ -40,6 +40,7 @@ public static class SeededSectionOrder
         [Store.Aldi] = ["Fruit & veg", "Bakery", "Meat & fish", "Dairy & eggs", "Frozen", "Cupboard", "Drinks", "Household", "Health & beauty", "Pet"],
         [Store.Tesco] = ["Fruit & veg", "Bakery", "Meat & fish", "Dairy & eggs", "Cupboard", "Drinks", "Frozen", "Household", "Health & beauty", "Pet"],
         [Store.Dunnes] = ["Fruit & veg", "Bakery", "Meat & fish", "Dairy & eggs", "Cupboard", "Drinks", "Frozen", "Household", "Health & beauty", "Pet"],
+        [Store.Centra] = ["Fruit & veg", "Bakery", "Meat & fish", "Dairy & eggs", "Cupboard", "Drinks", "Frozen", "Household", "Health & beauty", "Pet"],
     };
 
     /// <summary>The sections of <paramref name="store"/> in the order they come, <see cref="Other"/> last.</summary>

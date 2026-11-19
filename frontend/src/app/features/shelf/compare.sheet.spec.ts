@@ -97,11 +97,11 @@ describe('CompareSheetComponent', () => {
     TestBed.resetTestingModule();
   });
 
-  it('shows the four shops, each with its price or the reason it has none, and flags the old and missing ones', async () => {
+  it('shows the five shops, each with its price or the reason it has none, and flags the old and missing ones', async () => {
     const {rows} = await render();
     const text = rows().map(row => (row.textContent ?? '').replace(/\s+/g, ' ').trim());
 
-    expect(text).toHaveLength(5);
+    expect(text).toHaveLength(6);
     expect(text[0]).toContain('Leave it to the plan');
     expect(text[1]).toContain('lidl');
     expect(text[1]).toContain('€1.29');
@@ -111,6 +111,7 @@ describe('CompareSheetComponent', () => {
     expect(text[3]).toContain('Not read yet');
     expect(text[3]).not.toContain('€');
     expect(text[4]).toContain('No page there');
+    expect(text[5]).toContain('No page there');
   });
 
   it('fades the rows whose figure is old and the shop with no page, and no other', async () => {
@@ -120,7 +121,7 @@ describe('CompareSheetComponent', () => {
       row.querySelector('.font-label')?.classList.contains('text-text-secondary')
     );
 
-    expect(faded).toEqual([false, false, true, false, true]);
+    expect(faded).toEqual([false, false, true, false, true, true]);
   });
 
   it('makes every shop with something to choose a button and leaves the shop with no page inert', async () => {
@@ -128,7 +129,7 @@ describe('CompareSheetComponent', () => {
 
     const buttons = rows().map(row => row.querySelector('button') !== null);
 
-    expect(buttons).toEqual([true, true, true, true, false]);
+    expect(buttons).toEqual([true, true, true, true, false, false]);
   });
 
   it('puts the product on the list at the shop that was tapped and closes', async () => {

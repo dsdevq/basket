@@ -100,7 +100,7 @@ public sealed class CatalogEquivalentsTests : IClassFixture<BasketFactory>
     }
 
     [Fact]
-    public async Task Answers_the_other_three_shops_in_the_fixed_order_with_unit_prices_beside_the_source()
+    public async Task Answers_the_other_shops_in_the_fixed_order_with_unit_prices_beside_the_source()
     {
         var owner = await SeedAsync();
         var source = await AddAsync(Store.Lidl, "Whole Milk 2 L", 2000, "ml", price: 2.00m);
@@ -115,7 +115,7 @@ public sealed class CatalogEquivalentsTests : IClassFixture<BasketFactory>
         product.GetProperty("basis").ValueKind.Should().Be(JsonValueKind.Null);
         product.GetProperty("comparison").GetProperty("unit").GetString().Should().Be("l");
         product.GetProperty("comparison").GetProperty("unitPrice").GetDecimal().Should().Be(1.00m);
-        body.GetProperty("stores").EnumerateArray().Select(s => s.GetProperty("store").GetString()).Should().Equal("aldi", "tesco", "dunnes");
+        body.GetProperty("stores").EnumerateArray().Select(s => s.GetProperty("store").GetString()).Should().Equal("aldi", "tesco", "dunnes", "centra");
 
         var aldi = Shop(body, "aldi").GetProperty("items").EnumerateArray().Should().ContainSingle().Subject;
         aldi.GetProperty("basis").GetString().Should().Be("name_size");

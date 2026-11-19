@@ -11,6 +11,7 @@ export const STORE_NAMES: Record<StoreId, string> = {
   aldi: 'Aldi',
   tesco: 'Tesco',
   dunnes: 'Dunnes',
+  centra: 'Centra',
 };
 
 /** "2026-11-05" -> "5 Nov". Dates arrive as plain days (Dublin), so they are never shifted by a time zone. */

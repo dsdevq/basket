@@ -49,7 +49,7 @@ function rowFor(store: StoreId, e: ProductStore) {
   const rows = compareRows(
     milk([
       e,
-      ...(['lidl', 'aldi', 'tesco', 'dunnes'] as StoreId[])
+      ...(['lidl', 'aldi', 'tesco', 'dunnes', 'centra'] as StoreId[])
         .filter(s => s !== store)
         .map(s => unlinked(s)),
     ]),
@@ -59,10 +59,10 @@ function rowFor(store: StoreId, e: ProductStore) {
 }
 
 describe('compareRows', () => {
-  it('answers for all four shops in the app order, even when the product has an entry for none of them', () => {
+  it('answers for all five shops in the app order, even when the product has an entry for none of them', () => {
     const rows = compareRows(milk([]), TODAY);
 
-    expect(rows.map(row => row.store)).toEqual(['lidl', 'aldi', 'tesco', 'dunnes']);
+    expect(rows.map(row => row.store)).toEqual(['lidl', 'aldi', 'tesco', 'dunnes', 'centra']);
     expect(rows.every(row => row.state === 'not_linked' && !row.choosable)).toBe(true);
   });
 

@@ -59,7 +59,7 @@ public sealed class SeededSectionOrderTests
     }
 
     [Fact]
-    public async Task The_seeded_order_of_all_four_chains_is_read_only_for_signed_in_people()
+    public async Task The_seeded_order_of_all_five_chains_is_read_only_for_signed_in_people()
     {
         await using var factory = new BasketFactory();
         (await factory.CreateClient().GetAsync("/api/walk/seeded")).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
@@ -68,6 +68,6 @@ public sealed class SeededSectionOrderTests
         var body = await owner.GetFromJsonAsync<JsonElement>("/api/walk/seeded");
 
         body.GetProperty("stores").EnumerateArray().Select(s => s.GetProperty("store").GetString())
-            .Should().Equal("lidl", "aldi", "tesco", "dunnes");
+            .Should().Equal("lidl", "aldi", "tesco", "dunnes", "centra");
     }
 }
