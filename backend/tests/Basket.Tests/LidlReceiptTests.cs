@@ -233,6 +233,57 @@ public sealed class LidlReceiptTests
     }
 
     [Fact]
+    public async Task A_deposit_charged_is_not_a_product_and_the_receipt_keeps_its_total()
+    {
+        await using var factory = new BasketFactory();
+        var owner = await ConnectedOwnerAsync(factory);
+        factory.Receipts.Add(Receipt(
+            "R-1",
+            Monday,
+            2.40m,
+            Line("Cola 1.5L", 2.40m),
+            Line("12 x 0.15 Deposit", 1.80m, quantity: 12m),
+            Line("0.25 Deposit", 0.25m),
+            Line("0.25 Deposit Return", -0.25m)));
+
+        await PullAsync(factory);
+
+        (await ProductsAsync(owner)).Select(p => p.GetProperty("name").GetString()).Should().BeEquivalentTo("Cola 1.5L");
+        var trip = (await TripsAsync(owner)).GetProperty("trips").EnumerateArray().Single();
+        trip.GetProperty("total").GetDecimal().Should().Be(2.40m);
+    }
+
+    [Fact]
+    public async Task The_deposit_cleanup_removes_deposit_products_and_their_lines_once_and_leaves_totals()
+    {
+        await using var factory = new BasketFactory();
+        var (owner, _) = await factory.OwnerAsync();
+        var by = await factory.WithDb(db => db.Users.Select(u => u.Id).FirstAsync());
+        var tripId = Guid.NewGuid();
+        await factory.WithDb(async db =>
+        {
+            var milk = new Product { Id = Guid.NewGuid(), Name = "Whole milk 2L", AddedAt = DateTimeOffset.UtcNow, AddedByUserId = by };
+            var deposit = new Product { Id = Guid.NewGuid(), Name = "0.25 Deposit", AddedAt = DateTimeOffset.UtcNow, AddedByUserId = by };
+            db.Products.AddRange(milk, deposit);
+            db.Trips.Add(new Trip { Id = tripId, ClosedAt = Monday, Source = TripSources.LidlPlus, ExternalId = "R-1", Total = 1.54m });
+            db.TripItems.AddRange(
+                new TripItem { Id = Guid.NewGuid(), TripId = tripId, Text = "Whole milk 2L", CheckedAt = Monday, ProductId = milk.Id, Store = Store.Lidl },
+                new TripItem { Id = Guid.NewGuid(), TripId = tripId, Text = "0.25 Deposit", CheckedAt = Monday, ProductId = deposit.Id, Store = Store.Lidl });
+            await db.SaveChangesAsync();
+            return 0;
+        });
+
+        for (var run = 0; run < 2; run++)
+        {
+            await factory.WithDb(async db => await db.Database.ExecuteSqlRawAsync(Basket.Api.Data.Migrations.RemoveDepositProducts.CleanupSql));
+        }
+
+        (await ProductsAsync(owner)).Select(p => p.GetProperty("name").GetString()).Should().BeEquivalentTo("Whole milk 2L");
+        (await factory.WithDb(db => db.TripItems.Select(i => i.Text).ToListAsync())).Should().BeEquivalentTo("Whole milk 2L");
+        (await factory.WithDb(db => db.Trips.Select(t => t.Total).SingleAsync())).Should().Be(1.54m);
+    }
+
+    [Fact]
     public async Task A_line_scanned_twice_is_one_line_of_the_trip_and_two_receipts_of_one_day_keep_one_price_for_it()
     {
         await using var factory = new BasketFactory();
