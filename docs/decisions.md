@@ -1110,9 +1110,13 @@ day. Builds on `LidlPlusConnectionService.AccessAsync`; the Lidl Plus offers (#1
   rows: text as printed, `checked_at` the receipt time, nobody as the ticker, and the product and shop (`lidl`) set, so reloading a
   receipt puts product lines on the list that the Shelf tile marks "On the list". `GET /api/trips` returns `source` and `total` on every
   trip (null for a trip closed on the list); nothing else about it changed.
-- **A line is a purchase when it has a name and came to money.** Zero and negative lines (a returned deposit, a refund, a discount
-  printed as its own line) and lines without a name are not trip items and set no price. The same name twice on one receipt is one
-  trip line. Quantities are not kept on the trip (the trip has none); the price is.
+- **A line is a purchase when it has a name and came to money.** Zero and negative lines (the deposit refund, a refund, a discount
+  printed as its own line) and lines without a name are not trip items and set no price. A bottle deposit charged ("0.25 Deposit",
+  "12 x 0.15 Deposit") is positive but not a purchase: a line whose name has the word "deposit" is skipped too, so it is never a
+  shelf product or a "Usually bought" entry. The receipt's `total` still includes it, as printed. A one-off migration
+  (`RemoveDepositProducts`) removed the deposit products and trip lines that earlier pulls had filed; trips were left alone, so their
+  totals did not change. The same name twice on one receipt is one trip line. Quantities are not kept on the trip (the trip has none);
+  the price is.
 - **Lines become shelf products by exact name, letter case aside; nothing is guessed.** A line whose name matches a product (any letter
   case) is that product; otherwise a product with that name is added, recorded against the owner (as the fleet's adds are), up to the
   existing 300-product guard (past it, the line is still on the trip as text). The receipt's name is Lidl's own ("Whole milk 2L"), not

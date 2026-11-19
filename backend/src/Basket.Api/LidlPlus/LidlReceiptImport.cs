@@ -3,6 +3,7 @@ using Basket.Api.Lists;
 using Basket.Api.Prices;
 using Hangfire;
 using Microsoft.EntityFrameworkCore;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Options;
 
 namespace Basket.Api.LidlPlus;
@@ -39,7 +40,7 @@ public sealed record ReceiptImportResult(ReceiptImportOutcome Outcome, int Recei
 /// to the shelf when no product has that name. The price paid for each product is kept with its day (the plan and the Prices page
 /// read the latest). A receipt that is already filed is never opened again, so a pull can run any number of times.
 /// </summary>
-public sealed class LidlReceiptImport(
+public sealed partial class LidlReceiptImport(
     AppDbContext db,
     LidlPlusConnectionService connection,
     ILidlPlusTickets tickets,
@@ -306,9 +307,15 @@ public sealed class LidlReceiptImport(
         return newProducts;
     }
 
-    /// <summary>A line that was bought: it has a name and came to money. Deposits returned, refunds and discount lines are negative or zero and are not.</summary>
+    /// <summary>A line that was bought: it has a name, came to money and is not a bottle deposit. The deposit charged ("0.25 Deposit", "12 x 0.15 Deposit") is positive and is not a product; the deposit refund, refunds and discount lines are negative or zero.</summary>
     private static bool IsPurchase(LidlReceiptLine line) =>
-        !string.IsNullOrWhiteSpace(line.Description) && line.Amount is > 0 && line.Quantity > 0;
+        !string.IsNullOrWhiteSpace(line.Description) && line.Amount is > 0 && line.Quantity > 0 && !IsDeposit(line.Description);
+
+    /// <summary>Whether a line (or product) name is a bottle deposit: the word "deposit" on its own.</summary>
+    public static bool IsDeposit(string name) => DepositWord().IsMatch(name);
+
+    [GeneratedRegex(@"\bdeposit\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex DepositWord();
 
     /// <summary>What one cost: the line's amount over its quantity, or the price per kilo for a weighed line.</summary>
     private static decimal PaidEach(LidlReceiptLine line)
