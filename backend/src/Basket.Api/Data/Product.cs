@@ -190,6 +190,9 @@ public sealed class PricePullRun
 
     public int Read { get; set; }
 
+    /// <summary>Where a sweep that cannot read the whole range in one night starts next (the Aldi sweep); null on other runs.</summary>
+    public int? NextOffset { get; set; }
+
     public string? Message { get; set; }
 }
 

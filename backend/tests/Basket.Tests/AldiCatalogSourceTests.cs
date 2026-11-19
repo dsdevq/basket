@@ -328,6 +328,44 @@ public sealed class AldiCatalogSourceTests : IClassFixture<BasketFactory>
         pull.Message.Should().Contain("request limit");
     }
 
+    /// <summary>The invented range of 3,708 products: 62 pages, two more than a night's budget.</summary>
+    private static FakeFetcher LongRange()
+    {
+        const int total = 3708;
+        var fetcher = new FakeFetcher().Serve(TreeUrl, Fixtures.Read("aldi-category-tree.json"));
+        for (var offset = 0; offset < total; offset += 60)
+        {
+            fetcher.Serve(SearchUrl(offset), Page(offset + 1, Math.Min(60, total - offset), total));
+        }
+
+        return fetcher;
+    }
+
+    [Fact]
+    public async Task A_range_longer_than_the_page_budget_is_read_from_where_the_last_sweep_stopped_and_wraps()
+    {
+        await CleanAsync();
+
+        var first = LongRange();
+        var night1 = await PullAsync(first);
+        _factory.Clock.Advance(TimeSpan.FromDays(1));
+        var second = LongRange();
+        var night2 = await PullAsync(second);
+        _factory.Clock.Advance(TimeSpan.FromDays(1));
+        var third = LongRange();
+        await PullAsync(third);
+
+        // Night 1 reads offsets 0..3540 and stops; night 2 begins at 3600, wraps past the last page to 0 and stops at 3420.
+        first.Requested.Should().HaveCount(61).And.Contain(SearchUrl(3540)).And.NotContain(SearchUrl(3600));
+        night1.Outcome.Should().Be(PullOutcome.Partial);
+        second.Requested.Skip(1).Take(3).Should().Equal(SearchUrl(3600), SearchUrl(3660), SearchUrl(0));
+        second.Requested.Should().HaveCount(61).And.Contain(SearchUrl(3420)).And.NotContain(SearchUrl(3480));
+        night2.Outcome.Should().Be(PullOutcome.Partial);
+        third.Requested[1].Should().Be(SearchUrl(3480), "night 3 carries on where night 2 stopped");
+
+        (await SweepRunsAsync()).Select(r => r.NextOffset).Should().Equal(3600, 3480, 3360);
+    }
+
     [Fact]
     public async Task The_whole_range_of_about_3554_products_is_sixty_pages_and_closes_within_the_limit()
     {
