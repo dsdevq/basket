@@ -119,12 +119,20 @@ public sealed class LidlCatalogSweep(
 
                 if (newHere == 0)
                 {
-                    // Past the last page it only repeats what this category already listed; a page with no usable product is an
-                    // empty category: logged, and the sweep goes on to the next one.
-                    walked = true;
+                    // Past the last page it only repeats what this category already listed. A category's first page with no usable
+                    // product is an empty category: logged, and the sweep goes on. Further in, tiles with no product number are a
+                    // failed read of a category that still has products, so the sweep is incomplete.
+                    walked = repeatedHere > 0 || page == 0;
                     if (repeatedHere == 0)
                     {
-                        log.LogWarning("A Lidl listing page showed no usable products, treated as an empty category ({Category})", category.AbsolutePath);
+                        if (walked)
+                        {
+                            log.LogWarning("A Lidl listing page showed no usable products, treated as an empty category ({Category})", category.AbsolutePath);
+                        }
+                        else
+                        {
+                            note ??= $"A Lidl listing page showed no usable products ({category.AbsolutePath}).";
+                        }
                     }
 
                     break;
