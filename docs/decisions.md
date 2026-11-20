@@ -2459,3 +2459,15 @@ Centra is an Irish convenience chain with no online shop and no catalogue, so th
 - **The page turns over by design, so the 90 percent delisting guard does not apply.** About half the page is new every other Wednesday; the guard would read that as a half-failed sweep and never delist. A read that listed at least one offer delists those no longer on the page; the catalog is the live offers, not a range.
 - **Fetched from `centra.ie`, not `www.centra.ie`.** The www address answers a 301 to the apex host, which the polite fetcher refuses to follow. Pasted `www` links are normalised to the apex address.
 - **Out of scope, not built.** An everyday-price sweep (Centra publishes none), loyalty-app prices, and a change to the matching rule. Follow-up: each category's "See all" page (`?category_id=`) lists several hundred more offers than the front page's forty; reading those is a separate decision (more requests to a small site) and is not done here.
+
+## A Lidl Plus receipt takes over the tick-off trip of its day (2026-11-20, issue #184)
+
+Ticking a line off records no shop when the plan names none, and a receipt for the same shop was then stored as a second trip.
+
+- **Fold.** When a receipt is filed, the closed tick-off trip(s) of its Dublin day (several are merged into the earliest) become the
+  receipt's trip: it takes the receipt's source, id, total and time, keeps its ticked lines, and the receipt's other lines are added.
+  A receipt line already ticked (same product, else same name) is not added again.
+- **The shop.** A ticked line with no recorded shop becomes Lidl; one the person set to another shop stays.
+- **Walk order.** `WalkOrderLoader` no longer skips receipt trips: a receipt's own lines have no `bought_store`, so only the folded
+  ticks teach the order, per #43's rules.
+- **No migration.** Nothing new is stored; a tick-off trip before the receipt is pulled is left as it was.

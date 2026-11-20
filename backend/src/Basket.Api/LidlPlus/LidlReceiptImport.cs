@@ -226,18 +226,18 @@ public sealed partial class LidlReceiptImport(
         CancellationToken ct)
     {
         var now = clock.GetUtcNow();
-        var trip = new Trip
-        {
-            Id = Guid.NewGuid(),
-            ClosedAt = receipt.Date,
-            Source = TripSources.LidlPlus,
-            ExternalId = externalId,
-            Total = receipt.Total is { } total and >= 0 and < 100_000_000m ? Math.Round(total, 2) : null,
-        };
+        decimal? total = receipt.Total is { } t and >= 0 and < 100_000_000m ? Math.Round(t, 2) : null;
+        var folded = await FoldTickOffTripsAsync(receipt, ct);
+        var trip = folded ?? new Trip { Id = Guid.NewGuid() };
+        trip.ClosedAt = receipt.Date;
+        trip.Source = TripSources.LidlPlus;
+        trip.ExternalId = externalId;
+        trip.Total = total;
         var paidOn = PriceRecorder.DublinDay(receipt.Date);
         var newProducts = new List<Product>();
         var bought = new Dictionary<Guid, decimal>();
         var items = new List<TripItem>();
+        var ticked = folded is null ? [] : await db.TripItems.Where(i => i.TripId == trip.Id).ToListAsync(ct);
 
         // A line scanned twice is one line of the trip; the paid price is the last scan's.
         foreach (var line in receipt.Lines.Where(IsPurchase))
@@ -255,8 +255,10 @@ public sealed partial class LidlReceiptImport(
                 newProducts.Add(product);
             }
 
-            if (items.Any(i => string.Equals(i.Text, name, StringComparison.OrdinalIgnoreCase)))
+            if (items.Any(i => string.Equals(i.Text, name, StringComparison.OrdinalIgnoreCase))
+                || ticked.Any(i => (product is not null && i.ProductId == product.Id) || string.Equals(i.Text, name, StringComparison.OrdinalIgnoreCase)))
             {
+                // Already a line of the trip, either scanned twice or ticked off the list that day: the tick stays.
                 if (product is not null)
                 {
                     bought[product.Id] = PaidEach(line);
@@ -281,7 +283,10 @@ public sealed partial class LidlReceiptImport(
         }
 
         db.Products.AddRange(newProducts);
-        db.Trips.Add(trip);
+        if (folded is null)
+        {
+            db.Trips.Add(trip);
+        }
         db.TripItems.AddRange(items);
 
         var boughtIds = bought.Keys.ToList();
@@ -305,6 +310,37 @@ public sealed partial class LidlReceiptImport(
         }
 
         return newProducts;
+    }
+
+    /// <summary>
+    /// The tick-off trip(s) of the receipt's Dublin day, folded into one that the receipt then takes over, so the visit is stored once:
+    /// it keeps its ticks (their order is what walk order learns from) and its lines are now known to be bought at Lidl. A line
+    /// whose shop was not recorded becomes Lidl; one the person set to another shop stays. Null when no trip was ticked off that day.
+    /// </summary>
+    private async Task<Trip?> FoldTickOffTripsAsync(LidlReceipt receipt, CancellationToken ct)
+    {
+        var day = PriceRecorder.DublinDay(receipt.Date);
+        var trips = (await db.Trips
+                .Where(t => t.Source == null && t.ClosedAt != null && t.ClosedAt > receipt.Date.AddDays(-2) && t.ClosedAt < receipt.Date.AddDays(2))
+                .ToListAsync(ct))
+            .Where(t => PriceRecorder.DublinDay(t.ClosedAt!.Value) == day)
+            .OrderBy(t => t.ClosedAt)
+            .ThenBy(t => t.Id)
+            .ToList();
+        if (trips.Count == 0)
+        {
+            return null;
+        }
+
+        var target = trips[0];
+        foreach (var other in trips.Skip(1))
+        {
+            await db.TripItems.Where(i => i.TripId == other.Id).ExecuteUpdateAsync(s => s.SetProperty(i => i.TripId, target.Id), ct);
+            db.Trips.Remove(other);
+        }
+
+        await db.TripItems.Where(i => i.TripId == target.Id && i.BoughtStore == null).ExecuteUpdateAsync(s => s.SetProperty(i => i.BoughtStore, Store.Lidl), ct);
+        return target;
     }
 
     /// <summary>A line that was bought: it has a name, came to money and is not a bottle deposit. The deposit charged ("0.25 Deposit", "12 x 0.15 Deposit") is positive and is not a product; the deposit refund, refunds and discount lines are negative or zero.</summary>

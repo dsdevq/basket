@@ -4,8 +4,8 @@ using Microsoft.EntityFrameworkCore;
 namespace Basket.Api.Walk;
 
 /// <summary>
-/// Reads the ticks <see cref="LearnedSectionOrder"/> learns from, out of the trips already kept (no table of its own). Only trips
-/// closed on the list count: a receipt has no tick times. A tick counts when its line was a product (free text has no category) bought
+/// Reads the ticks <see cref="LearnedSectionOrder"/> learns from, out of the trips already kept (no table of its own). Only ticks
+/// count: a receipt's own lines carry no shop of their own, so a receipt trip counts only through the tick-off trip folded into it. A tick counts when its line was a product (free text has no category) bought
 /// at a named shop whose page for that product carries a category; its section is that category's, read the way the seed reads it.
 /// The category is the listing's today, not as it was on the day.
 /// </summary>
@@ -19,7 +19,6 @@ public static class WalkOrderLoader
     private static async Task<List<WalkTick>> TicksAsync(AppDbContext db, CancellationToken ct)
     {
         var tripIds = await db.Trips.AsNoTracking().Closed()
-            .Where(t => t.Source == null)
             .OrderByDescending(t => t.ClosedAt)
             .Select(t => t.Id)
             .Take(RecentTrips)

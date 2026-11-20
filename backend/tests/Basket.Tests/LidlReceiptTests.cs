@@ -4,6 +4,7 @@ using System.Text.Json;
 using Basket.Api.Data;
 using Basket.Api.LidlPlus;
 using Basket.Api.Prices;
+using Basket.Api.Walk;
 using Basket.Tests.Support;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
@@ -65,6 +66,81 @@ public sealed class LidlReceiptTests
         trip.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("text").GetString())
             .Should().BeEquivalentTo("Whole milk 2L", "Brown bread");
         factory.Receipts.Tokens.Should().OnlyContain(t => t == "access-token");
+    }
+
+    [Fact]
+    public async Task A_receipt_takes_over_the_tick_off_trip_of_its_day_so_the_shop_is_recorded_and_walk_order_learns_from_the_ticks()
+    {
+        await using var factory = new BasketFactory();
+        var owner = await ConnectedOwnerAsync(factory);
+        (string Name, string Category)[] shelf =
+        [
+            ("Apples", "Food & Drink > Fruit & Vegetables > Fruit"),
+            ("Bread", "Food & Drink > Bakery"),
+            ("Chicken fillets", "Food & Drink > Meat & Poultry"),
+            ("Cola 2L", "Food & Drink > Drinks"),
+        ];
+        var walk = new[] { "Cola 2L", "Bread", "Chicken fillets", "Apples" };
+        var elsewhere = Monday.AddDays(3);
+        await factory.WithDb(async db =>
+        {
+            var by = db.Users.Select(u => u.Id).First();
+            var products = shelf.Select(s => new Product { Id = Guid.NewGuid(), Name = s.Name, AddedAt = Monday, AddedByUserId = by }).ToList();
+            db.Products.AddRange(products);
+            foreach (var (product, (_, category)) in products.Zip(shelf))
+            {
+                db.StoreListings.Add(new StoreListing { Id = Guid.NewGuid(), ProductId = product.Id, Store = Store.Lidl, Url = $"https://www.lidl.ie/p/{product.Id:N}/p1", Category = category, AddedAt = Monday });
+            }
+
+            // Ticked off on three Mondays with no shop recorded, plus one tick-off trip on a day with no receipt.
+            foreach (var day in new[] { Monday, Monday.AddDays(7), Monday.AddDays(14), elsewhere })
+            {
+                var trip = new Trip { Id = Guid.NewGuid(), ClosedAt = day.AddHours(-1) };
+                db.Trips.Add(trip);
+                for (var i = 0; i < walk.Length; i++)
+                {
+                    db.TripItems.Add(new TripItem
+                    {
+                        Id = Guid.NewGuid(), TripId = trip.Id, Text = walk[i], ProductId = products.Single(p => p.Name == walk[i]).Id,
+                        CheckedAt = trip.ClosedAt!.Value.AddMinutes(-30 + (4 * i)),
+                    });
+                }
+            }
+
+            await db.SaveChangesAsync();
+            return 0;
+        });
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var before = await WalkOrderLoader.LoadAsync(scope.ServiceProvider.GetRequiredService<AppDbContext>(), CancellationToken.None);
+            before.For(Store.Lidl).Should().Equal(SeededSectionOrder.For(Store.Lidl), "ticks with no shop teach nothing");
+        }
+
+        foreach (var (id, day) in new[] { ("R-1", Monday), ("R-2", Monday.AddDays(7)), ("R-3", Monday.AddDays(14)) })
+        {
+            factory.Receipts.Add(Receipt(id, day, 5.00m, Line("Cola 2L", 1.00m), Line("Bread", 1.00m), Line("Chicken fillets", 2.00m), Line("Apples", 1.00m), Line("Carrier bag", 0.70m)));
+        }
+
+        (await PullAsync(factory)).Receipts.Should().Be(3);
+
+        var trips = (await TripsAsync(owner)).GetProperty("trips").EnumerateArray().ToArray();
+        trips.Should().HaveCount(4, "each Monday is one trip, and the day with no receipt is untouched");
+        trips.Count(t => t.GetProperty("source").GetString() == "lidl_plus").Should().Be(3);
+        foreach (var trip in trips.Where(t => t.GetProperty("source").GetString() == "lidl_plus"))
+        {
+            trip.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("text").GetString())
+                .Should().BeEquivalentTo([.. walk, "Carrier bag"]);
+        }
+
+        await using var after = factory.Services.CreateAsyncScope();
+        var db = after.ServiceProvider.GetRequiredService<AppDbContext>();
+        var items = await db.TripItems.AsNoTracking().ToListAsync();
+        items.Where(i => walk.Contains(i.Text) && i.TripId != items.First(x => x.CheckedAt!.Value.Date == elsewhere.Date && x.Text == i.Text).TripId)
+            .Should().OnlyContain(i => i.BoughtStore == Store.Lidl);
+        (await db.Trips.AsNoTracking().CountAsync(t => t.Source == null)).Should().Be(1);
+        var learned = await WalkOrderLoader.LoadAsync(db, CancellationToken.None);
+        learned.For(Store.Lidl).Should().NotEqual(SeededSectionOrder.For(Store.Lidl));
+        learned.For(Store.Lidl).Take(4).Should().Equal("Drinks", "Bakery", "Meat & fish", "Fruit & veg");
     }
 
     [Fact]
