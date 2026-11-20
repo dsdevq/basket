@@ -212,6 +212,59 @@ public sealed class LidlReceiptTests
     }
 
     [Fact]
+    public async Task Trips_with_no_shop_recorded_do_not_crowd_older_ticks_out_of_the_walk_order_window()
+    {
+        await using var factory = new BasketFactory();
+        await ConnectedOwnerAsync(factory);
+        (string Name, string Category)[] shelf =
+        [
+            ("Apples", "Food & Drink > Fruit & Vegetables > Fruit"),
+            ("Bread", "Food & Drink > Bakery"),
+            ("Chicken fillets", "Food & Drink > Meat & Poultry"),
+            ("Cola 2L", "Food & Drink > Drinks"),
+        ];
+        var walk = new[] { "Cola 2L", "Bread", "Chicken fillets", "Apples" };
+        await factory.WithDb(async db =>
+        {
+            var by = db.Users.Select(u => u.Id).First();
+            var products = shelf.Select(s => new Product { Id = Guid.NewGuid(), Name = s.Name, AddedAt = Monday, AddedByUserId = by }).ToList();
+            db.Products.AddRange(products);
+            foreach (var (product, (_, category)) in products.Zip(shelf))
+            {
+                db.StoreListings.Add(new StoreListing { Id = Guid.NewGuid(), ProductId = product.Id, Store = Store.Lidl, Url = $"https://www.lidl.ie/p/{product.Id:N}/p1", Category = category, AddedAt = Monday });
+            }
+
+            for (var d = 0; d < 3; d++)
+            {
+                var trip = new Trip { Id = Guid.NewGuid(), ClosedAt = Monday.AddDays(-100 - d) };
+                db.Trips.Add(trip);
+                for (var i = 0; i < walk.Length; i++)
+                {
+                    db.TripItems.Add(new TripItem
+                    {
+                        Id = Guid.NewGuid(), TripId = trip.Id, Text = walk[i], ProductId = products.Single(p => p.Name == walk[i]).Id,
+                        CheckedAt = trip.ClosedAt!.Value.AddMinutes(-30 + (4 * i)), BoughtStore = Store.Lidl,
+                    });
+                }
+            }
+
+            for (var d = 0; d < WalkOrderLoader.RecentTrips + 5; d++)
+            {
+                var trip = new Trip { Id = Guid.NewGuid(), ClosedAt = Monday.AddDays(-d), Source = "lidl_plus" };
+                db.Trips.Add(trip);
+                db.TripItems.Add(new TripItem { Id = Guid.NewGuid(), TripId = trip.Id, Text = "Receipt line", CheckedAt = trip.ClosedAt });
+            }
+
+            await db.SaveChangesAsync();
+            return 0;
+        });
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var learned = await WalkOrderLoader.LoadAsync(scope.ServiceProvider.GetRequiredService<AppDbContext>(), CancellationToken.None);
+        learned.For(Store.Lidl).Take(4).Should().Equal("Drinks", "Bakery", "Meat & fish", "Fruit & veg");
+    }
+
+    [Fact]
     public async Task The_same_receipt_is_never_opened_or_filed_twice()
     {
         await using var factory = new BasketFactory();

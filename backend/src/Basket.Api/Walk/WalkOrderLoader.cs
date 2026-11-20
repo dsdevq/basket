@@ -11,7 +11,7 @@ namespace Basket.Api.Walk;
 /// </summary>
 public static class WalkOrderLoader
 {
-    /// <summary>The latest closed trips read; more than every shop's <see cref="LearnedSectionOrder.MaxTrips"/> needs, so a shop used less often still has its own.</summary>
+    /// <summary>The latest closed trips with a tick at a named shop read; more than every shop's <see cref="LearnedSectionOrder.MaxTrips"/> needs, so a shop used less often still has its own.</summary>
     public const int RecentTrips = 60;
 
     public static async Task<WalkOrders> LoadAsync(AppDbContext db, CancellationToken ct) => WalkOrders.From(await TicksAsync(db, ct));
@@ -19,6 +19,7 @@ public static class WalkOrderLoader
     private static async Task<List<WalkTick>> TicksAsync(AppDbContext db, CancellationToken ct)
     {
         var tripIds = await db.Trips.AsNoTracking().Closed()
+            .Where(t => db.TripItems.Any(i => i.TripId == t.Id && i.CheckedAt != null && i.ProductId != null && i.BoughtStore != null))
             .OrderByDescending(t => t.ClosedAt)
             .Select(t => t.Id)
             .Take(RecentTrips)
