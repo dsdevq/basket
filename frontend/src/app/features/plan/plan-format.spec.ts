@@ -198,8 +198,9 @@ describe('plan-format', () => {
       expect(rowLines(row)).toBe(
         'Seen 5 Nov · Lidl Plus price · €0.50/l\nLast paid €1.19 on 3 Nov'
       );
-      expect(priceText(row.entry)).toBe('€0.99');
-      expect(rowTag(row.entry)).toBe('Best');
+      expect(row.entry).toBe(lidlOffer);
+      expect(priceText(lidlOffer)).toBe('€0.99');
+      expect(rowTag(lidlOffer)).toBe('Best');
     });
 
     it('leaves a shop it was never bought at with its reading alone', () => {
@@ -208,6 +209,22 @@ describe('plan-format', () => {
 
       expect(rows.map(r => r.paid?.store ?? null)).toEqual(['lidl', null]);
       expect(rowLines(rows[1])).toBe('Seen 5 Nov · €0.65/l');
+    });
+
+    it('draws the paid price at a shop that has no reading, as an information-only row', () => {
+      const rows = planRows(line({stores: [], lastPaid: [paid()]}));
+
+      expect(rows).toHaveLength(1);
+      expect(rows[0].entry).toBeNull();
+      expect(rows[0].storeName).toBe('Lidl');
+      expect(rowLines(rows[0])).toBe('Last paid €1.19 on 3 Nov');
+    });
+
+    it('puts a paid-only shop after the shops with a reading', () => {
+      const tesco = entry({store: 'tesco', storeName: 'Tesco'});
+      const rows = planRows(line({stores: [tesco], lastPaid: [paid()]}));
+
+      expect(rows.map(r => r.store)).toEqual(['tesco', 'lidl']);
     });
 
     it('has no rows for a line with neither a reading nor a paid price', () => {

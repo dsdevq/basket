@@ -126,24 +126,26 @@ import {
                     <span class="text-cmn-sm text-text-secondary">{{ why.detail }}</span>
                   </div>
                 }
-                @for (row of rows(item); track row.entry.store) {
+                @for (row of rows(item); track row.store) {
                   <cmn-list-item-row
-                    [label]="row.entry.storeName"
+                    [label]="row.storeName"
                     [sublabel]="lines(row)"
-                    [dimmed]="!row.entry.best && row.entry.state !== 'priced'"
+                    [dimmed]="!!row.entry && !row.entry.best && row.entry.state !== 'priced'"
                     class="[&_.truncate]:overflow-visible [&_.truncate]:whitespace-pre-line [&_.truncate]:break-words"
                   >
-                    @if (tag(row.entry); as text) {
+                    @if (row.entry && tag(row.entry); as text) {
                       <cmn-tag [variant]="variant(row.entry)" meta>{{ text }}</cmn-tag>
                     }
-                    <span amount class="flex flex-col items-end text-cmn-sm">
-                      <span class="font-semibold text-text-primary">{{ price(row.entry) }}</span>
-                      @if (was(row.entry); as old) {
-                        <s class="text-cmn-xs text-text-secondary"
-                          ><span class="sr-only">was </span>{{ old }}</s
-                        >
-                      }
-                    </span>
+                    @if (row.entry; as entry) {
+                      <span amount class="flex flex-col items-end text-cmn-sm">
+                        <span class="font-semibold text-text-primary">{{ price(entry) }}</span>
+                        @if (was(entry); as old) {
+                          <s class="text-cmn-xs text-text-secondary"
+                            ><span class="sr-only">was </span>{{ old }}</s
+                          >
+                        }
+                      </span>
+                    }
                   </cmn-list-item-row>
                 }
               </cmn-list-section>

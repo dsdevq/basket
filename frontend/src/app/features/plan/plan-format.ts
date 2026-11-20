@@ -235,23 +235,34 @@ export function paidText(paid: PlanPaid): string {
   return `Last paid ${euro(paid.price)} on ${shortDate(paid.paidOn)}`;
 }
 
-/** One shop's place in a line: its reading, and what was last paid there (null when nothing was bought there). */
+/** One shop's place in a line: its reading (null when the shop has none), and what was last paid there (null when nothing was bought there). */
 export interface PlanRow {
-  readonly entry: PlanStorePrice;
+  readonly store: StoreId;
+  readonly storeName: string;
+  readonly entry: PlanStorePrice | null;
   readonly paid: PlanPaid | null;
 }
 
-/** The rows of a line: the shops with a reading in reading order, each with what was last paid there. */
+/**
+ * The rows of a line: the shops with a reading in reading order, each with what was last paid there, then a row for each shop the
+ * product was bought at but has no reading for, so its paid price is still drawn. Such a row is information only.
+ */
 export function planRows(item: PlanItem): PlanRow[] {
-  return orderedStores(item).map(entry => ({
+  const read: PlanRow[] = orderedStores(item).map(entry => ({
+    store: entry.store,
+    storeName: entry.storeName,
     entry,
     paid: item.lastPaid.find(paid => paid.store === entry.store) ?? null,
   }));
+  const paidOnly: PlanRow[] = item.lastPaid
+    .filter(paid => !item.stores.some(entry => entry.store === paid.store))
+    .map(paid => ({store: paid.store, storeName: paid.storeName, entry: null, paid}));
+  return [...read, ...paidOnly];
 }
 
 /** The lines under a shop's name, one fact group per line: the reading (date, deal, card, unit price), then what was last paid. */
 export function rowLines(row: PlanRow): string {
-  const lines = [rowDetail(row.entry)];
+  const lines = row.entry ? [rowDetail(row.entry)] : [];
   if (row.paid) {
     lines.push(paidText(row.paid));
   }

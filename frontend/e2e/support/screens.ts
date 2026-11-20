@@ -546,6 +546,7 @@ const PLAN = {
       productId: 'p3',
       bestStore: 'aldi',
       stores: [BUTTER_ALDI, BUTTER_TESCO_OUT],
+      lastPaid: [planPaid('lidl', 2.49, '2026-10-28')],
     }),
     planLine('Brennans sliced pan 800g', {
       productId: 'p2',
