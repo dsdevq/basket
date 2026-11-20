@@ -2,7 +2,7 @@ import {HttpClient} from '@angular/common/http';
 import {inject, Injectable} from '@angular/core';
 import {firstValueFrom} from 'rxjs';
 
-import type {Candidate, Listing, PricesResponse, Product, StoreId} from './prices.model';
+import type {Alias, Candidate, Listing, PricesResponse, Product, StoreId} from './prices.model';
 
 @Injectable({providedIn: 'root'})
 export class PricesApi {
@@ -23,6 +23,18 @@ export class PricesApi {
 
   public remove(id: string): Promise<void> {
     return firstValueFrom(this.http.delete<void>(`/api/products/${id}`));
+  }
+
+  public addAlias(id: string, text: string): Promise<Alias> {
+    return firstValueFrom(this.http.post<Alias>(`/api/products/${id}/aliases`, {text}));
+  }
+
+  public renameAlias(id: string, aliasId: string, text: string): Promise<Alias> {
+    return firstValueFrom(this.http.patch<Alias>(`/api/products/${id}/aliases/${aliasId}`, {text}));
+  }
+
+  public removeAlias(id: string, aliasId: string): Promise<void> {
+    return firstValueFrom(this.http.delete<void>(`/api/products/${id}/aliases/${aliasId}`));
   }
 
   public link(id: string, store: StoreId, url: string, imageUrl?: string): Promise<Listing> {

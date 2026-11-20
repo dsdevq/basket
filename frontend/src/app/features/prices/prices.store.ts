@@ -5,7 +5,7 @@ import {patchState, signalStore, withMethods, withState} from '@ngrx/signals';
 import {HttpStatus, statusOf} from '../../core/http-status';
 import type {CatalogItem} from '../catalog/catalog.model';
 import {PricesApi} from './prices.api';
-import type {Candidate, Product, StoreId, StoreStatus} from './prices.model';
+import type {Alias, Candidate, Product, StoreId, StoreStatus} from './prices.model';
 
 interface PricesState {
   readonly products: readonly Product[];
@@ -23,6 +23,7 @@ const MESSAGES = {
   unlink: 'Could not remove that link.',
   candidates: 'Could not load the suggestions. Try again.',
   decide: 'Could not save that answer. Try again.',
+  alias: 'Could not save that name. Try again.',
   answered: 'Someone already answered that suggestion. Check the list again.',
 } as const;
 
@@ -33,6 +34,13 @@ export const PricesStore = signalStore(
   withMethods((store, api = inject(PricesApi), toast = inject(ToastService)) => {
     // Counts loads and local writes to `products`; a response that is no longer the latest of them is stale and dropped.
     let changes = 0;
+    /** The server's words when it refused a name (taken, too many, the product's own), else a plain failure. */
+    const aliasRefusal = (error: unknown): string => {
+      const message = (error as {error?: {message?: string}} | null)?.error?.message;
+      const refused =
+        statusOf(error) === HttpStatus.badRequest || statusOf(error) === HttpStatus.conflict;
+      return refused && message ? message : MESSAGES.alias;
+    };
     return {
       async load(quiet = false): Promise<void> {
         const seen = ++changes;
@@ -102,6 +110,40 @@ export const PricesStore = signalStore(
             toast.error(MESSAGES.remove);
           }
         }
+      },
+
+      /** Adds another name to a product; returns the server's refusal text (taken, too many, the product's own name) or null when saved. */
+      async addAlias(product: Product, text: string): Promise<string | null> {
+        try {
+          await api.addAlias(product.id, text);
+          await this.load(true);
+          return null;
+        } catch (error) {
+          return aliasRefusal(error);
+        }
+      },
+
+      async renameAlias(product: Product, alias: Alias, text: string): Promise<string | null> {
+        try {
+          await api.renameAlias(product.id, alias.id, text);
+          await this.load(true);
+          return null;
+        } catch (error) {
+          return aliasRefusal(error);
+        }
+      },
+
+      async removeAlias(product: Product, alias: Alias): Promise<boolean> {
+        try {
+          await api.removeAlias(product.id, alias.id);
+        } catch (error) {
+          if (statusOf(error) !== HttpStatus.notFound) {
+            toast.error(MESSAGES.alias);
+            return false;
+          }
+        }
+        await this.load(true);
+        return true;
       },
 
       /** Returns the server's refusal text for a bad address, or null when it was saved. */

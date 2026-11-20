@@ -21,6 +21,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
     public DbSet<Product> Products => Set<Product>();
 
+    public DbSet<ProductAlias> ProductAliases => Set<ProductAlias>();
+
     public DbSet<StoreListing> StoreListings => Set<StoreListing>();
 
     public DbSet<StoreProduct> StoreProducts => Set<StoreProduct>();
@@ -131,6 +133,19 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             product.Property(p => p.Barcode).HasMaxLength(14);
             product.HasOne<AppUser>().WithMany().HasForeignKey(p => p.AddedByUserId).OnDelete(DeleteBehavior.Restrict);
             product.HasIndex(p => p.Barcode).IsUnique();
+        });
+
+        builder.Entity<ProductAlias>(alias =>
+        {
+            alias.ToTable("product_alias");
+            alias.HasKey(a => a.Id);
+            alias.Property(a => a.Text).HasMaxLength(ProductAlias.MaxLength).IsRequired();
+            alias.Property(a => a.NormalizedText).HasMaxLength(ProductAlias.MaxLength).IsRequired();
+            alias.HasOne<Product>().WithMany().HasForeignKey(a => a.ProductId).OnDelete(DeleteBehavior.Cascade);
+            alias.HasOne<AppUser>().WithMany().HasForeignKey(a => a.AddedByUserId).OnDelete(DeleteBehavior.Restrict);
+            alias.HasIndex(a => a.ProductId);
+            // The same words never mean two products: a typed line has exactly one product to link to.
+            alias.HasIndex(a => a.NormalizedText).IsUnique();
         });
 
         builder.Entity<StoreListing>(listing =>

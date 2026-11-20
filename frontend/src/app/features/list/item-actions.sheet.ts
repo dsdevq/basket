@@ -19,7 +19,7 @@ export interface ItemActionsData {
   readonly item: ListItem;
 }
 
-export type ItemAction = 'delete';
+export type ItemAction = 'delete' | 'link';
 
 /**
  * The bottom sheet behind an item's "more" button. HIG: actions on a thing live in a sheet, not a dialog. For a ticked item it also
@@ -52,6 +52,17 @@ export type ItemAction = 'delete';
             </cmn-list-item-row>
           }
         </cmn-list-section>
+      }
+      @if (!data.item.productId) {
+        <cmn-button
+          (clicked)="choose('link')"
+          class="block [&_button]:w-full"
+          variant="primary"
+          size="lg"
+          icon="Link"
+        >
+          Link to a product
+        </cmn-button>
       }
       <cmn-button
         (clicked)="choose('delete')"

@@ -114,6 +114,16 @@ describe('ListPage', () => {
     TestBed.resetTestingModule();
   });
 
+  it('marks a typed line Not linked, and a product line not', async () => {
+    const {host} = await render([
+      item('1', 'Яйця'),
+      item('2', 'Whole milk 2L', {productId: 'p1', store: 'tesco'}),
+    ]);
+    const text = host.textContent ?? '';
+
+    expect(text.match(/Not linked/g)).toHaveLength(1);
+  });
+
   it('offers what is usually bought, and not what is already waiting, as one-tap adds', async () => {
     const {host, api, fixture} = await render(
       [item('1', 'Whole milk 2L', {productId: 'milk', store: 'tesco'})],
