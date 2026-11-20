@@ -227,7 +227,7 @@ public sealed partial class LidlReceiptImport(
     {
         var now = clock.GetUtcNow();
         decimal? total = receipt.Total is { } t and >= 0 and < 100_000_000m ? Math.Round(t, 2) : null;
-        var folded = await FoldTickOffTripsAsync(receipt, ct);
+        var (folded, ticked) = await FoldTickOffTripsAsync(receipt, ct);
         var trip = folded ?? new Trip { Id = Guid.NewGuid() };
         trip.ClosedAt = receipt.Date;
         trip.Source = TripSources.LidlPlus;
@@ -237,7 +237,6 @@ public sealed partial class LidlReceiptImport(
         var newProducts = new List<Product>();
         var bought = new Dictionary<Guid, decimal>();
         var items = new List<TripItem>();
-        var ticked = folded is null ? [] : await db.TripItems.Where(i => i.TripId == trip.Id).ToListAsync(ct);
 
         // A line scanned twice is one line of the trip; the paid price is the last scan's.
         foreach (var line in receipt.Lines.Where(IsPurchase))
@@ -313,34 +312,41 @@ public sealed partial class LidlReceiptImport(
     }
 
     /// <summary>
-    /// The tick-off trip(s) of the receipt's Dublin day, folded into one that the receipt then takes over, so the visit is stored once:
-    /// it keeps its ticks (their order is what walk order learns from) and its lines are now known to be bought at Lidl. A line
-    /// whose shop was not recorded becomes Lidl; one the person set to another shop stays. Null when no trip was ticked off that day.
+    /// The tick-off trip(s) of the receipt's Dublin day that were to Lidl or to no recorded shop, folded into one that the receipt then
+    /// takes over, so the visit is stored once: it keeps its ticks (their order is what walk order learns from) and its lines are now
+    /// known to be bought at Lidl. A line whose shop was not recorded becomes Lidl; one the person set to another shop stays, and a
+    /// trip whose lines are all for another shop is a different visit and is left alone. The changes are tracked, so they are saved
+    /// (or dropped) with the receipt. Null trip when no trip was ticked off that day.
     /// </summary>
-    private async Task<Trip?> FoldTickOffTripsAsync(LidlReceipt receipt, CancellationToken ct)
+    private async Task<(Trip? Trip, List<TripItem> Ticked)> FoldTickOffTripsAsync(LidlReceipt receipt, CancellationToken ct)
     {
         var day = PriceRecorder.DublinDay(receipt.Date);
-        var trips = (await db.Trips
+        var candidates = (await db.Trips
                 .Where(t => t.Source == null && t.ClosedAt != null && t.ClosedAt > receipt.Date.AddDays(-2) && t.ClosedAt < receipt.Date.AddDays(2))
                 .ToListAsync(ct))
             .Where(t => PriceRecorder.DublinDay(t.ClosedAt!.Value) == day)
             .OrderBy(t => t.ClosedAt)
             .ThenBy(t => t.Id)
             .ToList();
+        var candidateIds = candidates.Select(t => t.Id).ToList();
+        var lines = (await db.TripItems.Where(i => candidateIds.Contains(i.TripId)).ToListAsync(ct))
+            .ToLookup(i => i.TripId);
+        var trips = candidates.Where(t => lines[t.Id].Any(i => i.BoughtStore is null or Store.Lidl)).ToList();
         if (trips.Count == 0)
         {
-            return null;
+            return (null, []);
         }
 
         var target = trips[0];
-        foreach (var other in trips.Skip(1))
+        var ticked = trips.SelectMany(t => lines[t.Id]).ToList();
+        foreach (var item in ticked)
         {
-            await db.TripItems.Where(i => i.TripId == other.Id).ExecuteUpdateAsync(s => s.SetProperty(i => i.TripId, target.Id), ct);
-            db.Trips.Remove(other);
+            item.TripId = target.Id;
+            item.BoughtStore ??= Store.Lidl;
         }
 
-        await db.TripItems.Where(i => i.TripId == target.Id && i.BoughtStore == null).ExecuteUpdateAsync(s => s.SetProperty(i => i.BoughtStore, Store.Lidl), ct);
-        return target;
+        db.Trips.RemoveRange(trips.Skip(1));
+        return (target, ticked);
     }
 
     /// <summary>A line that was bought: it has a name, came to money and is not a bottle deposit. The deposit charged ("0.25 Deposit", "12 x 0.15 Deposit") is positive and is not a product; the deposit refund, refunds and discount lines are negative or zero.</summary>

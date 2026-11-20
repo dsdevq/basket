@@ -144,6 +144,41 @@ public sealed class LidlReceiptTests
     }
 
     [Fact]
+    public async Task A_same_day_tick_off_trip_to_another_shop_stays_its_own_visit_while_one_with_no_shop_is_folded()
+    {
+        await using var factory = new BasketFactory();
+        var owner = await ConnectedOwnerAsync(factory);
+        Guid tescoTrip = Guid.Empty;
+        Guid unrecordedTrip = Guid.Empty;
+        await factory.WithDb(async db =>
+        {
+            tescoTrip = Guid.NewGuid();
+            unrecordedTrip = Guid.NewGuid();
+            db.Trips.Add(new Trip { Id = tescoTrip, ClosedAt = Monday.AddHours(-3) });
+            db.Trips.Add(new Trip { Id = unrecordedTrip, ClosedAt = Monday.AddHours(-1) });
+            db.TripItems.Add(new TripItem { Id = Guid.NewGuid(), TripId = tescoTrip, Text = "Tea bags", CheckedAt = Monday.AddHours(-3), BoughtStore = Store.Tesco });
+            db.TripItems.Add(new TripItem { Id = Guid.NewGuid(), TripId = unrecordedTrip, Text = "Whole milk 2L", CheckedAt = Monday.AddHours(-1) });
+            await db.SaveChangesAsync();
+            return 0;
+        });
+        factory.Receipts.Add(Receipt("R-1", Monday, 3.78m, Line("Whole milk 2L", 1.29m), Line("Brown bread", 2.49m)));
+
+        (await PullAsync(factory)).Receipts.Should().Be(1);
+
+        var trips = (await TripsAsync(owner)).GetProperty("trips").EnumerateArray().ToArray();
+        trips.Should().HaveCount(2);
+        var lidl = trips.Single(t => t.GetProperty("source").GetString() == "lidl_plus");
+        lidl.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("text").GetString())
+            .Should().BeEquivalentTo("Whole milk 2L", "Brown bread");
+        var other = trips.Single(t => t.GetProperty("source").ValueKind != JsonValueKind.String);
+        other.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("text").GetString()).Should().Equal("Tea bags");
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        (await db.TripItems.AsNoTracking().SingleAsync(i => i.Text == "Tea bags")).BoughtStore.Should().Be(Store.Tesco);
+        (await db.TripItems.AsNoTracking().SingleAsync(i => i.Text == "Whole milk 2L")).BoughtStore.Should().Be(Store.Lidl);
+    }
+
+    [Fact]
     public async Task The_same_receipt_is_never_opened_or_filed_twice()
     {
         await using var factory = new BasketFactory();
