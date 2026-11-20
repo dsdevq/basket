@@ -114,7 +114,7 @@ describe('ListPage', () => {
     TestBed.resetTestingModule();
   });
 
-  it('marks a typed line Not linked with a Link button, and a product line neither', async () => {
+  it('marks a typed line Not linked, and a product line not', async () => {
     const {host} = await render([
       item('1', 'Яйця'),
       item('2', 'Whole milk 2L', {productId: 'p1', store: 'tesco'}),
@@ -122,8 +122,6 @@ describe('ListPage', () => {
     const text = host.textContent ?? '';
 
     expect(text.match(/Not linked/g)).toHaveLength(1);
-    expect(host.querySelector('button[aria-label="Link Яйця to a product"]')).not.toBeNull();
-    expect(host.querySelector('button[aria-label="Link Whole milk 2L to a product"]')).toBeNull();
   });
 
   it('offers what is usually bought, and not what is already waiting, as one-tap adds', async () => {

@@ -173,15 +173,6 @@ const USUAL_SHOWN = 5;
           avatar
         />
         <bk-list-photo [name]="item.text" [src]="item.imageUrl" avatar />
-        @if (!item.productId) {
-          <cmn-button
-            [aria-label]="'Link ' + item.text + ' to a product'"
-            (clicked)="link(item)"
-            actions
-            variant="ghost"
-            icon="Link"
-          />
-        }
         <cmn-button
           [aria-label]="'More for ' + item.text"
           (clicked)="more(item)"
