@@ -201,6 +201,7 @@ api.MapListEndpoints();
 api.MapTripEndpoints();
 api.MapHabitEndpoints();
 api.MapProductEndpoints();
+api.MapProductAliasEndpoints();
 api.MapCatalogEndpoints();
 api.MapMatchEndpoints();
 api.MapPromotionEndpoints();

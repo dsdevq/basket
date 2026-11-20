@@ -65,6 +65,25 @@ public static partial class CandidateMatcher
 {
     public const double NameOnlyThreshold = 0.8;
 
+    /// <summary>
+    /// The best verdict over several names of one product (its own, then the household's other names for it that have English words):
+    /// each is evaluated as <see cref="Evaluate"/> does and the highest score wins. Null when no name matches.
+    /// </summary>
+    public static MatchVerdict? EvaluateAny(IReadOnlyList<ProductFacts> names, CandidateFacts candidate)
+    {
+        MatchVerdict? best = null;
+        foreach (var name in names)
+        {
+            var verdict = Evaluate(name, candidate);
+            if (verdict is not null && (best is null || verdict.Score > best.Score))
+            {
+                best = verdict;
+            }
+        }
+
+        return best;
+    }
+
     public static MatchVerdict? Evaluate(ProductFacts product, CandidateFacts candidate)
     {
         var productCode = Gtin.TryNormalize(product.Barcode, out var p) ? p : null;

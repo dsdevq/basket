@@ -54,12 +54,13 @@ public sealed class ServerCandidates(AppDbContext db, TimeProvider clock, ILogge
                 var listings = (await db.StoreListings.Where(l => batch.Contains(l.ProductId)).ToListAsync(ct)).ToLookup(l => l.ProductId);
                 var linkedIds = listings.SelectMany(g => g).Where(l => l.ConfirmedAt != null && l.StoreProductId != null).Select(l => l.StoreProductId!.Value).ToList();
                 var linked = await db.StoreProducts.AsNoTracking().Where(p => linkedIds.Contains(p.Id)).ToDictionaryAsync(p => p.Id, ct);
+                var aliases = await ProductAliases.TextsAsync(db, batch, ct);
 
                 foreach (var product in products)
                 {
                     try
                     {
-                        var result = await MatchAsync(product, listings[product.Id].ToList(), linked, only, ct);
+                        var result = await MatchAsync(product, listings[product.Id].ToList(), linked, aliases[product.Id].ToList(), only, ct);
                         await db.SaveChangesAsync(ct);
                         total += result;
                     }
@@ -91,10 +92,13 @@ public sealed class ServerCandidates(AppDbContext db, TimeProvider clock, ILogge
         Product product,
         List<StoreListing> listings,
         Dictionary<Guid, StoreProduct> linked,
+        List<string> aliases,
         Store? only,
         CancellationToken ct)
     {
         var facts = FactsOf(product, listings, linked);
+        // The product's own name, then each other name the household gave it that has English words: a row passes if any name matches it.
+        var names = ProductAliases.FactsWithAliases(facts, aliases);
         var proposed = 0;
         var linkedPages = 0;
         var now = clock.GetUtcNow();
@@ -109,7 +113,7 @@ public sealed class ServerCandidates(AppDbContext db, TimeProvider clock, ILogge
             var all = await db.MatchCandidates.Where(c => c.ProductId == product.Id && c.Store == store).ToDictionaryAsync(c => c.Url, StringComparer.Ordinal, ct);
             var seen = new HashSet<string>(StringComparer.Ordinal);
             var passed = new List<(StoreProduct Row, Proposal Proposal)>();
-            foreach (var row in await CatalogRows.NarrowAsync(db, store, facts, ct))
+            foreach (var row in await NarrowAnyAsync(store, names, ct))
             {
                 if (!Stores.TryNormalizeProductUrl(store, row.Url, out var uri))
                 {
@@ -123,7 +127,7 @@ public sealed class ServerCandidates(AppDbContext db, TimeProvider clock, ILogge
                 }
 
                 var title = CatalogRows.TitleOf(row);
-                var verdict = CandidateMatcher.Evaluate(facts, new CandidateFacts(title, row.Barcode, row.Category, CatalogRows.SizeOf(row)));
+                var verdict = CandidateMatcher.EvaluateAny(names, new CandidateFacts(title, row.Barcode, row.Category, CatalogRows.SizeOf(row)));
                 if (verdict is not null)
                 {
                     passed.Add((row, new Proposal(url, title, row.Barcode, verdict)));
@@ -148,6 +152,21 @@ public sealed class ServerCandidates(AppDbContext db, TimeProvider clock, ILogge
         }
 
         return new ServerCandidateResult(1, proposed, linkedPages);
+    }
+
+    /// <summary>The rows worth comparing under any of the product's names, each once, in the order <see cref="CatalogRows.NarrowAsync"/> gives them.</summary>
+    private async Task<List<StoreProduct>> NarrowAnyAsync(Store store, IReadOnlyList<ProductFacts> names, CancellationToken ct)
+    {
+        var rows = new Dictionary<Guid, StoreProduct>();
+        foreach (var name in names)
+        {
+            foreach (var row in await CatalogRows.NarrowAsync(db, store, name, ct))
+            {
+                rows.TryAdd(row.Id, row);
+            }
+        }
+
+        return rows.Values.OrderBy(r => r.Name, StringComparer.Ordinal).ThenBy(r => r.Id).ToList();
     }
 
     /// <summary>

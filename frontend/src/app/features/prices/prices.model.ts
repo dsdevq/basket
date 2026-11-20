@@ -71,10 +71,18 @@ export interface Candidate {
   readonly score: number;
 }
 
+/** Another name for a product, as the household says it ("Яйця" for Free Range Eggs). */
+export interface Alias {
+  readonly id: string;
+  readonly text: string;
+}
+
 export interface Product {
   readonly id: string;
   readonly name: string;
   readonly stores: readonly ProductStore[];
+  /** The other names the household gave it, oldest first. */
+  readonly aliases?: readonly Alias[];
 }
 
 export type RunOutcome = 'ok' | 'partial' | 'blocked' | 'failed';

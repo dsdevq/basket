@@ -40,7 +40,8 @@ export function flagText(flag: PlanFlag, staleAfterDays: number): FlagText {
     case 'unmatched':
       return {
         tag: 'Not matched',
-        detail: 'Typed in by hand, so there is no product to look up. Pick it on the Shelf.',
+        detail:
+          'Typed in by hand, so there is no product to look up. Link it to a product from the list.',
       };
     case 'no_price':
       return {tag: 'No price', detail: 'No shop has a usable price for it yet.'};
