@@ -345,6 +345,7 @@ public sealed partial class LidlReceiptImport(
             item.BoughtStore ??= Store.Lidl;
         }
 
+        db.ChangeTracker.DetectChanges();
         db.Trips.RemoveRange(trips.Skip(1));
         return (target, ticked);
     }
