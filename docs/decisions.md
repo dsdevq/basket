@@ -1676,14 +1676,15 @@ actually walks is in the trips he ticks off, so a store's walk is learned from t
 - **The rule for enough trips.** A trip counts for a store only if it shows a walk: at least **4** lines bought at that store, in at
   least **3** named sections, ticked over at least **3 minutes** from first to last (a list ticked off in one go on the sofa has no
   order in it). A store's order is learned once it has at least **3** such trips, from its latest **10** (a shop moves its shelves,
-  so old walks fade). Below 3, that store keeps the seeded order; each store decides on its own. Only trips closed on the list count; a
-  Lidl Plus receipt has no tick times, and the open trip is not closed yet. The numbers are constants in `LearnedSectionOrder`.
+  so old walks fade). Below 3, that store keeps the seeded order; each store decides on its own. Only ticks count: a receipt's own lines
+  have no tick times, so a Lidl Plus receipt trip counts only through a tick-off trip folded into it (issue #184, last section), and
+  the open trip is not closed yet. The numbers are constants in `LearnedSectionOrder`.
 - **How the order is made.** In one trip a section sits where its middle tick falls (one stray tick does not move it). Across trips
   every pair of sections is a vote (this one came before that one) and a section ranks by the pairs it wins minus the pairs it loses
   (Copeland's rule), because a trip rarely visits every section; ties fall back on the seeded order. One odd trip among several does
   not flip the order. A section seen in fewer than **2** of the counted trips is not placed by the learning; it keeps its seeded place
   after the learned sections, and "Other" is last.
-- **Derived on every read, no migration.** Nothing is stored: `WalkOrderLoader` reads the latest 60 closed list trips and their ticks,
+- **Derived on every read, no migration.** Nothing is stored: `WalkOrderLoader` reads the latest 60 closed trips that have a tick at a named shop, and their ticks,
   `LearnedSectionOrder` decides, and a trip closed today counts at once. The ticks, the shop and the product are already on `trip_item`
   (open trip, #36 and #157), so the order is a view of data kept anyway. The cost is a few small queries per plan read; if it ever
   shows, caching or a stored summary is the follow-up, and that would be a migration for the owner's go.
@@ -2411,7 +2412,8 @@ suggested, unless the user changes the store. This introduces the trip record th
   and the item's "more" sheet gets a "Bought at" section, the current shop marked "Bought here"; tapping another saves and closes.
 - **`bought_store` is not `store`.** `trip_item.store` stays "the shop the line was picked from", which reload restores onto the new
   line; `bought_store` is where it was bought. A line picked from All and bought at Lidl reloads picked from All, not pinned to Lidl.
-  Receipt trips and trips closed before this change have no `bought_store`; they are not backfilled.
+  Receipt trips and trips closed before this change have no `bought_store`; they are not backfilled (a tick-off trip folded into a
+  receipt gets Lidl, see issue #184, last section).
 - **Done shopping closes the open trip.** `POST /api/list/close` sets the trip's `closed_at`, deletes the ticked lines from the list
   and answers with the trip, in one transaction, the same refusals as before (409 `nothing_ticked`, 409 `list_changed`). It first
   makes the trip say exactly what is ticked: a record whose line is gone is dropped and a ticked line with no record is added bought at
@@ -2459,3 +2461,17 @@ Centra is an Irish convenience chain with no online shop and no catalogue, so th
 - **The page turns over by design, so the 90 percent delisting guard does not apply.** About half the page is new every other Wednesday; the guard would read that as a half-failed sweep and never delist. A read that listed at least one offer delists those no longer on the page; the catalog is the live offers, not a range.
 - **Fetched from `centra.ie`, not `www.centra.ie`.** The www address answers a 301 to the apex host, which the polite fetcher refuses to follow. Pasted `www` links are normalised to the apex address.
 - **Out of scope, not built.** An everyday-price sweep (Centra publishes none), loyalty-app prices, and a change to the matching rule. Follow-up: each category's "See all" page (`?category_id=`) lists several hundred more offers than the front page's forty; reading those is a separate decision (more requests to a small site) and is not done here.
+
+## A Lidl Plus receipt takes over the tick-off trip of its day (2026-11-20, issue #184)
+
+Ticking a line off records no shop when the plan names none, and a receipt for the same shop was then stored as a second trip.
+
+- **Fold.** When a receipt is filed, the closed tick-off trip(s) of its Dublin day that were to Lidl or to no recorded shop (several
+  are merged into the earliest) become the receipt's trip: it takes the receipt's source, id, total and time, keeps its ticked lines,
+  and the receipt's other lines are added. A receipt line already ticked (same product, else same name) is not added again. A trip
+  whose lines are all for another shop is a different visit and is left alone. The fold is saved, or dropped, with the receipt.
+- **The shop.** A ticked line with no recorded shop becomes Lidl; one the person set to another shop stays.
+- **Walk order.** `WalkOrderLoader` no longer skips receipt trips: a receipt's own lines have no `bought_store`, so only the folded
+  ticks teach the order, per #43's rules. Its 60-trip window counts only trips with a tick at a named shop, so tickless receipt trips
+  do not push a rarely-used shop's tick-off trips out of it.
+- **No migration.** Nothing new is stored; a tick-off trip before the receipt is pulled is left as it was.
