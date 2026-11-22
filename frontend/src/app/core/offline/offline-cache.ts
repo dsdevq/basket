@@ -5,6 +5,7 @@
  */
 const SESSION_KEY = 'basket.offline.session';
 const LIST_KEY = 'basket.offline.list';
+const QUEUE_KEY = 'basket.offline.queue';
 
 export interface CachedList<T> {
   readonly userId: string;
@@ -29,6 +30,12 @@ function write(key: string, value: unknown): void {
   }
 }
 
+/** Edits made with no signal and not yet sent, in order, for the person who made them. */
+export interface CachedQueue<T> {
+  readonly userId: string;
+  readonly edits: readonly T[];
+}
+
 export const offlineCache = {
   readSession: <T>(): T | null => read<T>(SESSION_KEY),
   writeSession: (user: unknown): void => write(SESSION_KEY, user),
@@ -38,10 +45,28 @@ export const offlineCache = {
   },
   writeList: <T>(userId: string, items: readonly T[]): void =>
     write(LIST_KEY, {userId, savedAt: new Date().toISOString(), items}),
+  readQueue: <T>(userId: string): readonly T[] => {
+    const cached = read<CachedQueue<T>>(QUEUE_KEY);
+    return cached?.userId === userId && Array.isArray(cached.edits)
+      ? (cached.edits as readonly T[])
+      : [];
+  },
+  writeQueue: <T>(userId: string, edits: readonly T[]): void => {
+    if (edits.length) {
+      write(QUEUE_KEY, {userId, edits});
+      return;
+    }
+    try {
+      localStorage.removeItem(QUEUE_KEY);
+    } catch {
+      // Nothing to clear.
+    }
+  },
   forget: (): void => {
     try {
       localStorage.removeItem(SESSION_KEY);
       localStorage.removeItem(LIST_KEY);
+      localStorage.removeItem(QUEUE_KEY);
     } catch {
       // Nothing to clear.
     }

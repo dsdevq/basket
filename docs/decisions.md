@@ -457,7 +457,26 @@ This amends "Why a stale shell cannot show someone else's data" above for the on
 - **Forgotten on sign-out and when the server says nobody is signed in** (`SessionStore.setUser(null)`, `signOut`, a
   session answer with no user), so a shared phone shows nothing of a previous person. A session that ended while offline is
   found by the first 401 once online, as before.
-- **Read only.** Edits made offline fail with the existing "could not ..." messages and roll back; queueing them is step 2.
+- **Edits are step 2, below.** Anything that is not one of the queued edits still fails with the existing "could not ..."
+  message and rolls back when there is no signal.
+
+## Edits made with no signal are queued and replayed (2026-11-22, #193 step 2, #209)
+
+- **What is queued:** adding a free-text line, ticking and unticking, changing where a ticked line was bought, and deleting.
+  They show at once, are kept in `localStorage` (`basket.offline.queue`, for the signed-in user id, no migration) and are
+  sent oldest first. **Not queued:** Done shopping (the server files whatever it has ticked, so it first sends the waiting
+  edits and refuses while any remain) and adding or moving a Shelf product (needs the price data, which needs a signal).
+- **Queued only with no answer at all** (HTTP status 0). An HTTP error is still shown and rolled back as before. While any
+  edit is waiting, every new one waits behind it, so order is kept.
+- **Replay** runs when the list loads (the 15-second refresh, pull to refresh, opening the page) and on the browser's
+  `online` event. It stops at the first edit that still gets no answer, a 429 or a 5xx and keeps everything for the next
+  try. An edit the server refuses (4xx) is dropped with a toast and the list is re-read; a 404 (the line is gone) is dropped
+  silently. While edits wait, the server's list does not replace the one on screen.
+- **A line added offline** has a local id until the server answers; edits made to it meanwhile are re-pointed at the real
+  id. Adding and then deleting it before any signal cancels both without a request. A retried add whose answer was lost
+  can create the line twice; accepted for a two-person list.
+- **Seen on the list:** a warning line "N changes waiting to send" while any are queued. Sign-out forgets the queue with the
+  rest of the remembered data, so unsent edits do not survive a sign-out.
 
 ## Fleet identity on the machine endpoints (2026-11-08, #62)
 

@@ -8,12 +8,15 @@ import {offlineCache} from '../../core/offline/offline-cache';
 import type {StoreId} from '../prices/prices.model';
 import {ListApi} from './list.api';
 import type {ListItem} from './list.model';
+import {newLocalId, type QueuedEdit, retarget, targetOf} from './list.queue';
 
 interface ListState {
   readonly items: readonly ListItem[];
   readonly status: 'loading' | 'ready' | 'error';
   readonly adding: boolean;
   readonly closing: boolean;
+  /** Edits made with no signal and not yet sent, oldest first. */
+  readonly queued: readonly QueuedEdit[];
 }
 
 const MESSAGES = {
@@ -28,17 +31,33 @@ const MESSAGES = {
       hour: '2-digit',
       minute: '2-digit',
     })}. Changes need a connection.`,
+  rejected: 'A change made without signal was not accepted. The list is as the server has it.',
+  waiting: 'Changes made without signal are still waiting to send. Try again once they have gone.',
   close: 'Could not finish the trip. The list is as it was. Try again.',
   closeChanged: 'The list just changed. Check it and tap Done shopping again.',
 } as const;
 
-/** The shared list. Changes show at once and are rolled back if the server refuses them. */
+interface Submitted {
+  /** True when there was no signal (or edits were already waiting): the edit is kept and sent later. */
+  readonly queued: boolean;
+  /** The server's answer, when the edit was sent at once. */
+  readonly item?: ListItem;
+}
+
+/**
+ * The shared list. Changes show at once and are rolled back if the server refuses them. With no signal an edit is
+ * kept on this phone instead and sent, in order, when the connection is back.
+ */
 export const ListStore = signalStore(
   {providedIn: 'root'},
-  withState<ListState>({items: [], status: 'loading', adding: false, closing: false}),
+  withState<ListState>({items: [], status: 'loading', adding: false, closing: false, queued: []}),
   withComputed(({items}) => ({
     toBuy: computed(() => items().filter(item => !item.checked)),
     done: computed(() => items().filter(item => item.checked)),
+  })),
+  withComputed(({queued}) => ({
+    /** How many edits are kept on this phone, waiting for a signal. */
+    waiting: computed(() => queued().length),
   })),
   withMethods(
     (
@@ -64,8 +83,141 @@ export const ListStore = signalStore(
       const replace = (next: ListItem): void =>
         setItems(store.items().map(item => (item.id === next.id ? next : item)));
 
-      /** Fetches the list. `quiet` keeps what is on screen if the call fails (the background refresh). */
+      const setQueued = (queued: readonly QueuedEdit[]): void => {
+        patchState(store, {queued});
+        const me = session.user();
+        if (me) {
+          offlineCache.writeQueue(me.id, queued);
+        }
+      };
+      // The waiting edits are read back once per start, for the person signed in.
+      let hydrated = false;
+      const hydrate = (): void => {
+        const me = session.user();
+        if (!hydrated && me) {
+          hydrated = true;
+          patchState(store, {queued: offlineCache.readQueue<QueuedEdit>(me.id)});
+        }
+      };
+      // The edit being sent right now; it cannot be cancelled while the server is deciding.
+      let inFlight: QueuedEdit | null = null;
+
+      const run = (edit: QueuedEdit): Promise<ListItem | undefined> => {
+        switch (edit.kind) {
+          case 'add':
+            return api.add(edit.text);
+          case 'check':
+            return api.setChecked(edit.id, edit.checked);
+          case 'boughtAt':
+            return api.setBoughtAt(edit.id, edit.store);
+          case 'remove':
+            return api.remove(edit.id).then(() => undefined);
+        }
+      };
+
+      /** The queue without this edit; a refused add also takes the edits that depended on the line it would have made. */
+      const withoutEdit = (edit: QueuedEdit, refused: boolean): readonly QueuedEdit[] =>
+        store
+          .queued()
+          .filter(
+            other =>
+              other !== edit &&
+              !(refused && edit.kind === 'add' && targetOf(other) === edit.localId)
+          );
+
+      /** Takes a sent edit off the queue and shows what the server answered. */
+      const applySent = (edit: QueuedEdit, answer: ListItem | undefined): void => {
+        setQueued(
+          withoutEdit(edit, false).map(other =>
+            edit.kind === 'add' && answer ? retarget(other, edit.localId, answer.id) : other
+          )
+        );
+        if (edit.kind === 'add' && answer) {
+          setItems(
+            store
+              .items()
+              .filter(line => line.id !== answer.id)
+              .map(line => (line.id === edit.localId ? answer : line))
+          );
+        } else if (answer && !store.queued().some(other => targetOf(other) === answer.id)) {
+          // Skipped while a later edit to the same line is still waiting, so the line does not flicker back.
+          replace(answer);
+        }
+      };
+
+      // One replay at a time; a second caller waits for the one already running.
+      let draining: Promise<void> | null = null;
+      const drain = async (): Promise<void> => {
+        let rejected = false;
+        for (let edit = store.queued()[0]; edit; edit = store.queued()[0]) {
+          inFlight = edit;
+          try {
+            applySent(edit, await run(edit));
+          } catch (error) {
+            const status = statusOf(error);
+            if (
+              status === 0 ||
+              status === HttpStatus.tooManyRequests ||
+              status >= HttpStatus.serverError
+            ) {
+              // Still no signal, or the server is busy: keep everything, in order, for the next try.
+              break;
+            }
+            // A line that is already gone is as good as done; anything else the server refused is dropped.
+            rejected ||= status !== HttpStatus.notFound;
+            if (edit.kind === 'add') {
+              setItems(store.items().filter(line => line.id !== edit.localId));
+            }
+            setQueued(withoutEdit(edit, true));
+          } finally {
+            inFlight = null;
+          }
+        }
+        if (rejected) {
+          toast.error(MESSAGES.rejected);
+        }
+      };
+      /** Sends what was made with no signal, oldest first; stops at the first edit that still cannot go. */
+      const flush = (): Promise<void> => {
+        hydrate();
+        draining ??= drain().finally(() => (draining = null));
+        return draining;
+      };
+
+      /** Shows the list as this phone last saw it, when it has not loaded yet this session. */
+      const showRemembered = (quiet: boolean): boolean => {
+        const me = session.user();
+        const cached =
+          me && store.status() !== 'ready' ? offlineCache.readList<ListItem>(me.id) : null;
+        if (!cached) {
+          return false;
+        }
+        patchState(store, {items: cached.items, status: 'ready'});
+        if (!quiet) {
+          toast.info(MESSAGES.offline(cached.savedAt));
+        }
+        return true;
+      };
+      const fail = (quiet: boolean): void => {
+        if (!quiet) {
+          patchState(store, {status: store.items().length ? 'ready' : 'error'});
+          toast.error(MESSAGES.load);
+        }
+      };
+
+      /**
+       * Fetches the list, after sending any edits made with no signal. `quiet` keeps what is on screen if the
+       * call fails (the background refresh).
+       */
       const load = async (quiet = false): Promise<void> => {
+        await flush();
+        if (store.queued().length) {
+          // The server's list does not have these edits yet, so it must not replace what this phone shows.
+          if (!showRemembered(quiet)) {
+            fail(quiet);
+          }
+          return;
+        }
         const seen = changes;
         try {
           const items = await api.items();
@@ -73,22 +225,30 @@ export const ListStore = signalStore(
           remember();
         } catch (error) {
           // No answer at all and the list never loaded this session: show it as this phone last saw it.
-          const me = session.user();
-          const cached =
-            statusOf(error) === 0 && me && store.status() !== 'ready'
-              ? offlineCache.readList<ListItem>(me.id)
-              : null;
-          if (cached) {
-            patchState(store, {items: cached.items, status: 'ready'});
-            if (!quiet) {
-              toast.info(MESSAGES.offline(cached.savedAt));
-            }
+          if (statusOf(error) === 0 && showRemembered(quiet)) {
             return;
           }
-          if (!quiet) {
-            patchState(store, {status: store.items().length ? 'ready' : 'error'});
-            toast.error(MESSAGES.load);
+          fail(quiet);
+        }
+      };
+
+      /** Sends the edit now, or keeps it for later when there is no signal or earlier edits are still waiting. */
+      const submit = async (edit: QueuedEdit): Promise<Submitted> => {
+        hydrate();
+        if (store.queued().length) {
+          // Edits made earlier must reach the server first, so this one waits behind them.
+          setQueued([...store.queued(), edit]);
+          void load(true);
+          return {queued: true};
+        }
+        try {
+          return {queued: false, item: await run(edit)};
+        } catch (error) {
+          if (statusOf(error) !== 0) {
+            throw error;
           }
+          setQueued([edit]);
+          return {queued: true};
         }
       };
 
@@ -98,8 +258,30 @@ export const ListStore = signalStore(
         async add(text: string): Promise<boolean> {
           patchState(store, {adding: true});
           try {
-            const created = await api.add(text);
-            setItems([...store.items().filter(item => item.id !== created.id), created]);
+            const localId = newLocalId();
+            const {queued, item: created} = await submit({kind: 'add', localId, text});
+            if (created) {
+              setItems([...store.items().filter(item => item.id !== created.id), created]);
+            } else if (queued) {
+              // Shown at once with a local id; the server's line replaces it when the edit is sent.
+              const me = session.user();
+              setItems([
+                ...store.items(),
+                {
+                  id: localId,
+                  text,
+                  checked: false,
+                  addedAt: new Date().toISOString(),
+                  addedBy: {id: me?.id ?? '', name: me?.displayName ?? ''},
+                  checkedAt: null,
+                  checkedBy: null,
+                  productId: null,
+                  store: null,
+                  imageUrl: null,
+                  boughtStore: null,
+                },
+              ]);
+            }
             return true;
           } catch {
             toast.error(MESSAGES.add);
@@ -153,7 +335,10 @@ export const ListStore = signalStore(
           };
           replace(optimistic);
           try {
-            replace(await api.setChecked(item.id, checked));
+            const {item: answer} = await submit({kind: 'check', id: item.id, checked});
+            if (answer) {
+              replace(answer);
+            }
           } catch {
             replace(item);
             toast.error(MESSAGES.update);
@@ -164,7 +349,10 @@ export const ListStore = signalStore(
         async setBoughtStore(item: ListItem, shop: StoreId): Promise<boolean> {
           replace({...item, boughtStore: shop});
           try {
-            replace(await api.setBoughtAt(item.id, shop));
+            const {item: answer} = await submit({kind: 'boughtAt', id: item.id, store: shop});
+            if (answer) {
+              replace(answer);
+            }
             return true;
           } catch {
             replace(item);
@@ -183,6 +371,12 @@ export const ListStore = signalStore(
           }
           patchState(store, {closing: true});
           try {
+            // The trip is whatever the server has ticked, so edits made with no signal must have gone first.
+            await flush();
+            if (store.queued().length) {
+              toast.error(MESSAGES.waiting);
+              return false;
+            }
             await api.close();
             setItems(store.items().filter(item => !item.checked));
             toast.success('Trip saved to History');
@@ -204,8 +398,17 @@ export const ListStore = signalStore(
         async remove(item: ListItem): Promise<void> {
           const before = store.items();
           setItems(before.filter(candidate => candidate.id !== item.id));
+          hydrate();
+          const waitingAdd = store
+            .queued()
+            .find(edit => edit.kind === 'add' && edit.localId === item.id);
+          if (waitingAdd && waitingAdd !== inFlight) {
+            // Added and deleted with no signal in between: the server never needs to hear of either.
+            setQueued(store.queued().filter(edit => targetOf(edit) !== item.id));
+            return;
+          }
           try {
-            await api.remove(item.id);
+            await submit({kind: 'remove', id: item.id});
           } catch (error) {
             if (statusOf(error) !== HttpStatus.notFound) {
               setItems(before);
