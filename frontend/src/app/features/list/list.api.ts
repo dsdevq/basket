@@ -35,7 +35,9 @@ export class ListApi {
 
   /** Changes the shop a ticked item was bought at, when it was not the one recorded at the tick. */
   public setBoughtAt(id: string, store: StoreId): Promise<ListItem> {
-    return firstValueFrom(this.http.patch<ListItem>(`/api/list/items/${id}/bought-at`, {store}, DIRECT));
+    return firstValueFrom(
+      this.http.patch<ListItem>(`/api/list/items/${id}/bought-at`, {store}, DIRECT)
+    );
   }
 
   /** Files the ticked items as a trip in the history and takes them off the list. */
