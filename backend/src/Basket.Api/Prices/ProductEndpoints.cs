@@ -3,6 +3,7 @@ using Basket.Api.Auth;
 using Basket.Api.Data;
 using Basket.Api.Matching;
 using Basket.Api.Prices.Catalog;
+using Basket.Api.Prices.Promotions;
 using Microsoft.EntityFrameworkCore;
 
 namespace Basket.Api.Prices;
@@ -77,6 +78,7 @@ public static class ProductEndpoints
         products.MapDelete("/{id:guid}", DeleteProduct);
         products.MapPut("/{id:guid}/stores/{store}", LinkStore).RequireAuthorization(Policies.CatalogAdd);
         products.MapDelete("/{id:guid}/stores/{store}", UnlinkStore);
+        products.MapGet("/{id:guid}/stores/{store}/history", GetHistory);
     }
 
     private static async Task<IResult> GetProducts(AppDbContext db, TimeProvider clock, CancellationToken ct)
@@ -139,6 +141,28 @@ public static class ProductEndpoints
         }).ToList();
 
         return Results.Ok(new { products = response, stores });
+    }
+
+    /// <summary>The last 90 days of one shop's readings for a product (see <see cref="PriceHistory"/>); an empty list when the page has none yet.</summary>
+    private static async Task<IResult> GetHistory(Guid id, string store, AppDbContext db, TimeProvider clock, CancellationToken ct)
+    {
+        if (!Stores.TryParse(store, out var shop))
+        {
+            return Results.NotFound();
+        }
+
+        var listing = await db.StoreListings.AsNoTracking().FirstOrDefaultAsync(l => l.ProductId == id && l.Store == shop, ct);
+        if (listing is null)
+        {
+            return Results.NotFound();
+        }
+
+        var today = Today(clock);
+        var start = PriceHistory.WindowStart(today);
+        var observations = await db.PriceObservations.AsNoTracking()
+            .Where(o => o.ListingId == listing.Id && o.ObservedOn >= start && o.ObservedOn <= today)
+            .ToListAsync(ct);
+        return Results.Ok(PriceHistory.Build(id, shop, observations, today));
     }
 
     private static async Task<IResult> AddProduct(

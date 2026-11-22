@@ -22,6 +22,12 @@ public static class PromotionEndpoints
                 .ToListAsync(ct))
             .ToDictionary(o => o.ListingId);
 
-        return Results.Ok(PromotionBuilder.Build(products, listings, latest, today));
+        var start = PriceHistory.WindowStart(today);
+        var history = (await db.PriceObservations.AsNoTracking()
+                .Where(o => o.ObservedOn >= start && o.ObservedOn <= today)
+                .ToListAsync(ct))
+            .ToLookup(o => o.ListingId);
+
+        return Results.Ok(PromotionBuilder.Build(products, listings, latest, today, history));
     }
 }

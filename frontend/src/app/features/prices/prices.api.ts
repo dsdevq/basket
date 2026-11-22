@@ -2,6 +2,7 @@ import {HttpClient} from '@angular/common/http';
 import {inject, Injectable} from '@angular/core';
 import {firstValueFrom} from 'rxjs';
 
+import type {PriceHistory} from './price-history.model';
 import type {Alias, Candidate, Listing, PricesResponse, Product, StoreId} from './prices.model';
 
 @Injectable({providedIn: 'root'})
@@ -10,6 +11,13 @@ export class PricesApi {
 
   public all(): Promise<PricesResponse> {
     return firstValueFrom(this.http.get<PricesResponse>('/api/products'));
+  }
+
+  /** The last 90 days of readings of the product's page in one shop. */
+  public history(id: string, store: StoreId): Promise<PriceHistory> {
+    return firstValueFrom(
+      this.http.get<PriceHistory>(`/api/products/${id}/stores/${store}/history`)
+    );
   }
 
   public add(name: string): Promise<Product> {

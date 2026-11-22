@@ -6,6 +6,7 @@ export const HttpStatus = {
   conflict: 409,
   unprocessable: 422,
   tooManyRequests: 429,
+  serverError: 500,
   badGateway: 502,
 } as const;
 

@@ -33,7 +33,7 @@ const RESPONSE: PromotionsResponse = {
           savingPercent: 20,
           rank: 1,
         }),
-        offer({store: 'lidl', storeName: 'Lidl', unitPrice: 5, rank: 2}),
+        offer({store: 'lidl', storeName: 'Lidl', unitPrice: 5, rank: 2, lowestIn90Days: true}),
         offer({
           store: 'aldi',
           storeName: 'Aldi',
@@ -93,6 +93,13 @@ describe('PromotionsPage', () => {
     expect(text).toContain('Clubcard price · needs Clubcard · saves 20%');
     expect(text).toContain('2 for €4');
     expect(text).toContain('25% off');
+  });
+
+  it('marks the offer that is the lowest in 90 days, and only that one', async () => {
+    const {host} = await render(RESPONSE);
+
+    const text = host.textContent ?? '';
+    expect(text.split('Lowest in 90 days').length - 1).toBe(1);
   });
 
   it('shows an old reading with its date and the reason, not as a ranked price', async () => {

@@ -10,6 +10,7 @@ import {
 } from '@angular/core';
 import {takeUntilDestroyed} from '@angular/core/rxjs-interop';
 import {
+  CmnDrawerService,
   EmptyStateComponent,
   ListItemRowComponent,
   ListSectionComponent,
@@ -21,6 +22,11 @@ import {
 } from '@lifekit-hq/ui';
 import {fromEvent} from 'rxjs';
 
+import {
+  PriceHistorySheetComponent,
+  type PriceHistorySheetData,
+} from '../prices/price-history.sheet';
+import {LOWEST_TAG} from '../prices/price-history-format';
 import type {PromoOffer, PromoUnit} from './promotions.model';
 import {PromotionsStore} from './promotions.store';
 import {byStore, gapText, headline, offerLines, placeText, UNIT_WORDS} from './promotions-format';
@@ -94,8 +100,13 @@ const VIEWS: readonly SegmentedOption[] = [
                     [label]="offer.storeName"
                     [sublabel]="lines(offer)"
                     [dimmed]="offer.rank === null"
+                    [action]="true"
+                    (activated)="showHistory(product.id, product.name, offer)"
                     class="[&_.truncate]:overflow-visible [&_.truncate]:whitespace-pre-line [&_.truncate]:break-words"
                   >
+                    @if (offer.lowestIn90Days) {
+                      <cmn-tag variant="success" meta>{{ lowestTag }}</cmn-tag>
+                    }
                     @if (place(offer, product); as text) {
                       <cmn-tag [variant]="offer.rank === 1 ? 'success' : 'neutral'" meta>{{
                         text
@@ -123,8 +134,13 @@ const VIEWS: readonly SegmentedOption[] = [
                     [label]="entry.product.name"
                     [sublabel]="lines(entry.offer)"
                     [dimmed]="entry.offer.rank === null"
+                    [action]="true"
+                    (activated)="showHistory(entry.product.id, entry.product.name, entry.offer)"
                     class="[&_.truncate]:overflow-visible [&_.truncate]:whitespace-pre-line [&_.truncate]:break-words"
                   >
+                    @if (entry.offer.lowestIn90Days) {
+                      <cmn-tag variant="success" meta>{{ lowestTag }}</cmn-tag>
+                    }
                     @if (place(entry.offer, entry.product); as text) {
                       <cmn-tag [variant]="entry.offer.rank === 1 ? 'success' : 'neutral'" meta>{{
                         text
@@ -146,6 +162,7 @@ const VIEWS: readonly SegmentedOption[] = [
 export class PromotionsPage implements OnInit {
   private readonly document = inject(DOCUMENT);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly drawer = inject(CmnDrawerService);
 
   protected readonly store = inject(PromotionsStore);
 
@@ -155,6 +172,7 @@ export class PromotionsPage implements OnInit {
   protected readonly headline = headline;
   protected readonly gapText = gapText;
   protected readonly place = placeText;
+  protected readonly lowestTag = LOWEST_TAG;
 
   public ngOnInit(): void {
     void this.store.load();
@@ -170,6 +188,15 @@ export class PromotionsPage implements OnInit {
   /** One line per fact group; the row keeps the line breaks. */
   protected lines(offer: PromoOffer): string {
     return offerLines(offer).join('\n');
+  }
+
+  /** Tapping an offer opens its shop's last 90 days of prices for that product. */
+  protected showHistory(productId: string, productName: string, offer: PromoOffer): void {
+    this.drawer.open<boolean, PriceHistorySheetData>(PriceHistorySheetComponent, {
+      title: `${productName} at ${offer.storeName}`,
+      data: {productId, productName, store: offer.store, storeName: offer.storeName},
+      mode: 'sheet',
+    });
   }
 
   protected unitWord(unit: PromoUnit): string {

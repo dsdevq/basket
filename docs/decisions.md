@@ -424,8 +424,9 @@ not a new one.
   touched by the worker: it goes straight to the network.
 - **Why a stale shell cannot show someone else's data.** The cached files are the build output, identical for every visitor and
   holding no list, price, name or session. Everything personal arrives through `/api` with the `__Host-basket` cookie, is never
-  stored by the worker, and is asked for again on every load. Offline, the shell opens and the session call fails, so the app
-  shows "Cannot reach basket" rather than a remembered session or list. Signing out or in as someone else needs no cache
+  stored by the worker, and is asked for again on every load. Offline, the shell opens and the session call fails; the app
+  then shows "Cannot reach basket", or the remembered list for the person on their own phone ("Cached read of the list when
+  offline" below). Signing out or in as someone else needs no cache
   clearing for the same reason. `ngsw-config.spec.ts` runs Angular's real config generator over the file and pins "no data
   groups, nothing under `/api` cached, `/api` is not a navigation fallback"; `offline-shell.spec.ts` runs the built app with the
   worker, goes offline, reloads, and lists Cache Storage for any `/api` entry.
@@ -440,6 +441,44 @@ not a new one.
   It was added to the notice slot on 2026-11-12 with the shared shell chrome (`ShellChromeService`).
   The e2e config keeps `serviceWorkers: 'block'` for every other spec (the worker fetches around `page.route`); only
   `offline-shell.spec.ts` allows it, against its own server that answers `/api`.
+
+## Cached read of the list when offline (2026-11-22, #193)
+
+Step 1 of "the list works offline in the shop"; the write queue that replays edits on reconnect is step 2, filed separately.
+This amends "Why a stale shell cannot show someone else's data" above for the one person on their own phone.
+
+- **The worker still caches nothing under `/api`.** The remembered data is in `localStorage` (`core/offline/offline-cache.ts`),
+  not Cache Storage: the last `/api/session` user and the last loaded list, saved on every successful load and every local edit of it.
+- **Only with no answer at all.** When `/api/session` fails with no HTTP status (no signal), `SessionStore` opens as the
+  remembered person instead of sending them to "Cannot reach basket"; an HTTP error status (a 503) still does. When the list
+  call then fails the same way and the list has not loaded yet this session, `ListStore` shows the remembered list with a
+  note of when it was saved; a list the person already emptied or edited this session is never replaced by it.
+  The list is only used if it was saved for that same user id.
+- **Forgotten on sign-out and when the server says nobody is signed in** (`SessionStore.setUser(null)`, `signOut`, a
+  session answer with no user), so a shared phone shows nothing of a previous person. A session that ended while offline is
+  found by the first 401 once online, as before.
+- **Edits are step 2, below.** Anything that is not one of the queued edits still fails with the existing "could not ..."
+  message and rolls back when there is no signal.
+
+## Edits made with no signal are queued and replayed (2026-11-22, #193 step 2, #209)
+
+- **What is queued:** adding a free-text line, ticking and unticking, changing where a ticked line was bought, and deleting.
+  They show at once, are kept in `localStorage` (`basket.offline.queue`, for the signed-in user id, no migration) and are
+  sent oldest first. **Not queued:** Done shopping (the server files whatever it has ticked, so it first sends the waiting
+  edits and refuses while any remain, or when the server refused one of them, re-reading the list so it can be checked
+  again) and adding or moving a Shelf product (needs the price data, which needs a signal).
+- **Queued only with no answer at all** (HTTP status 0). An HTTP error is still shown and rolled back as before. While any
+  edit is waiting, every new one waits behind it, so order is kept. Edits are sent with `ngsw-bypass`: with no signal the
+  service worker would answer them with a synthesized 504, hiding the status 0 that tells the store to queue.
+- **Replay** runs when the list loads (the 15-second refresh, pull to refresh, opening the page) and on the browser's
+  `online` event. It stops at the first edit that still gets no answer, a 401, a 429 or a 5xx and keeps everything for the
+  next try. An edit the server refuses (4xx) is dropped with a toast and the list is re-read; a 404 (the line is gone) is dropped
+  silently. While edits wait, the server's list does not replace the one on screen.
+- **A line added offline** has a local id until the server answers; edits made to it meanwhile are re-pointed at the real
+  id. A retried add whose answer was lost can create the line twice; accepted for a two-person list.
+- **Seen on the list:** a warning line "N changes waiting to send" while any are queued. Sign-out forgets the queue with the
+  rest of the remembered data, so unsent edits do not survive a sign-out. That includes a session the server ended (a 401
+  during replay signs the person out first): the waiting edits are discarded and one toast says so.
 
 ## Fleet identity on the machine endpoints (2026-11-08, #62)
 
@@ -2502,10 +2541,22 @@ encouraged over typing, and aliases should affect search and product matching.
   adds nothing to it, and an English name is one more name of the product: a catalog row passes when any of the product's names
   matches it, and the best score is kept (`CandidateMatcher.EvaluateAny`; the narrowing reads rows for each name). Adding or renaming
   to a name with English words re-runs the server's candidate search for that product. This limit is stated, not hidden.
-- **Add with nothing picked (open sub-choice, default taken).** Add keeps the typed text and marks the line "Not linked" with a Link
-  button, because new or non-food items must still go on the list in a second. Asking on every unlinked add, and pick-only, were the
-  alternatives; neither was built. "Link to a product" is also in the line's More sheet. The Plan's "Not matched" line now says to
+- **Add with nothing picked (open sub-choice, default taken).** Add keeps the typed text and marks the line "Not linked"
+  because new or non-food items must still go on the list in a second. Asking on every unlinked add, and pick-only, were the
+  alternatives; neither was built. "Link to a product" is in the line's More sheet (there is no inline Link button: it failed the screen check beside the swipe Delete tray). The Plan's "Not matched" line now says to
   link it from the list.
 - **Each product lists its other names** in its More sheet on the Prices tab: add, tap to rename, delete.
 - **Not in this slice.** Suggestions while typing in the composer (slice 2), proposals from receipts (slice 3), re-linking a line
   when a trip is reloaded, and the receipt import and the catalog search using names.
+
+## Price history and "lowest in 90 days" (2026-11-22, issue #194)
+
+Prices were stored and shown nowhere; the history exposes a "discount" that is only the price returning to what it was (Trolley.co.uk, heisse-preise).
+
+- **Which history.** The shelf's own: `price_observation`, one row per page per Dublin day, which every shelf screen already reads and which the catalog sweeps feed through `PriceRecorder` (#132). The catalog's write-on-change `store_product_price` is unchanged and not read here: a shelf product's page is what the offers and the Plan are built from, so the history and the offer cannot disagree. No migration, nothing new stored.
+- **A price is what a pack costs when the offer is met.** Each reading goes through `OfferCalculator` (a "2 for €4" is €2, a card price is the card price), the figure the ranking already uses. A reading with no price says nothing and is not drawn.
+- **The window is 90 Dublin days**, today and the 89 before (`PriceHistory.WindowDays`). Readings are daily at most and a gap stays a gap: nothing is filled in.
+- **The mark.** An offer carries `lowestIn90Days` when it is a promo (never a plain shelf price), its pack price is no higher than any price of the window, and the window holds a higher one. A price that never moved is not "the lowest", it is the price; a tie with the earlier low counts. Judged on the same pack price the ranking uses, so a multi-buy is compared with earlier multi-buys and shelf prices alike.
+- **The view.** `GET /api/products/{id}/stores/{store}/history`, people only like the rest of the group (404 for an unknown shop or a shop with no page; an empty `points` list for a page not read yet). It returns the window's points oldest first, the lowest and highest with their day, the current price and the same flag (true only when the latest reading is a promo, as on the offer row). On Promotions, tapping an offer opens a bottom sheet (a step line of the 90 days, one sentence, the days the price moved); the offer row carries a "Lowest in 90 days" tag.
+- **Honest about thin data.** With one reading, or an unchanged price, the sheet says so and the mark is not given. The mark is only as good as the days basket has read: history begins when a page was first linked or swept.
+- **Out of scope, not built.** A history entry from the Shelf or the Plan, receipts' paid prices on the line, a longer window, alerts when something hits its low.

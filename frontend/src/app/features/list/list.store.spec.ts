@@ -1,3 +1,4 @@
+import {signal} from '@angular/core';
 import {TestBed} from '@angular/core/testing';
 import {ToastService} from '@lifekit-hq/ui';
 
@@ -25,15 +26,22 @@ function item(id: string, over: Partial<ListItem> = {}): ListItem {
   };
 }
 
-function setup(api: Partial<ListApi>) {
-  const toast = {error: vi.fn(), success: vi.fn()};
+function setup(
+  api: Partial<ListApi>,
+  user: () => {id: string; displayName: string; role: string} | null = () => ({
+    id: 'u1',
+    displayName: 'Denys',
+    role: 'owner',
+  })
+) {
+  const toast = {error: vi.fn(), success: vi.fn(), info: vi.fn()};
   TestBed.configureTestingModule({
     providers: [
       {provide: ListApi, useValue: api},
       {provide: ToastService, useValue: toast},
       {
         provide: SessionStore,
-        useValue: {user: () => ({id: 'u1', displayName: 'Denys', role: 'owner'})},
+        useValue: {user},
       },
     ],
   });
@@ -41,6 +49,32 @@ function setup(api: Partial<ListApi>) {
 }
 
 describe('ListStore', () => {
+  beforeEach(() => localStorage.clear());
+
+  it('shows the list as last seen when there is no signal, and says so', async () => {
+    const first = setup({items: vi.fn().mockResolvedValue([item('a')])});
+    await first.store.load();
+    TestBed.resetTestingModule();
+
+    const {store, toast} = setup({items: vi.fn().mockRejectedValue({status: 0})});
+    await store.load();
+
+    expect(store.status()).toBe('ready');
+    expect(store.toBuy().map(i => i.id)).toEqual(['a']);
+    expect(toast.info).toHaveBeenCalledOnce();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it("does not show another person's remembered list, nor one after a server error", async () => {
+    localStorage.setItem(
+      'basket.offline.list',
+      JSON.stringify({userId: 'someone-else', savedAt: '2026-11-20T10:00:00Z', items: [item('x')]})
+    );
+    const {store} = setup({items: vi.fn().mockRejectedValue({status: 0})});
+    await store.load();
+    expect(store.status()).toBe('error');
+  });
+
   it('loads the list and splits it into to-buy and ticked', async () => {
     const {store} = setup({
       items: vi.fn().mockResolvedValue([item('a'), item('b', {checked: true})]),
@@ -87,7 +121,7 @@ describe('ListStore', () => {
   });
 
   it('reports a failed add and leaves the list alone', async () => {
-    const {store, toast} = setup({add: vi.fn().mockRejectedValue(new Error('x'))});
+    const {store, toast} = setup({add: vi.fn().mockRejectedValue({status: 500})});
 
     expect(await store.add('milk')).toBe(false);
 
@@ -165,7 +199,7 @@ describe('ListStore', () => {
     const ticked = item('a', {checked: true, boughtStore: 'lidl'});
     const {store, toast} = setup({
       items: vi.fn().mockResolvedValue([ticked]),
-      setBoughtAt: vi.fn().mockRejectedValue(new Error('nope')),
+      setBoughtAt: vi.fn().mockRejectedValue({status: 422}),
     });
     await store.load();
 
@@ -199,7 +233,7 @@ describe('ListStore', () => {
     const original = item('a');
     const {store, toast} = setup({
       items: vi.fn().mockResolvedValue([original]),
-      setChecked: vi.fn().mockRejectedValue(new Error('x')),
+      setChecked: vi.fn().mockRejectedValue({status: 500}),
     });
     await store.load();
 
@@ -299,6 +333,27 @@ describe('ListStore', () => {
       expect(store.closing()).toBe(false);
     });
 
+    it('does not bring the bought items back when the refresh after it has no signal', async () => {
+      const items = vi
+        .fn()
+        .mockResolvedValueOnce([item('b', {checked: true})])
+        .mockRejectedValue({status: 0});
+      const {store, toast} = setup({items, close: vi.fn().mockResolvedValue({})});
+      await store.load();
+
+      await store.closeTrip();
+      await Promise.resolve();
+      await store.load(true);
+
+      expect(store.items()).toEqual([]);
+      expect(toast.info).not.toHaveBeenCalled();
+
+      TestBed.resetTestingModule();
+      const next = setup({items: vi.fn().mockRejectedValue({status: 0})});
+      await next.store.load();
+      expect(next.store.items()).toEqual([]);
+    });
+
     it('leaves the list as it was when the server refuses', async () => {
       const items = vi.fn().mockResolvedValue([item('b', {checked: true})]);
       const close = vi.fn().mockRejectedValue({status: 500});
@@ -324,10 +379,9 @@ describe('ListStore', () => {
       await store.load();
 
       await store.closeTrip();
-      await Promise.resolve();
 
       expect(toast.error).toHaveBeenCalledTimes(1);
-      expect(store.items().map(i => i.checked)).toEqual([false]);
+      await vi.waitFor(() => expect(store.items().map(i => i.checked)).toEqual([false]));
     });
 
     it('ignores a second tap while the first is in flight', async () => {
@@ -472,6 +526,246 @@ describe('ListStore', () => {
 
       expect(api.addProduct).toHaveBeenCalledWith('milk', 'aldi');
       expect(api.remove).not.toHaveBeenCalled();
+    });
+  });
+  describe('with no signal', () => {
+    const offline = {status: 0};
+
+    it('queues an edit made with no connection, and sends the same edit at once with one', async () => {
+      const online = setup({
+        items: vi.fn().mockResolvedValue([item('a')]),
+        setChecked: vi.fn().mockResolvedValue(item('a', {checked: true})),
+      });
+      await online.store.load();
+      await online.store.toggle(item('a'), true);
+      expect(online.store.waiting()).toBe(0);
+      expect(online.store.items()[0]?.checked).toBe(true);
+      TestBed.resetTestingModule();
+      localStorage.clear();
+
+      const setChecked = vi.fn().mockRejectedValue(offline);
+      const {store, toast} = setup({items: vi.fn().mockResolvedValue([item('a')]), setChecked});
+      await store.load();
+      await store.toggle(item('a'), true);
+
+      expect(store.waiting()).toBe(1);
+      expect(store.items()[0]?.checked).toBe(true);
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    it('keeps queued edits across a restart and applies them, in order, when the connection returns', async () => {
+      const calls: string[] = [];
+      const first = setup({
+        items: vi.fn().mockResolvedValue([item('a'), item('b')]),
+        setChecked: vi.fn().mockRejectedValue(offline),
+        remove: vi.fn().mockRejectedValue(offline),
+      });
+      await first.store.load();
+      await first.store.toggle(item('a'), true);
+      await first.store.remove(item('b'));
+      expect(first.store.waiting()).toBe(2);
+      TestBed.resetTestingModule();
+
+      const {store} = setup({
+        items: vi.fn().mockResolvedValue([item('a', {checked: true})]),
+        setChecked: vi.fn().mockImplementation(() => {
+          calls.push('check');
+          return Promise.resolve(item('a', {checked: true}));
+        }),
+        remove: vi.fn().mockImplementation(() => {
+          calls.push('remove');
+          return Promise.resolve();
+        }),
+      });
+      await store.load();
+
+      expect(calls).toEqual(['check', 'remove']);
+      expect(store.waiting()).toBe(0);
+      expect(localStorage.getItem('basket.offline.queue')).toBeNull();
+    });
+
+    it('keeps the queue, and does not replace the list with the server one, while it still cannot send', async () => {
+      const {store} = setup({
+        items: vi.fn().mockResolvedValue([item('a')]),
+        setChecked: vi.fn().mockRejectedValue(offline),
+      });
+      await store.load();
+      await store.toggle(item('a'), true);
+
+      await store.load(true);
+
+      expect(store.waiting()).toBe(1);
+      expect(store.items()[0]?.checked).toBe(true);
+    });
+
+    it('shows an added line at once and swaps in the server line, re-pointing later edits at it', async () => {
+      const added = item('real', {text: 'milk'});
+      const first = setup({
+        items: vi.fn().mockResolvedValue([]),
+        add: vi.fn().mockRejectedValue(offline),
+        setChecked: vi.fn().mockRejectedValue(offline),
+      });
+      await first.store.load();
+
+      expect(await first.store.add('milk')).toBe(true);
+      const local = first.store.items()[0];
+      expect(local?.text).toBe('milk');
+      await first.store.toggle(local, true);
+      expect(first.store.waiting()).toBe(2);
+
+      TestBed.resetTestingModule();
+      const add = vi.fn().mockResolvedValue(added);
+      const setChecked = vi.fn().mockResolvedValue({...added, checked: true});
+      const {store} = setup({
+        items: vi.fn().mockResolvedValue([{...added, checked: true}]),
+        add,
+        setChecked,
+      });
+      await store.load();
+
+      expect(setChecked).toHaveBeenLastCalledWith('real', true);
+      expect(store.waiting()).toBe(0);
+      expect(store.items().map(i => i.id)).toEqual(['real']);
+    });
+
+    it('replays a line added and then deleted with no signal, in order, deleting the real line', async () => {
+      const added = item('real', {text: 'milk'});
+      const first = setup({
+        items: vi.fn().mockResolvedValue([]),
+        add: vi.fn().mockRejectedValue(offline),
+        remove: vi.fn().mockRejectedValue(offline),
+      });
+      await first.store.load();
+      await first.store.add('milk');
+      await first.store.remove(first.store.items()[0]);
+      expect(first.store.items()).toEqual([]);
+      expect(first.store.waiting()).toBe(2);
+      TestBed.resetTestingModule();
+
+      const calls: string[] = [];
+      const {store} = setup({
+        items: vi.fn().mockResolvedValue([]),
+        add: vi.fn().mockImplementation(() => {
+          calls.push('add');
+          return Promise.resolve(added);
+        }),
+        remove: vi.fn().mockImplementation((id: string) => {
+          calls.push(`remove ${id}`);
+          return Promise.resolve();
+        }),
+      });
+      await store.load();
+
+      expect(calls).toEqual(['add', 'remove real']);
+      expect(store.waiting()).toBe(0);
+    });
+
+    it('drops an edit the server refuses on replay and says so', async () => {
+      const setChecked = vi.fn().mockRejectedValueOnce(offline).mockRejectedValue({status: 422});
+      const {store, toast} = setup({items: vi.fn().mockResolvedValue([item('a')]), setChecked});
+      await store.load();
+      await store.toggle(item('a'), true);
+
+      await store.load(true);
+
+      expect(store.waiting()).toBe(0);
+      expect(toast.error).toHaveBeenCalledTimes(1);
+      expect(store.items()[0]?.checked).toBe(false);
+    });
+
+    it('keeps every edit made while an earlier one was still being sent, in order', async () => {
+      const setChecked = vi.fn().mockRejectedValue(offline);
+      const {store} = setup({
+        items: vi.fn().mockResolvedValue([item('a'), item('b')]),
+        setChecked,
+      });
+      await store.load();
+
+      await Promise.all([store.toggle(item('a'), true), store.toggle(item('b'), true)]);
+
+      expect(store.waiting()).toBe(2);
+      expect(JSON.parse(localStorage.getItem('basket.offline.queue') ?? '{}').edits).toEqual([
+        {kind: 'check', id: 'a', checked: true},
+        {kind: 'check', id: 'b', checked: true},
+      ]);
+    });
+
+    it("does not hand one person's waiting edits to the next person", async () => {
+      const current = signal<{id: string; displayName: string; role: string} | null>({
+        id: 'u1',
+        displayName: 'Denys',
+        role: 'owner',
+      });
+      const setChecked = vi.fn().mockRejectedValue(offline);
+      const {store, toast} = setup(
+        {items: vi.fn().mockResolvedValue([item('a')]), setChecked},
+        () => current()
+      );
+      await store.load();
+      await store.toggle(item('a'), true);
+      expect(store.waiting()).toBe(1);
+
+      current.set(null);
+      TestBed.tick();
+      expect(store.waiting()).toBe(0);
+      expect(toast.info).toHaveBeenCalledTimes(1);
+
+      setChecked.mockResolvedValue(item('a', {checked: true}));
+      current.set({id: 'u2', displayName: 'Mia', role: 'member'});
+      TestBed.tick();
+      await store.load(true);
+
+      expect(store.waiting()).toBe(0);
+      expect(setChecked).toHaveBeenCalledTimes(1);
+    });
+
+    it('stops the replay on a 401 and leaves the queue as it is (the session end clears it)', async () => {
+      const setChecked = vi.fn().mockRejectedValueOnce(offline).mockRejectedValue({status: 401});
+      const {store, toast} = setup({items: vi.fn().mockResolvedValue([item('a')]), setChecked});
+      await store.load();
+      await store.toggle(item('a'), true);
+
+      await store.load(true);
+
+      expect(store.waiting()).toBe(1);
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    it('will not file the trip, and re-reads the list, when a replayed edit is refused', async () => {
+      const close = vi.fn().mockResolvedValue({});
+      const items = vi
+        .fn()
+        .mockResolvedValueOnce([item('a')])
+        .mockResolvedValue([item('a', {checked: false})]);
+      const {store} = setup({
+        items,
+        setChecked: vi.fn().mockRejectedValueOnce(offline).mockRejectedValue({status: 422}),
+        close,
+      });
+      await store.load();
+      await store.toggle(item('a'), true);
+
+      expect(await store.closeTrip()).toBe(false);
+      await vi.waitFor(() => expect(items).toHaveBeenCalledTimes(2));
+
+      expect(close).not.toHaveBeenCalled();
+      expect(store.items()[0]?.checked).toBe(false);
+    });
+
+    it('will not file the trip while edits are still waiting', async () => {
+      const close = vi.fn().mockResolvedValue({});
+      const {store, toast} = setup({
+        items: vi.fn().mockResolvedValue([item('a')]),
+        setChecked: vi.fn().mockRejectedValue(offline),
+        close,
+      });
+      await store.load();
+      await store.toggle(item('a'), true);
+
+      expect(await store.closeTrip()).toBe(false);
+
+      expect(close).not.toHaveBeenCalled();
+      expect(toast.error).toHaveBeenCalledTimes(1);
     });
   });
 });

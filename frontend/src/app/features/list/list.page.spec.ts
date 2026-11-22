@@ -87,7 +87,7 @@ async function render(items: ListItem[], habits: Habit[] = []): Promise<Harness>
       {provide: HabitsApi, useValue: habitsApi},
       {provide: CmnDrawerService, useValue: drawer},
       {provide: CmnDialogService, useValue: dialog},
-      {provide: ToastService, useValue: {error: vi.fn(), success: vi.fn()}},
+      {provide: ToastService, useValue: {error: vi.fn(), info: vi.fn(), success: vi.fn()}},
       {
         provide: SessionStore,
         useValue: {user: signal({id: 'u1', displayName: 'Denys', role: 'owner'})},
@@ -246,6 +246,18 @@ describe('ListPage', () => {
     expect(api.add).toHaveBeenCalledWith('Eggs');
     expect(input.value).toBe('');
     expect(host.textContent).toContain('Eggs');
+  });
+
+  it('says plainly how many changes made with no signal are still waiting', async () => {
+    const {fixture, api, host} = await render([item('1', 'Milk')]);
+    expect(host.textContent).not.toContain('waiting to send');
+    api.setChecked.mockRejectedValue({status: 0});
+
+    (host.querySelector('[role="checkbox"]') as HTMLButtonElement).click();
+    await settle(fixture);
+    fixture.detectChanges();
+
+    expect(host.textContent).toContain('1 change waiting to send');
   });
 
   it('does not call the server for blank text', async () => {

@@ -36,6 +36,8 @@ export interface PromoOffer {
   /** Place among the comparable shops, 1 is cheapest per unit; null when left out of the ranking. */
   readonly rank: number | null;
   readonly flags: readonly PromoFlag[];
+  /** True when this promo is the cheapest this shop's page has been in 90 days, and was dearer before. */
+  readonly lowestIn90Days: boolean;
 }
 
 /** A linked shop with nothing usable today. */
