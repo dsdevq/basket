@@ -148,8 +148,8 @@ export const ListStore = signalStore(
       };
 
       // One replay at a time; a second caller waits for the one already running.
-      let draining: Promise<void> | null = null;
-      const drain = async (): Promise<void> => {
+      let draining: Promise<boolean> | null = null;
+      const drain = async (): Promise<boolean> => {
         let rejected = false;
         for (let edit = store.queued()[0]; edit; edit = store.queued()[0]) {
           try {
@@ -176,9 +176,10 @@ export const ListStore = signalStore(
         if (rejected) {
           toast.error(MESSAGES.rejected);
         }
+        return rejected;
       };
-      /** Sends what was made with no signal, oldest first; stops at the first edit that still cannot go. */
-      const flush = (): Promise<void> => {
+      /** Sends what was made with no signal, oldest first; stops at the first edit that still cannot go. Says whether the server refused one. */
+      const flush = (): Promise<boolean> => {
         hydrate();
         draining ??= drain().finally(() => (draining = null));
         return draining;
@@ -379,9 +380,15 @@ export const ListStore = signalStore(
           patchState(store, {closing: true});
           try {
             // The trip is whatever the server has ticked, so edits made with no signal must have gone first.
-            await flush();
+            const refused = await flush();
             if (store.queued().length) {
               toast.error(MESSAGES.waiting);
+              return false;
+            }
+            if (refused) {
+              // The screen still shows the refused edit, so the trip must not be filed from it.
+              toast.error(MESSAGES.closeChanged);
+              void load(true);
               return false;
             }
             await api.close();

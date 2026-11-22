@@ -688,6 +688,27 @@ describe('ListStore', () => {
       expect(toast.error).not.toHaveBeenCalled();
     });
 
+    it('will not file the trip, and re-reads the list, when a replayed edit is refused', async () => {
+      const close = vi.fn().mockResolvedValue({});
+      const items = vi
+        .fn()
+        .mockResolvedValueOnce([item('a')])
+        .mockResolvedValue([item('a', {checked: false})]);
+      const {store} = setup({
+        items,
+        setChecked: vi.fn().mockRejectedValueOnce(offline).mockRejectedValue({status: 422}),
+        close,
+      });
+      await store.load();
+      await store.toggle(item('a'), true);
+
+      expect(await store.closeTrip()).toBe(false);
+      await vi.waitFor(() => expect(items).toHaveBeenCalledTimes(2));
+
+      expect(close).not.toHaveBeenCalled();
+      expect(store.items()[0]?.checked).toBe(false);
+    });
+
     it('will not file the trip while edits are still waiting', async () => {
       const close = vi.fn().mockResolvedValue({});
       const {store, toast} = setup({
