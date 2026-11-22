@@ -424,8 +424,9 @@ not a new one.
   touched by the worker: it goes straight to the network.
 - **Why a stale shell cannot show someone else's data.** The cached files are the build output, identical for every visitor and
   holding no list, price, name or session. Everything personal arrives through `/api` with the `__Host-basket` cookie, is never
-  stored by the worker, and is asked for again on every load. Offline, the shell opens and the session call fails, so the app
-  shows "Cannot reach basket" rather than a remembered session or list. Signing out or in as someone else needs no cache
+  stored by the worker, and is asked for again on every load. Offline, the shell opens and the session call fails; the app
+  then shows "Cannot reach basket", or the remembered list for the person on their own phone ("Cached read of the list when
+  offline" below). Signing out or in as someone else needs no cache
   clearing for the same reason. `ngsw-config.spec.ts` runs Angular's real config generator over the file and pins "no data
   groups, nothing under `/api` cached, `/api` is not a navigation fallback"; `offline-shell.spec.ts` runs the built app with the
   worker, goes offline, reloads, and lists Cache Storage for any `/api` entry.
@@ -447,10 +448,11 @@ Step 1 of "the list works offline in the shop"; the write queue that replays edi
 This amends "Why a stale shell cannot show someone else's data" above for the one person on their own phone.
 
 - **The worker still caches nothing under `/api`.** The remembered data is in `localStorage` (`core/offline/offline-cache.ts`),
-  not Cache Storage: the last `/api/session` user and the last loaded list, saved on every successful load.
+  not Cache Storage: the last `/api/session` user and the last loaded list, saved on every successful load and every local edit of it.
 - **Only with no answer at all.** When `/api/session` fails with no HTTP status (no signal), `SessionStore` opens as the
   remembered person instead of sending them to "Cannot reach basket"; an HTTP error status (a 503) still does. When the list
-  call then fails the same way and nothing is on screen, `ListStore` shows the remembered list with a note of when it was saved.
+  call then fails the same way and the list has not loaded yet this session, `ListStore` shows the remembered list with a
+  note of when it was saved; a list the person already emptied or edited this session is never replaced by it.
   The list is only used if it was saved for that same user id.
 - **Forgotten on sign-out and when the server says nobody is signed in** (`SessionStore.setUser(null)`, `signOut`, a
   session answer with no user), so a shared phone shows nothing of a previous person. A session that ended while offline is
