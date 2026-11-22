@@ -475,7 +475,8 @@ This amends "Why a stale shell cannot show someone else's data" above for the on
 - **A line added offline** has a local id until the server answers; edits made to it meanwhile are re-pointed at the real
   id. A retried add whose answer was lost can create the line twice; accepted for a two-person list.
 - **Seen on the list:** a warning line "N changes waiting to send" while any are queued. Sign-out forgets the queue with the
-  rest of the remembered data, so unsent edits do not survive a sign-out.
+  rest of the remembered data, so unsent edits do not survive a sign-out. That includes a session the server ended (a 401
+  during replay signs the person out first): the waiting edits are discarded and one toast says so.
 
 ## Fleet identity on the machine endpoints (2026-11-08, #62)
 

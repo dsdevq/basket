@@ -32,6 +32,7 @@ const MESSAGES = {
       minute: '2-digit',
     })}. Changes need a connection.`,
   rejected: 'A change made without signal was not accepted. The list is as the server has it.',
+  discarded: 'You were signed out, so the changes waiting to send were discarded.',
   waiting: 'Changes made without signal are still waiting to send. Try again once they have gone.',
   close: 'Could not finish the trip. The list is as it was. Try again.',
   closeChanged: 'The list just changed. Check it and tap Done shopping again.',
@@ -95,6 +96,9 @@ export const ListStore = signalStore(
       const hydrate = (): void => {
         const id = session.user()?.id ?? null;
         if (id !== hydratedFor) {
+          if (hydratedFor && store.queued().length) {
+            toast.info(MESSAGES.discarded);
+          }
           hydratedFor = id;
           patchState(store, {queued: id ? offlineCache.readQueue<QueuedEdit>(id) : []});
         }
@@ -162,7 +166,7 @@ export const ListStore = signalStore(
               status === HttpStatus.tooManyRequests ||
               status >= HttpStatus.serverError
             ) {
-              // Still no signal, signed out, or the server is busy: keep everything, in order, for the next try.
+              // Still no signal, session ended, or the server is busy: stop here and leave the queue as it is. (A session that ended is cleared with the sign-out, not kept.)
               break;
             }
             // A line that is already gone is as good as done; anything else the server refused is dropped.

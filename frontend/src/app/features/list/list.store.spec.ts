@@ -655,7 +655,7 @@ describe('ListStore', () => {
         role: 'owner',
       });
       const setChecked = vi.fn().mockRejectedValue(offline);
-      const {store} = setup(
+      const {store, toast} = setup(
         {items: vi.fn().mockResolvedValue([item('a')]), setChecked},
         () => current()
       );
@@ -666,6 +666,7 @@ describe('ListStore', () => {
       current.set(null);
       TestBed.tick();
       expect(store.waiting()).toBe(0);
+      expect(toast.info).toHaveBeenCalledTimes(1);
 
       setChecked.mockResolvedValue(item('a', {checked: true}));
       current.set({id: 'u2', displayName: 'Mia', role: 'member'});
@@ -676,7 +677,7 @@ describe('ListStore', () => {
       expect(setChecked).toHaveBeenCalledTimes(1);
     });
 
-    it('keeps the queue, not drops it, when the session has ended during a replay', async () => {
+    it('stops the replay on a 401 and leaves the queue as it is (the session end clears it)', async () => {
       const setChecked = vi.fn().mockRejectedValueOnce(offline).mockRejectedValue({status: 401});
       const {store, toast} = setup({items: vi.fn().mockResolvedValue([item('a')]), setChecked});
       await store.load();
