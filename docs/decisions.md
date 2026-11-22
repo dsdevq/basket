@@ -473,8 +473,7 @@ This amends "Why a stale shell cannot show someone else's data" above for the on
   try. An edit the server refuses (4xx) is dropped with a toast and the list is re-read; a 404 (the line is gone) is dropped
   silently. While edits wait, the server's list does not replace the one on screen.
 - **A line added offline** has a local id until the server answers; edits made to it meanwhile are re-pointed at the real
-  id. Adding and then deleting it before any signal cancels both without a request. A retried add whose answer was lost
-  can create the line twice; accepted for a two-person list.
+  id. A retried add whose answer was lost can create the line twice; accepted for a two-person list.
 - **Seen on the list:** a warning line "N changes waiting to send" while any are queued. Sign-out forgets the queue with the
   rest of the remembered data, so unsent edits do not survive a sign-out.
 

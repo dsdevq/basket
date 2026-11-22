@@ -586,21 +586,36 @@ describe('ListStore', () => {
       expect(store.items().map(i => i.id)).toEqual(['real']);
     });
 
-    it('drops a line added and deleted with no signal without telling the server', async () => {
-      const remove = vi.fn();
-      const {store} = setup({
+    it('replays a line added and then deleted with no signal, in order, deleting the real line', async () => {
+      const added = item('real', {text: 'milk'});
+      const first = setup({
         items: vi.fn().mockResolvedValue([]),
         add: vi.fn().mockRejectedValue(offline),
-        remove,
+        remove: vi.fn().mockRejectedValue(offline),
+      });
+      await first.store.load();
+      await first.store.add('milk');
+      await first.store.remove(first.store.items()[0]);
+      expect(first.store.items()).toEqual([]);
+      expect(first.store.waiting()).toBe(2);
+      TestBed.resetTestingModule();
+
+      const calls: string[] = [];
+      const {store} = setup({
+        items: vi.fn().mockResolvedValue([]),
+        add: vi.fn().mockImplementation(() => {
+          calls.push('add');
+          return Promise.resolve(added);
+        }),
+        remove: vi.fn().mockImplementation((id: string) => {
+          calls.push(`remove ${id}`);
+          return Promise.resolve();
+        }),
       });
       await store.load();
-      await store.add('milk');
 
-      await store.remove(store.items()[0]);
-
-      expect(store.items()).toEqual([]);
+      expect(calls).toEqual(['add', 'remove real']);
       expect(store.waiting()).toBe(0);
-      expect(remove).not.toHaveBeenCalled();
     });
 
     it('drops an edit the server refuses on replay and says so', async () => {

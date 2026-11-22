@@ -103,8 +103,6 @@ export const ListStore = signalStore(
         session.user();
         untracked(hydrate);
       });
-      // The edit being sent right now; it cannot be cancelled while the server is deciding.
-      let inFlight: QueuedEdit | null = null;
 
       const run = (edit: QueuedEdit): Promise<ListItem | undefined> => {
         switch (edit.kind) {
@@ -154,7 +152,6 @@ export const ListStore = signalStore(
       const drain = async (): Promise<void> => {
         let rejected = false;
         for (let edit = store.queued()[0]; edit; edit = store.queued()[0]) {
-          inFlight = edit;
           try {
             applySent(edit, await run(edit));
           } catch (error) {
@@ -174,8 +171,6 @@ export const ListStore = signalStore(
               setItems(store.items().filter(line => line.id !== edit.localId));
             }
             setQueued(withoutEdit(edit, true));
-          } finally {
-            inFlight = null;
           }
         }
         if (rejected) {
@@ -411,14 +406,6 @@ export const ListStore = signalStore(
           const before = store.items();
           setItems(before.filter(candidate => candidate.id !== item.id));
           hydrate();
-          const waitingAdd = store
-            .queued()
-            .find(edit => edit.kind === 'add' && edit.localId === item.id);
-          if (waitingAdd && waitingAdd !== inFlight) {
-            // Added and deleted with no signal in between: the server never needs to hear of either.
-            setQueued(store.queued().filter(edit => targetOf(edit) !== item.id));
-            return;
-          }
           try {
             await submit({kind: 'remove', id: item.id});
           } catch (error) {
