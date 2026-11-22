@@ -107,7 +107,7 @@ async function render(
       {provide: ListApi, useValue: listApi},
       {provide: PricesApi, useValue: pricesApi},
       {provide: HabitsApi, useValue: {all: vi.fn().mockResolvedValue(habits)}},
-      {provide: ToastService, useValue: {error: vi.fn(), success: vi.fn()}},
+      {provide: ToastService, useValue: {error: vi.fn(), info: vi.fn(), success: vi.fn()}},
       {
         provide: SessionStore,
         useValue: {user: () => ({id: 'u1', displayName: 'Anna', role: 'owner'})},
