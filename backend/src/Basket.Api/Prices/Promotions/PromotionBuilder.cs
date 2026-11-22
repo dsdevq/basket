@@ -28,7 +28,8 @@ public sealed record PromoOffer(
     DateOnly ObservedOn,
     DateOnly? ValidUntil,
     int? Rank,
-    IReadOnlyList<string> Flags);
+    IReadOnlyList<string> Flags,
+    bool LowestIn90Days = false);
 
 /// <summary>A shop that is linked but has nothing usable today. <see cref="Reason"/>: not_read, no_price, upcoming or ended.</summary>
 public sealed record PromoGap(string Store, string StoreName, string Reason, DateOnly? Date);
@@ -67,12 +68,13 @@ public static class PromotionBuilder
         IEnumerable<Product> products,
         ILookup<Guid, StoreListing> listings,
         IReadOnlyDictionary<Guid, PriceObservation> latest,
-        DateOnly today)
+        DateOnly today,
+        ILookup<Guid, PriceObservation>? history = null)
     {
         var result = new List<PromoProduct>();
         foreach (var product in products.OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase))
         {
-            var comparison = Compare(product, listings, latest, today);
+            var comparison = Compare(product, listings, latest, today, history);
             if (comparison.Offers.Any(o => o.IsPromo))
             {
                 result.Add(new PromoProduct(product.Id, product.Name, comparison.Unit, comparison.Ranked, comparison.Offers, comparison.Gaps));
@@ -85,13 +87,15 @@ public static class PromotionBuilder
     /// <summary>
     /// One product across its linked shops: every usable reading as a normalised, ranked offer, and every linked shop with
     /// nothing usable today as a gap. The Promotions view lists only the products that have a promo; the plan reads every
-    /// product on the list through the same rule, so the two never disagree about a price.
+    /// product on the list through the same rule, so the two never disagree about a price. <paramref name="history"/> (the
+    /// last 90 days of readings by listing) is what "lowest in 90 days" is judged on; without it no offer carries the mark.
     /// </summary>
     public static ProductComparison Compare(
         Product product,
         ILookup<Guid, StoreListing> listings,
         IReadOnlyDictionary<Guid, PriceObservation> latest,
-        DateOnly today)
+        DateOnly today,
+        ILookup<Guid, PriceObservation>? history = null)
     {
         var offers = new List<PromoOffer>();
         var gaps = new List<PromoGap>();
@@ -116,7 +120,7 @@ public static class PromotionBuilder
                 continue;
             }
 
-            var offer = Offer(store, product, listing, observation, today);
+            var offer = Offer(store, product, listing, observation, today, history);
             if (offer is null)
             {
                 gaps.Add(new PromoGap(Slug(store), store.DisplayName(), "no_price", null));
@@ -137,7 +141,7 @@ public static class PromotionBuilder
         _ => new PromoGap(Slug(store), store.DisplayName(), "no_price", null),
     };
 
-    private static PromoOffer? Offer(Store store, Product product, StoreListing listing, PriceObservation o, DateOnly today)
+    private static PromoOffer? Offer(Store store, Product product, StoreListing listing, PriceObservation o, DateOnly today, ILookup<Guid, PriceObservation>? history)
     {
         var reading = new Reading(o.Price, o.WasPrice, o.LoyaltyPrice, o.LoyaltyScheme, o.PromoText);
         if (OfferCalculator.Evaluate(reading) is not { } deal)
@@ -201,7 +205,8 @@ public static class PromotionBuilder
             o.ObservedOn,
             o.ValidUntil,
             null,
-            flags);
+            flags,
+            isPromo && history is not null && PriceHistory.IsLowest(deal.EachPrice, history[listing.Id], today));
     }
 
     /// <summary>
