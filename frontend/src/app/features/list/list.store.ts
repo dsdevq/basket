@@ -1,4 +1,4 @@
-import {computed, inject} from '@angular/core';
+import {computed, effect, inject, untracked} from '@angular/core';
 import {ToastService} from '@lifekit-hq/ui';
 import {patchState, signalStore, withComputed, withMethods, withState} from '@ngrx/signals';
 
@@ -90,15 +90,19 @@ export const ListStore = signalStore(
           offlineCache.writeQueue(me.id, queued);
         }
       };
-      // The waiting edits are read back once per start, for the person signed in.
-      let hydrated = false;
+      // The waiting edits belong to the person signed in: read back for each person, and gone when they sign out.
+      let hydratedFor: string | null = null;
       const hydrate = (): void => {
-        const me = session.user();
-        if (!hydrated && me) {
-          hydrated = true;
-          patchState(store, {queued: offlineCache.readQueue<QueuedEdit>(me.id)});
+        const id = session.user()?.id ?? null;
+        if (id !== hydratedFor) {
+          hydratedFor = id;
+          patchState(store, {queued: id ? offlineCache.readQueue<QueuedEdit>(id) : []});
         }
       };
+      effect(() => {
+        session.user();
+        untracked(hydrate);
+      });
       // The edit being sent right now; it cannot be cancelled while the server is deciding.
       let inFlight: QueuedEdit | null = null;
 
@@ -157,10 +161,11 @@ export const ListStore = signalStore(
             const status = statusOf(error);
             if (
               status === 0 ||
+              status === HttpStatus.unauthorized ||
               status === HttpStatus.tooManyRequests ||
               status >= HttpStatus.serverError
             ) {
-              // Still no signal, or the server is busy: keep everything, in order, for the next try.
+              // Still no signal, signed out, or the server is busy: keep everything, in order, for the next try.
               break;
             }
             // A line that is already gone is as good as done; anything else the server refused is dropped.
@@ -233,7 +238,7 @@ export const ListStore = signalStore(
       };
 
       /** Sends the edit now, or keeps it for later when there is no signal or earlier edits are still waiting. */
-      const submit = async (edit: QueuedEdit): Promise<Submitted> => {
+      const send = async (edit: QueuedEdit): Promise<Submitted> => {
         hydrate();
         if (store.queued().length) {
           // Edits made earlier must reach the server first, so this one waits behind them.
@@ -247,9 +252,16 @@ export const ListStore = signalStore(
           if (statusOf(error) !== 0) {
             throw error;
           }
-          setQueued([edit]);
+          setQueued([...store.queued(), edit]);
           return {queued: true};
         }
+      };
+      // Edits go out one at a time, in the order they were made, so one that fails with no signal queues the next.
+      let sending: Promise<unknown> = Promise.resolve();
+      const submit = (edit: QueuedEdit): Promise<Submitted> => {
+        const result = sending.then(() => send(edit));
+        sending = result.catch(() => undefined);
+        return result;
       };
 
       return {

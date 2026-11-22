@@ -1,3 +1,4 @@
+import {signal} from '@angular/core';
 import {TestBed} from '@angular/core/testing';
 import {ToastService} from '@lifekit-hq/ui';
 
@@ -25,7 +26,14 @@ function item(id: string, over: Partial<ListItem> = {}): ListItem {
   };
 }
 
-function setup(api: Partial<ListApi>) {
+function setup(
+  api: Partial<ListApi>,
+  user: () => {id: string; displayName: string; role: string} | null = () => ({
+    id: 'u1',
+    displayName: 'Denys',
+    role: 'owner',
+  })
+) {
   const toast = {error: vi.fn(), success: vi.fn(), info: vi.fn()};
   TestBed.configureTestingModule({
     providers: [
@@ -33,7 +41,7 @@ function setup(api: Partial<ListApi>) {
       {provide: ToastService, useValue: toast},
       {
         provide: SessionStore,
-        useValue: {user: () => ({id: 'u1', displayName: 'Denys', role: 'owner'})},
+        useValue: {user},
       },
     ],
   });
@@ -606,6 +614,63 @@ describe('ListStore', () => {
       expect(store.waiting()).toBe(0);
       expect(toast.error).toHaveBeenCalledTimes(1);
       expect(store.items()[0]?.checked).toBe(false);
+    });
+
+    it('keeps every edit made while an earlier one was still being sent, in order', async () => {
+      const setChecked = vi.fn().mockRejectedValue(offline);
+      const {store} = setup({
+        items: vi.fn().mockResolvedValue([item('a'), item('b')]),
+        setChecked,
+      });
+      await store.load();
+
+      await Promise.all([store.toggle(item('a'), true), store.toggle(item('b'), true)]);
+
+      expect(store.waiting()).toBe(2);
+      expect(JSON.parse(localStorage.getItem('basket.offline.queue') ?? '{}').edits).toEqual([
+        {kind: 'check', id: 'a', checked: true},
+        {kind: 'check', id: 'b', checked: true},
+      ]);
+    });
+
+    it("does not hand one person's waiting edits to the next person", async () => {
+      const current = signal<{id: string; displayName: string; role: string} | null>({
+        id: 'u1',
+        displayName: 'Denys',
+        role: 'owner',
+      });
+      const setChecked = vi.fn().mockRejectedValue(offline);
+      const {store} = setup(
+        {items: vi.fn().mockResolvedValue([item('a')]), setChecked},
+        () => current()
+      );
+      await store.load();
+      await store.toggle(item('a'), true);
+      expect(store.waiting()).toBe(1);
+
+      current.set(null);
+      TestBed.tick();
+      expect(store.waiting()).toBe(0);
+
+      setChecked.mockResolvedValue(item('a', {checked: true}));
+      current.set({id: 'u2', displayName: 'Mia', role: 'member'});
+      TestBed.tick();
+      await store.load(true);
+
+      expect(store.waiting()).toBe(0);
+      expect(setChecked).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the queue, not drops it, when the session has ended during a replay', async () => {
+      const setChecked = vi.fn().mockRejectedValueOnce(offline).mockRejectedValue({status: 401});
+      const {store, toast} = setup({items: vi.fn().mockResolvedValue([item('a')]), setChecked});
+      await store.load();
+      await store.toggle(item('a'), true);
+
+      await store.load(true);
+
+      expect(store.waiting()).toBe(1);
+      expect(toast.error).not.toHaveBeenCalled();
     });
 
     it('will not file the trip while edits are still waiting', async () => {
