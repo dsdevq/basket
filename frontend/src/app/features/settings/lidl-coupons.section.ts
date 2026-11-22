@@ -102,9 +102,13 @@ export class LidlCouponsSectionComponent implements OnInit {
     try {
       const answer = await action();
       this.show(answer);
-      this.toast.success(
-        answer.activated > 0 ? `Switched on ${answer.activated}` : 'Nothing to switch on'
-      );
+      if (answer.activated > 0) {
+        this.toast.success(`Switched on ${answer.activated}`);
+      } else if (answer.refused > 0) {
+        this.toast.error('Lidl refused some coupons. They are still off.');
+      } else {
+        this.toast.success('Nothing to switch on');
+      }
     } catch (error) {
       this.toast.error(
         statusOf(error) === HttpStatus.badGateway

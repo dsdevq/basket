@@ -74,6 +74,8 @@ public sealed class LidlPlusCouponsClient(HttpClient http, IOptions<LidlPlusOpti
 
             var coupons = new List<LidlCouponInfo>();
             var seen = new HashSet<string>(StringComparer.Ordinal);
+            var readable = 0;
+            var unreadable = 0;
             foreach (var section in sections.EnumerateArray())
             {
                 if (section.ValueKind != JsonValueKind.Object
@@ -83,13 +85,21 @@ public sealed class LidlPlusCouponsClient(HttpClient http, IOptions<LidlPlusOpti
                     continue;
                 }
 
+                readable++;
                 foreach (var promotion in promotions.EnumerateArray())
                 {
-                    if (Read(promotion) is { } coupon && seen.Add(coupon.Id))
+                    if (Read(promotion, out var malformed) is { } coupon && seen.Add(coupon.Id))
                     {
                         coupons.Add(coupon);
                     }
+
+                    unreadable += malformed ? 1 : 0;
                 }
+            }
+
+            if (coupons.Count == 0 && (unreadable > 0 || (readable == 0 && sections.GetArrayLength() > 0)))
+            {
+                return LidlCouponList.Unavailable;
             }
 
             return new LidlCouponList(LidlCouponsOutcome.Ok, coupons);
@@ -111,9 +121,10 @@ public sealed class LidlPlusCouponsClient(HttpClient http, IOptions<LidlPlusOpti
         };
     }
 
-    /// <summary>One coupon, or null when it has no id or title, is a "pick one" coupon, or Lidl marks it as not offered ("apologize").</summary>
-    private static LidlCouponInfo? Read(JsonElement promotion)
+    /// <summary>One coupon, or null when it is malformed (no id or title, reported in <paramref name="malformed"/>), is a "pick one" coupon, or Lidl marks it as not offered ("apologize").</summary>
+    private static LidlCouponInfo? Read(JsonElement promotion, out bool malformed)
     {
+        malformed = true;
         if (promotion.ValueKind != JsonValueKind.Object)
         {
             return null;
@@ -122,7 +133,13 @@ public sealed class LidlPlusCouponsClient(HttpClient http, IOptions<LidlPlusOpti
         var id = Text(promotion, "id") ?? Text(promotion, "promotionId");
         var discount = promotion.TryGetProperty("discount", out var discountObject) ? discountObject : default;
         var title = Text(promotion, "title") ?? Text(promotion, "offerTitle") ?? Text(discount, "title");
-        if (id is null || title is null || id.Length > Data.LidlCoupon.MaxIdLength || IsSelection(promotion) || IsApology(promotion))
+        if (id is null || title is null || id.Length > Data.LidlCoupon.MaxIdLength)
+        {
+            return null;
+        }
+
+        malformed = false;
+        if (IsSelection(promotion) || IsApology(promotion))
         {
             return null;
         }

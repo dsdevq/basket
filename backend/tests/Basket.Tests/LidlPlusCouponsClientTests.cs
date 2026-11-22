@@ -112,6 +112,30 @@ public sealed class LidlPlusCouponsClientTests
         (await client.ListAsync(Access, CancellationToken.None)).Outcome.Should().Be(LidlCouponsOutcome.Unavailable);
     }
 
+    [Theory]
+    [InlineData("{\"sections\":[{\"promotions\":[{\"promoId\":\"C-1\",\"name\":\"Chicken\"}]}]}")]
+    [InlineData("{\"sections\":[{\"items\":[]}]}")]
+    public async Task A_200_whose_coupons_cannot_be_read_is_unavailable_so_the_last_list_is_kept(string body)
+    {
+        var (client, _) = Client(_ => Json(HttpStatusCode.OK, body));
+
+        (await client.ListAsync(Access, CancellationToken.None)).Outcome.Should().Be(LidlCouponsOutcome.Unavailable);
+    }
+
+    [Theory]
+    [InlineData("{\"sections\":[]}")]
+    [InlineData("{\"sections\":[{\"promotions\":[]}]}")]
+    [InlineData("{\"sections\":[{\"promotions\":[{\"id\":\"S-1\",\"title\":\"Pick one\",\"isSpecial\":true}]}]}")]
+    public async Task A_200_with_no_coupons_to_list_is_an_empty_list(string body)
+    {
+        var (client, _) = Client(_ => Json(HttpStatusCode.OK, body));
+
+        var list = await client.ListAsync(Access, CancellationToken.None);
+
+        list.Outcome.Should().Be(LidlCouponsOutcome.Ok);
+        list.Coupons.Should().BeEmpty();
+    }
+
     [Fact]
     public async Task Lidl_being_unreachable_is_unavailable()
     {
