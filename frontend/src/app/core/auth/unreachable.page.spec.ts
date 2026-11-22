@@ -30,6 +30,9 @@ function configureOrigin(content: string | null) {
 }
 
 describe('UnreachablePage', () => {
+  // A phone-remembered session (offline cache) would open the app instead of this page; start with none.
+  beforeEach(() => localStorage.clear());
+
   afterEach(() => {
     configureOrigin(null);
     TestBed.resetTestingModule();
