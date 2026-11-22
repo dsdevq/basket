@@ -359,12 +359,16 @@ export const ListStore = signalStore(
         },
 
         /**
-         * Links a typed line to a product, keeping the line's words as another name of it when `remember` is set. The server's
+         * Links a typed line to a product, keeping the line's words as another name of it when `rememberWords` is set. The server's
          * own words explain a refusal (the product is already on the list, the words belong to another product); false then.
          */
-        async linkProduct(item: ListItem, productId: string, remember: boolean): Promise<boolean> {
+        async linkProduct(
+          item: ListItem,
+          productId: string,
+          rememberWords: boolean
+        ): Promise<boolean> {
           try {
-            replace(await api.linkProduct(item.id, productId, remember));
+            replace(await api.linkProduct(item.id, productId, rememberWords));
             return true;
           } catch (error) {
             const message = (error as {error?: {message?: string}} | null)?.error?.message;
