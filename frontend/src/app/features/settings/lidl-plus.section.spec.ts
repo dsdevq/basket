@@ -3,6 +3,7 @@ import {TestBed} from '@angular/core/testing';
 import {CmnDialogService, CmnDrawerService, ToastService} from '@lifekit-hq/ui';
 import {of} from 'rxjs';
 
+import {LidlCouponsApi} from './lidl-coupons.api';
 import {LidlPlusApi} from './lidl-plus.api';
 import type {LidlPlusStatus} from './lidl-plus.model';
 import {LidlPlusSectionComponent} from './lidl-plus.section';
@@ -29,6 +30,7 @@ async function render(
   TestBed.configureTestingModule({
     providers: [
       {provide: LidlPlusApi, useValue: api},
+      {provide: LidlCouponsApi, useValue: {list: vi.fn().mockRejectedValue(new Error('none'))}},
       {provide: ToastService, useValue: toast},
       {provide: CmnDialogService, useValue: {confirm}},
       {provide: CmnDrawerService, useValue: {open}},

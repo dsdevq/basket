@@ -38,6 +38,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<LoyaltyCard> LoyaltyCards => Set<LoyaltyCard>();
 
     public DbSet<LidlPlusConnection> LidlPlusConnections => Set<LidlPlusConnection>();
+    public DbSet<LidlCoupon> LidlCoupons => Set<LidlCoupon>();
 
     public DbSet<UserPreference> UserPreferences => Set<UserPreference>();
 
@@ -253,6 +254,16 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             connection.Property(c => c.Id).ValueGeneratedNever();
             connection.Property(c => c.RefreshTokenProtected).HasMaxLength(LidlPlusConnection.MaxProtectedLength).IsRequired();
             connection.Property(c => c.Problem).HasMaxLength(32);
+        });
+
+        builder.Entity<LidlCoupon>(coupon =>
+        {
+            coupon.ToTable("lidl_coupon");
+            coupon.HasKey(c => c.Id);
+            coupon.Property(c => c.Id).HasMaxLength(LidlCoupon.MaxIdLength).ValueGeneratedNever();
+            coupon.Property(c => c.Title).HasMaxLength(LidlCoupon.MaxTitleLength).IsRequired();
+            coupon.Property(c => c.Discount).HasMaxLength(LidlCoupon.MaxTextLength);
+            coupon.Property(c => c.Description).HasMaxLength(LidlCoupon.MaxTextLength);
         });
 
         builder.Entity<UserPreference>(preferences =>

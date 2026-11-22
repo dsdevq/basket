@@ -5,6 +5,7 @@ import {CmnWhatsNewService} from '@lifekit-hq/ui';
 import {AuthApi} from '../../core/auth/auth.api';
 import {SessionStore} from '../../core/auth/session.store';
 import {ShellChromeService} from '../../core/shell/shell-chrome.service';
+import {LidlCouponsApi} from './lidl-coupons.api';
 import {LidlPlusApi} from './lidl-plus.api';
 import {PriceRelayApi} from './price-relay.api';
 import {SettingsPage} from './settings.page';
@@ -22,6 +23,7 @@ function render(role: 'owner' | 'member') {
       provideRouter([]),
       {provide: AuthApi, useValue: {passkeys: pending}},
       {provide: LidlPlusApi, useValue: {status: pending}},
+      {provide: LidlCouponsApi, useValue: {list: pending}},
       {provide: PriceRelayApi, useValue: {tokens: pending}},
       {provide: SessionStore, useValue: sessionStub(role)},
       {provide: ShellChromeService, useValue: {openWhatsNew: vi.fn(), handle: vi.fn()}},
