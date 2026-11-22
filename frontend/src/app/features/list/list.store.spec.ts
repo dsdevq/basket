@@ -283,6 +283,27 @@ describe('ListStore', () => {
       expect(store.closing()).toBe(false);
     });
 
+    it('does not bring the bought items back when the refresh after it has no signal', async () => {
+      const items = vi
+        .fn()
+        .mockResolvedValueOnce([item('b', {checked: true})])
+        .mockRejectedValue({status: 0});
+      const {store, toast} = setup({items, close: vi.fn().mockResolvedValue({})});
+      await store.load();
+
+      await store.closeTrip();
+      await Promise.resolve();
+      await store.load(true);
+
+      expect(store.items()).toEqual([]);
+      expect(toast.info).not.toHaveBeenCalled();
+
+      TestBed.resetTestingModule();
+      const next = setup({items: vi.fn().mockRejectedValue({status: 0})});
+      await next.store.load();
+      expect(next.store.items()).toEqual([]);
+    });
+
     it('leaves the list as it was when the server refuses', async () => {
       const items = vi.fn().mockResolvedValue([item('b', {checked: true})]);
       const close = vi.fn().mockRejectedValue({status: 500});

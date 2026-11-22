@@ -49,9 +49,17 @@ export const ListStore = signalStore(
     ) => {
       // Counts local writes to `items`; a refresh that started before a write is stale and must not overwrite it.
       let changes = 0;
+      // What this phone last knew of the list, kept for the next start with no signal; only once the list has loaded.
+      const remember = (): void => {
+        const me = session.user();
+        if (me && store.status() === 'ready') {
+          offlineCache.writeList(me.id, store.items());
+        }
+      };
       const setItems = (items: readonly ListItem[]): void => {
         changes++;
         patchState(store, {items});
+        remember();
       };
       const replace = (next: ListItem): void =>
         setItems(store.items().map(item => (item.id === next.id ? next : item)));
@@ -62,15 +70,12 @@ export const ListStore = signalStore(
         try {
           const items = await api.items();
           patchState(store, changes === seen ? {items, status: 'ready'} : {status: 'ready'});
-          const me = session.user();
-          if (me) {
-            offlineCache.writeList(me.id, store.items());
-          }
+          remember();
         } catch (error) {
-          // No answer at all and nothing on screen: show the list as this phone last saw it.
+          // No answer at all and the list never loaded this session: show it as this phone last saw it.
           const me = session.user();
           const cached =
-            statusOf(error) === 0 && me && !store.items().length
+            statusOf(error) === 0 && me && store.status() !== 'ready'
               ? offlineCache.readList<ListItem>(me.id)
               : null;
           if (cached) {
