@@ -64,9 +64,14 @@ public static partial class CouponPricing
         return (best, until);
     }
 
-    /// <summary>The price of one pack with the coupon's wording taken off the shelf price, to the cent; null when the wording is neither a percentage nor an amount.</summary>
+    /// <summary>The price of one pack with the coupon's wording taken off the shelf price, to the cent; null when the wording is neither a percentage nor an amount, or sets a spend or quantity condition.</summary>
     internal static decimal? Price(decimal shelf, string wording)
     {
+        if (Conditional().IsMatch(wording) || PromoText.ParseMultiBuy(wording) is not null)
+        {
+            return null;
+        }
+
         if (PromoText.ParsePercent(wording) is { } percent)
         {
             return Math.Round(shelf * (Percent - percent) / Percent, 2, MidpointRounding.AwayFromZero);
@@ -105,6 +110,9 @@ public static partial class CouponPricing
             .Select(m => m.Value)
             .Where(w => w.Length >= 3 && !Filler.Contains(w) && !w.Any(char.IsDigit))
             .ToHashSet(StringComparer.Ordinal);
+
+    [GeneratedRegex(@"\b(?:spend|when\s+you|buy|minimum|at\s+least)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex Conditional();
 
     [GeneratedRegex(@"[\p{L}\p{N}]+", RegexOptions.CultureInvariant)]
     private static partial Regex WordPattern();

@@ -118,6 +118,18 @@ describe('LidlCouponsSectionComponent', () => {
     expect(toast.success).toHaveBeenCalledWith('Switched on 2');
   });
 
+  it('says so when Lidl refused the coupons, never that there is nothing to switch on', async () => {
+    const {toast, press} = await render({
+      list: vi.fn().mockResolvedValue(answer([coupon('a')])),
+      activateAll: vi.fn().mockResolvedValue(answer([coupon('a')], {refused: 1})),
+    });
+
+    await press('Switch on all');
+
+    expect(toast.error).toHaveBeenCalledWith('Lidl refused some coupons. They are still off.');
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
   it('keeps the list and says so when Lidl does not answer an activation', async () => {
     const {host, toast, press} = await render({
       list: vi.fn().mockResolvedValue(answer([coupon('a')])),

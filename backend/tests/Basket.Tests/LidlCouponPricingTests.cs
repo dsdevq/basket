@@ -108,6 +108,18 @@ public sealed class LidlCouponPricingTests
         Lidl(Compare(shelf, Coupon("Test chicken breast fillets", wording))).Kind.Should().Be("regular");
     }
 
+    [Theory]
+    [InlineData("Spend €30 and save €5")]
+    [InlineData("Buy 2, get 20% off")]
+    [InlineData("€1 off when you buy 2")]
+    [InlineData("€1 off, minimum spend €10")]
+    public void A_coupon_with_a_spend_or_quantity_condition_is_not_applied_even_when_an_amount_can_be_read(string wording)
+    {
+        var shelf = Build("Test chicken breast fillets 500g", 4.00m, 3.50m);
+
+        Lidl(Compare(shelf, Coupon("Test chicken breast fillets", wording))).Kind.Should().Be("regular");
+    }
+
     [Fact]
     public void A_coupon_is_only_taken_when_it_beats_the_price_the_reading_already_gives()
     {
