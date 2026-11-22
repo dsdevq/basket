@@ -2,7 +2,6 @@ using Basket.Api.Data;
 using Basket.Api.Prices;
 using Hangfire;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
 
 namespace Basket.Api.LidlPlus;
 
@@ -34,7 +33,6 @@ public sealed class LidlCouponService(
     AppDbContext db,
     LidlPlusConnectionService connection,
     ILidlPlusCoupons coupons,
-    IOptions<LidlPlusOptions> options,
     TimeProvider clock)
 {
     // One household, one app instance: two reads or activations at once would race on the snapshot and on Lidl.
@@ -79,16 +77,10 @@ public sealed class LidlCouponService(
                 return new CouponActivationResult(CouponSyncOutcome.Done, 0, 0, Unknown: true);
             }
 
-            var settings = options.Value;
             var activated = 0;
             var refused = 0;
-            foreach (var coupon in targets.Take(settings.MaxCouponActivations))
+            foreach (var coupon in targets)
             {
-                if (activated + refused > 0 && settings.CouponPauseMilliseconds > 0)
-                {
-                    await Task.Delay(settings.CouponPauseMilliseconds, ct);
-                }
-
                 switch (await coupons.ActivateAsync(access!, coupon.Id, ct))
                 {
                     case LidlActivationOutcome.Activated:

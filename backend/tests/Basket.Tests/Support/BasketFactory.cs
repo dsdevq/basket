@@ -107,7 +107,6 @@ public class BasketFactory : WebApplicationFactory<Program>
         builder.UseSetting("Hangfire:Enabled", "false");
         builder.UseSetting("Observability:Metrics:Enabled", Metrics ? "true" : "false");
         builder.UseSetting("LidlPlus:ReceiptPauseMilliseconds", "0");
-        builder.UseSetting("LidlPlus:CouponPauseMilliseconds", "0");
         if (Bootstrap is not null)
         {
             builder.UseSetting("Auth:BootstrapToken", Bootstrap);

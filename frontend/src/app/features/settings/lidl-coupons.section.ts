@@ -38,7 +38,7 @@ import type {LidlCoupon, LidlCoupons} from './lidl-coupons.model';
                 <span class="text-cmn-base text-text-primary">{{ coupon.title }}</span>
                 <span class="text-cmn-sm text-text-secondary">{{ detail(coupon) }}</span>
               </div>
-              @if (!coupon.activated) {
+              @if (canSwitchOn(coupon)) {
                 <cmn-button
                   [loading]="busy() === coupon.id"
                   (clicked)="activate(coupon)"
@@ -66,10 +66,26 @@ export class LidlCouponsSectionComponent implements OnInit {
   protected readonly coupons = signal<readonly LidlCoupon[]>([]);
   protected readonly fresh = signal(true);
   protected readonly busy = signal<string | null>(null);
-  protected readonly pending = computed(() => this.coupons().filter(c => !c.activated).length);
+  protected readonly pending = computed(
+    () => this.coupons().filter(c => this.canSwitchOn(c)).length
+  );
 
   public ngOnInit(): void {
     void this.load();
+  }
+
+  /** Lidl only takes a coupon on while it is in date, so a coupon that has not started (or has ended) has nothing to switch on. */
+  protected canSwitchOn(coupon: LidlCoupon): boolean {
+    const today = this.today();
+    return (
+      !coupon.activated &&
+      (!coupon.validFrom || coupon.validFrom <= today) &&
+      (!coupon.validUntil || coupon.validUntil >= today)
+    );
+  }
+
+  private today(): string {
+    return new Date().toLocaleDateString('en-CA');
   }
 
   protected detail(coupon: LidlCoupon): string {

@@ -85,6 +85,24 @@ public sealed class LidlPlusCouponsClientTests
         list.Coupons[1].ValidFrom.Should().BeNull();
     }
 
+    // Ireland is UTC+1 from the last Sunday of March to the last of October: a UTC end of 23:59 is 00:59 the next Dublin day.
+    [Theory]
+    [InlineData("2026-07-12T23:59:00Z", 2026, 7, 12)]
+    [InlineData("2026-07-12T22:59:00Z", 2026, 7, 12)]
+    [InlineData("2026-07-13T00:00:00Z", 2026, 7, 12)]
+    [InlineData("2026-12-12T23:59:00Z", 2026, 12, 12)]
+    [InlineData("2026-12-13T00:00:00Z", 2026, 12, 12)]
+    [InlineData("2026-07-12T12:00:00Z", 2026, 7, 11)]
+    public async Task A_coupon_never_counts_on_a_day_that_runs_past_its_stated_end(string end, int year, int month, int day)
+    {
+        var body = $$"""{"sections":[{"promotions":[{"id":"C-1","title":"Test coupon","validity":{"end":"{{end}}"}}]}]}""";
+        var (client, _) = Client(_ => Json(HttpStatusCode.OK, body));
+
+        var list = await client.ListAsync(Access, CancellationToken.None);
+
+        list.Coupons.Single().ValidUntil.Should().Be(new DateOnly(year, month, day));
+    }
+
     [Theory]
     [InlineData(HttpStatusCode.NotFound)]
     [InlineData(HttpStatusCode.Unauthorized)]

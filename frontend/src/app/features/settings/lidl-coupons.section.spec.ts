@@ -51,6 +51,12 @@ async function render(api: Partial<Record<keyof LidlCouponsApi, ReturnType<typeo
 }
 
 describe('LidlCouponsSectionComponent', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({toFake: ['Date']});
+    vi.setSystemTime(new Date(2026, 10, 22, 12));
+  });
+  afterEach(() => vi.useRealTimers());
+
   it('lists each coupon with its wording, end day and whether it is on', async () => {
     const {host} = await render({
       list: vi
@@ -128,6 +134,23 @@ describe('LidlCouponsSectionComponent', () => {
 
     expect(toast.error).toHaveBeenCalledWith('Lidl refused some coupons. They are still off.');
     expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it('offers no switch on for a coupon that has not started, and leaves it out of the count', async () => {
+    const future = coupon('later', {validFrom: '2026-11-23'});
+    const only = await render({list: vi.fn().mockResolvedValue(answer([future]))});
+
+    expect(only.host.textContent).toContain('Coupon later');
+    expect(only.host.querySelectorAll('button')).toHaveLength(0);
+
+    TestBed.resetTestingModule();
+    const mixed = await render({
+      list: vi.fn().mockResolvedValue(answer([future, coupon('now', {validFrom: '2026-11-22'})])),
+    });
+    const labels = Array.from(mixed.host.querySelectorAll('button')).map(b =>
+      b.textContent?.trim()
+    );
+    expect(labels).toEqual(['Switch on', 'Switch on all']);
   });
 
   it('keeps the list and says so when Lidl does not answer an activation', async () => {

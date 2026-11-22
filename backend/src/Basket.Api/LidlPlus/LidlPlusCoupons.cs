@@ -152,8 +152,8 @@ public sealed class LidlPlusCouponsClient(HttpClient http, IOptions<LidlPlusOpti
             Clip(title, Data.LidlCoupon.MaxTitleLength)!,
             Clip(wording, Data.LidlCoupon.MaxTextLength),
             Clip(description, Data.LidlCoupon.MaxTextLength),
-            Day(Text(validity, "start") ?? Text(promotion, "startValidityDate")),
-            Day(Text(validity, "end") ?? Text(promotion, "endValidityDate")),
+            Moment(Text(validity, "start") ?? Text(promotion, "startValidityDate")) is { } start ? PriceRecorder.DublinDay(start) : null,
+            Moment(Text(validity, "end") ?? Text(promotion, "endValidityDate")) is { } end ? PriceRecorder.LastDublinDayOver(end) : null,
             Flag(promotion, "isActivated") || Flag(promotion, "activated"));
     }
 
@@ -195,8 +195,8 @@ public sealed class LidlPlusCouponsClient(HttpClient http, IOptions<LidlPlusOpti
     private static string? Clip(string? value, int max) =>
         value is null ? null : value.Length <= max ? value : value[..max];
 
-    private static DateOnly? Day(string? value) =>
-        DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var moment) ? PriceRecorder.DublinDay(moment) : null;
+    private static DateTimeOffset? Moment(string? value) =>
+        DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var moment) ? moment : null;
 
     private static bool Flag(JsonElement root, string name) =>
         root.ValueKind == JsonValueKind.Object && root.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.True;
