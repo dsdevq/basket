@@ -272,6 +272,48 @@ describe('ListStore', () => {
     expect(toast.error).not.toHaveBeenCalled();
   });
 
+  describe('linkProduct', () => {
+    it('replaces the typed line with the linked one', async () => {
+      const linked = item('a', {productId: 'p1', text: 'Яйця'});
+      const linkProduct = vi.fn().mockResolvedValue(linked);
+      const {store} = setup({
+        items: vi.fn().mockResolvedValue([item('a', {text: 'Яйця'})]),
+        linkProduct,
+      });
+      await store.load();
+
+      expect(await store.linkProduct(store.items()[0], 'p1', true)).toBe(true);
+
+      expect(linkProduct).toHaveBeenCalledWith('a', 'p1', true);
+      expect(store.items()).toEqual([linked]);
+    });
+
+    it("says the server's reason when the link is refused, and leaves the line as it was", async () => {
+      const linkProduct = vi
+        .fn()
+        .mockRejectedValue({status: 409, error: {message: 'Already on the list.'}});
+      const {store, toast} = setup({items: vi.fn().mockResolvedValue([item('a')]), linkProduct});
+      await store.load();
+
+      expect(await store.linkProduct(item('a'), 'p1', false)).toBe(false);
+
+      expect(toast.error).toHaveBeenCalledWith('Already on the list.');
+      expect(store.items()[0]?.productId).toBeNull();
+    });
+
+    it('says a plain failure otherwise', async () => {
+      const {store, toast} = setup({
+        items: vi.fn().mockResolvedValue([item('a')]),
+        linkProduct: vi.fn().mockRejectedValue(new Error('offline')),
+      });
+      await store.load();
+
+      expect(await store.linkProduct(item('a'), 'p1', true)).toBe(false);
+
+      expect(toast.error).toHaveBeenCalledWith('Could not link that line. Try again.');
+    });
+  });
+
   describe('closeTrip', () => {
     it('takes the ticked items off the list once the server filed the trip, and keeps the rest', async () => {
       const items = vi

@@ -2515,6 +2515,40 @@ Ticking a line off records no shop when the plan names none, and a receipt for t
   do not push a rarely-used shop's tick-off trips out of it.
 - **No migration.** Nothing new is stored; a tick-off trip before the receipt is pulled is left as it was.
 
+## Product aliases: link a typed list line to a product (2026-11-20, issue #185, slice 1 of 3)
+
+Typed list lines never linked to a product: 27 of 30 tick-off lines were typed, all Cyrillic, while the Shelf holds the shops' English
+names, so the Plan flagged them "Not matched" and never priced them. The owner's direction: aliases are optional, selecting is
+encouraged over typing, and aliases should affect search and product matching.
+
+- **One additive table, `product_alias`** (migration `20261120100000_ProductAlias`): id, product, `text` (as typed, 80 characters at
+  most, whitespace collapsed), `normalized_text` (lower case, the key), added at and by. Deleting a product removes its names; the
+  person who added one cannot be deleted while it exists, like every other `added_by`. There is no household column: the app is one
+  household, as in every other table, so a name is unique across the whole table (unique index on `normalized_text`). A name already
+  taken is a 409 `alias_exists` that says which product has it, so "Яйця" can never mean two products.
+- **At most 20 names per product** (409 `aliases_full`), and a product's own name is not a name (409 `alias_is_name`).
+- **Link a typed line: `PUT /api/list/items/{id}/product`** with `{productId, remember}`. The line keeps its words and its shop stays
+  none; only `product_id` is set, so the Plan now prices it. The ticked tick-off lines are the common case, so the open trip item of the
+  line gets the product too. Refused: an unknown product (400), a line that already has a product (409 `already_linked`), a product
+  already waiting on the list with no shop (409 `already_on_list`, one line per product and shop), and, with `remember`, words that
+  are already a name of another product (409 `alias_exists`). Nothing is half done: the line and the name are saved together.
+- **Remember is pre-ticked in the app; unticked links once.** The app skips the question when the words are already a name of that
+  product or are its own name. The server saves the name only when `remember` is true.
+- **Add by a known name.** `POST /api/list/items` with text that equals a name (any letter case) creates the line already linked,
+  keeping the typed text; when that product is already waiting with no shop, the open line is returned (200) instead of a second one.
+- **What names do.** (1) Linking, above. (2) Search in the link picker (name and names, accents and case folded; every typed word
+  must be found). (3) The matcher: the catalog matcher compares English words only (`Words()` keeps `[a-z0-9]`), so a Cyrillic name
+  adds nothing to it, and an English name is one more name of the product: a catalog row passes when any of the product's names
+  matches it, and the best score is kept (`CandidateMatcher.EvaluateAny`; the narrowing reads rows for each name). Adding or renaming
+  to a name with English words re-runs the server's candidate search for that product. This limit is stated, not hidden.
+- **Add with nothing picked (open sub-choice, default taken).** Add keeps the typed text and marks the line "Not linked"
+  because new or non-food items must still go on the list in a second. Asking on every unlinked add, and pick-only, were the
+  alternatives; neither was built. "Link to a product" is in the line's More sheet (there is no inline Link button: it failed the screen check beside the swipe Delete tray). The Plan's "Not matched" line now says to
+  link it from the list.
+- **Each product lists its other names** in its More sheet on the Prices tab: add, tap to rename, delete.
+- **Not in this slice.** Suggestions while typing in the composer (slice 2), proposals from receipts (slice 3), re-linking a line
+  when a trip is reloaded, and the receipt import and the catalog search using names.
+
 ## Price history and "lowest in 90 days" (2026-11-22, issue #194)
 
 Prices were stored and shown nowhere; the history exposes a "discount" that is only the price returning to what it was (Trolley.co.uk, heisse-preise).

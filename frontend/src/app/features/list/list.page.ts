@@ -35,6 +35,7 @@ import {type ItemAction, ItemActionsSheetComponent} from './item-actions.sheet';
 import type {ListItem} from './list.model';
 import {ListStore} from './list.store';
 import {ListPhotoComponent} from './list-photo.component';
+import {type ProductLinkData, ProductLinkSheetComponent} from './product-link.sheet';
 
 /** How often the list re-reads while the page is open and visible, so the other person's changes show. */
 const REFRESH_MS = 15_000;
@@ -171,6 +172,9 @@ const USUAL_SHOWN = 5;
         (swipeTrailingAction)="remove(item)"
         class="[&_.truncate]:overflow-visible [&_.truncate]:whitespace-normal [&_.truncate]:break-words"
       >
+        @if (!item.productId) {
+          <cmn-tag meta variant="warning">Not linked</cmn-tag>
+        }
         @if (shop(item); as name) {
           <cmn-tag meta variant="neutral">{{ name }}</cmn-tag>
         }
@@ -315,8 +319,20 @@ export class ListPage implements OnInit {
       data: {item},
       mode: 'sheet',
     });
-    if ((await firstValueFrom(ref.afterClosed(), {defaultValue: undefined})) === 'delete') {
+    const action = await firstValueFrom(ref.afterClosed(), {defaultValue: undefined});
+    if (action === 'delete') {
       this.remove(item);
+    } else if (action === 'link') {
+      this.link(item);
     }
+  }
+
+  /** A typed line has no product: pick one on the Shelf, and say whether to keep the words as another name of it. */
+  protected link(item: ListItem): void {
+    this.drawer.open<boolean, ProductLinkData>(ProductLinkSheetComponent, {
+      title: `Link “${item.text}”`,
+      data: {item},
+      mode: 'sheet',
+    });
   }
 }

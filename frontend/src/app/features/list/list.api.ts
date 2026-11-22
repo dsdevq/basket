@@ -29,6 +29,13 @@ export class ListApi {
     return firstValueFrom(this.http.post<ListItem>('/api/list/items', {productId, store}, DIRECT));
   }
 
+  /** Links a typed line to a product; with `remember` the line's words are kept as another name of the product. */
+  public linkProduct(id: string, productId: string, remember: boolean): Promise<ListItem> {
+    return firstValueFrom(
+      this.http.put<ListItem>(`/api/list/items/${id}/product`, {productId, remember})
+    );
+  }
+
   public setChecked(id: string, checked: boolean): Promise<ListItem> {
     return firstValueFrom(this.http.patch<ListItem>(`/api/list/items/${id}`, {checked}, DIRECT));
   }

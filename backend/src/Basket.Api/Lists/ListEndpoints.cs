@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using Basket.Api.Data;
+using Basket.Api.Matching;
 using Basket.Api.Plan;
 using Basket.Api.Prices;
 using Microsoft.EntityFrameworkCore;
@@ -14,6 +15,12 @@ namespace Basket.Api.Lists;
 public sealed record AddItemRequest(string? Text, Guid? ProductId = null, string? Store = null);
 
 public sealed record SetCheckedRequest(bool? Checked);
+
+/// <summary>
+/// Links a typed line to a Shelf product. <see cref="Remember"/>: keep the line's words as another name of the product, so the same
+/// words link on their own next time; without it the line is linked once.
+/// </summary>
+public sealed record LinkProductRequest(Guid? ProductId, bool? Remember = null);
 
 /// <summary>The shop a ticked item was bought at, when it was not the one the plan suggested.</summary>
 public sealed record SetBoughtAtRequest(string? Store);
@@ -45,6 +52,7 @@ public static class ListEndpoints
         list.MapPost("/items", AddItem);
         list.MapPatch("/items/{id:guid}", SetChecked);
         list.MapPatch("/items/{id:guid}/bought-at", SetBoughtAt);
+        list.MapPut("/items/{id:guid}/product", LinkProduct);
         list.MapDelete("/items/{id:guid}", DeleteItem);
     }
 
@@ -108,6 +116,7 @@ public static class ListEndpoints
     {
         string? text;
         Store? shop = null;
+        var linkedTo = request.ProductId;
         if (request.ProductId is { } productId)
         {
             var product = await db.Products.AsNoTracking().SingleOrDefaultAsync(p => p.Id == productId, ct);
@@ -148,6 +157,16 @@ public static class ListEndpoints
         else
         {
             text = UserNames.Clean(request.Text, ListItem.MaxTextLength);
+            // Words the household has given a product as another name link to it: "Яйця" goes on the list as Free Range Eggs' line.
+            if (text is not null && await ProductAliases.FindAsync(db, text, ct) is { } alias)
+            {
+                linkedTo = alias.ProductId;
+                var open = await OpenLineAsync(db, alias.ProductId, null, ct);
+                if (open is not null)
+                {
+                    return Results.Ok(open);
+                }
+            }
         }
 
         if (text is null)
@@ -166,7 +185,7 @@ public static class ListEndpoints
             Text = text,
             AddedAt = clock.GetUtcNow(),
             AddedByUserId = Guid.Parse(principal.FindFirstValue(ClaimTypes.NameIdentifier)!),
-            ProductId = request.ProductId,
+            ProductId = linkedTo,
             Store = shop,
         };
         db.ListItems.Add(item);
@@ -174,10 +193,10 @@ public static class ListEndpoints
         {
             await db.SaveChangesAsync(ct);
         }
-        catch (DbUpdateException ex) when (request.ProductId is not null && IsUniqueViolation(ex))
+        catch (DbUpdateException ex) when (linkedTo is not null && IsUniqueViolation(ex))
         {
             // Another phone added the same line a moment ago; that one is the answer.
-            var winner = await OpenLineAsync(db, request.ProductId.Value, shop, ct);
+            var winner = await OpenLineAsync(db, linkedTo.Value, shop, ct);
             if (winner is not null)
             {
                 return Results.Ok(winner);
@@ -277,6 +296,90 @@ public static class ListEndpoints
         }
 
         await transaction.CommitAsync(ct);
+        return Results.Ok(ToResponse(await Project(db, id).SingleAsync(ct)));
+    }
+
+    /// <summary>
+    /// Links a typed line to a product from the Shelf. The line keeps its words; it gains the product, so the plan prices it, the
+    /// Shelf marks the product as on the list, and a trip it is already ticked into records the product. With <c>remember</c> the words
+    /// also become another name of the product. Refused when the line is already linked, when the product already has an open line
+    /// (a second one would be a duplicate), or when the words already mean another product.
+    /// </summary>
+    private static async Task<IResult> LinkProduct(
+        Guid id,
+        LinkProductRequest request,
+        ClaimsPrincipal principal,
+        AppDbContext db,
+        ServerCandidates candidates,
+        TimeProvider clock,
+        CancellationToken ct)
+    {
+        if (request.ProductId is not { } productId || await db.Products.AsNoTracking().SingleOrDefaultAsync(p => p.Id == productId, ct) is not { } product)
+        {
+            return Results.Json(new { error = "product_unknown", message = "That product is not on the shelf." }, statusCode: 400);
+        }
+
+        var userId = Guid.Parse(principal.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await OpenTrips.LockAsync(db, ct);
+
+        var line = await db.ListItems.AsNoTracking().SingleOrDefaultAsync(i => i.Id == id, ct);
+        if (line is null)
+        {
+            return Results.NotFound();
+        }
+
+        if (line.ProductId is not null)
+        {
+            return Results.Json(new { error = "already_linked", message = "That line is already linked to a product." }, statusCode: 409);
+        }
+
+        if (!line.IsChecked && await db.ListItems.AnyAsync(i => !i.IsChecked && i.ProductId == productId && i.Store == null, ct))
+        {
+            return Results.Json(new { error = "already_on_list", message = $"{product.Name} is already on the list." }, statusCode: 409);
+        }
+
+        string? remembered = null;
+        if (request.Remember == true && UserNames.Clean(line.Text, ProductAlias.MaxLength) is { } words && ProductAliases.Normalize(words) != ProductAliases.Normalize(product.Name))
+        {
+            var known = await ProductAliases.FindAsync(db, words, ct);
+            if (known is { } other && other.ProductId != productId)
+            {
+                var owner = await db.Products.AsNoTracking().Where(p => p.Id == other.ProductId).Select(p => p.Name).FirstAsync(ct);
+                return Results.Json(new { error = "alias_exists", message = $"“{words}” already means {owner}." }, statusCode: 409);
+            }
+
+            if (known is null)
+            {
+                var outcome = await ProductAliases.TryAddAsync(db, product, words, userId, clock.GetUtcNow(), ct);
+                if (outcome.Refusal is not null)
+                {
+                    return outcome.Refusal;
+                }
+
+                remembered = words;
+            }
+        }
+
+        try
+        {
+            await db.ListItems.Where(i => i.Id == id).ExecuteUpdateAsync(s => s.SetProperty(i => i.ProductId, productId), ct);
+            await db.TripItems.Where(t => t.ListItemId == id).ExecuteUpdateAsync(s => s.SetProperty(t => t.ProductId, productId), ct);
+            await db.SaveChangesAsync(ct);
+        }
+        catch (Exception ex) when (ex is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation }
+            || ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
+        {
+            // Another phone put the product on the list a moment ago, or someone saved the same words as another name.
+            return Results.Json(new { error = "conflict", message = "That changed a moment ago. Try again." }, statusCode: 409);
+        }
+
+        await transaction.CommitAsync(ct);
+        if (remembered is not null)
+        {
+            await ProductAliases.LookAgainAsync(candidates, productId, remembered, ct);
+        }
+
         return Results.Ok(ToResponse(await Project(db, id).SingleAsync(ct)));
     }
 

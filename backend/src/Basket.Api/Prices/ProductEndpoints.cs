@@ -55,7 +55,7 @@ public sealed record ProductStoreResponse(
     PaidResponse? LastPaid,
     int Candidates = 0);
 
-public sealed record ProductResponse(Guid Id, string Name, IReadOnlyList<ProductStoreResponse> Stores, string? Barcode);
+public sealed record ProductResponse(Guid Id, string Name, IReadOnlyList<ProductStoreResponse> Stores, string? Barcode, IReadOnlyList<AliasResponse>? Aliases = null);
 
 public sealed record RunResponse(DateTimeOffset FinishedAt, string Outcome, int Listings, int Read, string? Message);
 
@@ -104,6 +104,8 @@ public static class ProductEndpoints
                 .ToListAsync(ct))
             .ToDictionary(g => (g.ProductId, g.Store), g => g.Count);
 
+        var aliases = (await db.ProductAliases.AsNoTracking().OrderBy(a => a.AddedAt).ThenBy(a => a.Id).ToListAsync(ct)).ToLookup(a => a.ProductId);
+
         var response = products.Select(product => new ProductResponse(
             product.Id,
             product.Name,
@@ -119,7 +121,8 @@ public static class ProductEndpoints
                     LastPaid(store, paid.GetValueOrDefault((product.Id, store)), connected),
                     proposals.GetValueOrDefault((product.Id, store)));
             }).ToList(),
-            product.Barcode)).ToList();
+            product.Barcode,
+            aliases[product.Id].Select(a => new AliasResponse(a.Id, a.Text)).ToList())).ToList();
 
         var runs = await db.PricePullRuns.AsNoTracking()
             .GroupBy(r => r.Store)
@@ -282,7 +285,8 @@ public static class ProductEndpoints
                 listing is not null && listing.Store == s ? new ListingResponse(listing.Url, listing.Title, listing.LastCheckedAt, listing.LastError, listing.Category, listing.ImageUrl, listing.ConfirmedAt is not null) : null,
                 null,
                 LastPaid(s, null, connected))).ToList(),
-            product.Barcode);
+            product.Barcode,
+            []);
         return Results.Created($"/api/products/{product.Id}", created);
     }
 

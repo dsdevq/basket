@@ -23,6 +23,7 @@ const MESSAGES = {
   load: 'Could not load the list. Check your connection and try again.',
   add: 'Could not add that. Try again.',
   update: 'Could not update that item. It is back as it was.',
+  link: 'Could not link that line. Try again.',
   boughtAt: 'Could not change the shop. It is back as it was.',
   remove: 'Could not delete that item.',
   offline: (savedAt: string) =>
@@ -354,6 +355,33 @@ export const ListStore = signalStore(
           } catch {
             replace(item);
             toast.error(MESSAGES.update);
+          }
+        },
+
+        /**
+         * Links a typed line to a product, keeping the line's words as another name of it when `rememberWords` is set. The server's
+         * own words explain a refusal (the product is already on the list, the words belong to another product); false then.
+         */
+        async linkProduct(
+          item: ListItem,
+          productId: string,
+          rememberWords: boolean
+        ): Promise<boolean> {
+          try {
+            replace(await api.linkProduct(item.id, productId, rememberWords));
+            return true;
+          } catch (error) {
+            const message = (error as {error?: {message?: string}} | null)?.error?.message;
+            toast.error(
+              statusOf(error) === HttpStatus.conflict && message ? message : MESSAGES.link
+            );
+            if (
+              statusOf(error) === HttpStatus.notFound ||
+              statusOf(error) === HttpStatus.conflict
+            ) {
+              void load(true);
+            }
+            return false;
           }
         },
 

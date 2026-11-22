@@ -91,7 +91,9 @@ public static class MatchEndpoints
                 statusCode: 409);
         }
 
-        var facts = new ProductFacts(product.Name, product.Barcode);
+        var names = ProductAliases.FactsWithAliases(
+            new ProductFacts(product.Name, product.Barcode),
+            await db.ProductAliases.AsNoTracking().Where(a => a.ProductId == id).Select(a => a.Text).ToListAsync(ct));
         var all = await db.MatchCandidates.Where(c => c.ProductId == id && c.Store == store).ToDictionaryAsync(c => c.Url, StringComparer.Ordinal, ct);
         var now = clock.GetUtcNow();
         var outcomes = new List<ProposeOutcome>(results.Count);
@@ -128,7 +130,7 @@ public static class MatchEndpoints
             }
 
             var title = UserNames.Clean(result.Title, 300);
-            var verdict = CandidateMatcher.Evaluate(facts, new CandidateFacts(title, result.Barcode));
+            var verdict = CandidateMatcher.EvaluateAny(names, new CandidateFacts(title, result.Barcode));
             if (verdict is null)
             {
                 outcomes.Add(new ProposeOutcome(url, "no_match"));
@@ -216,10 +218,12 @@ public static class MatchEndpoints
 
         product.Barcode = barcode;
 
-        var facts = new ProductFacts(product.Name, barcode);
+        var names = ProductAliases.FactsWithAliases(
+            new ProductFacts(product.Name, barcode),
+            await db.ProductAliases.AsNoTracking().Where(a => a.ProductId == id).Select(a => a.Text).ToListAsync(ct));
         foreach (var candidate in await db.MatchCandidates.Where(c => c.ProductId == id && c.Status == CandidateStatus.Proposed).ToListAsync(ct))
         {
-            var verdict = CandidateMatcher.Evaluate(facts, new CandidateFacts(candidate.Title, candidate.Barcode));
+            var verdict = CandidateMatcher.EvaluateAny(names, new CandidateFacts(candidate.Title, candidate.Barcode));
             if (verdict is null)
             {
                 db.MatchCandidates.Remove(candidate);

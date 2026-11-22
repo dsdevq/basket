@@ -61,6 +61,24 @@ describe('ItemActionsSheetComponent', () => {
     expect(host.textContent).not.toContain('Bought at');
   });
 
+  it('offers to link a typed line to a product, and not a line that already is', async () => {
+    const typed = await render(item());
+    const buttons = (host: HTMLElement) =>
+      Array.from(host.querySelectorAll('button')).map(b => (b.textContent ?? '').trim());
+    expect(buttons(typed.host)).toContain('Link to a product');
+
+    await typed.press(
+      Array.from(typed.host.querySelectorAll('button')).find(b =>
+        (b.textContent ?? '').includes('Link to a product')
+      )
+    );
+    expect(typed.ref.close).toHaveBeenCalledWith('link');
+    TestBed.resetTestingModule();
+
+    const linked = await render(item({productId: 'p1'}));
+    expect(buttons(linked.host)).not.toContain('Link to a product');
+  });
+
   it('lists the five shops for a ticked item and marks the one it was bought at', async () => {
     const {rows} = await render(item({checked: true, boughtStore: 'aldi'}));
     const text = rows().map(row => (row.textContent ?? '').replace(/\s+/g, ' ').trim());
