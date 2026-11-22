@@ -465,12 +465,14 @@ This amends "Why a stale shell cannot show someone else's data" above for the on
 - **What is queued:** adding a free-text line, ticking and unticking, changing where a ticked line was bought, and deleting.
   They show at once, are kept in `localStorage` (`basket.offline.queue`, for the signed-in user id, no migration) and are
   sent oldest first. **Not queued:** Done shopping (the server files whatever it has ticked, so it first sends the waiting
-  edits and refuses while any remain) and adding or moving a Shelf product (needs the price data, which needs a signal).
+  edits and refuses while any remain, or when the server refused one of them, re-reading the list so it can be checked
+  again) and adding or moving a Shelf product (needs the price data, which needs a signal).
 - **Queued only with no answer at all** (HTTP status 0). An HTTP error is still shown and rolled back as before. While any
-  edit is waiting, every new one waits behind it, so order is kept.
+  edit is waiting, every new one waits behind it, so order is kept. Edits are sent with `ngsw-bypass`: with no signal the
+  service worker would answer them with a synthesized 504, hiding the status 0 that tells the store to queue.
 - **Replay** runs when the list loads (the 15-second refresh, pull to refresh, opening the page) and on the browser's
-  `online` event. It stops at the first edit that still gets no answer, a 429 or a 5xx and keeps everything for the next
-  try. An edit the server refuses (4xx) is dropped with a toast and the list is re-read; a 404 (the line is gone) is dropped
+  `online` event. It stops at the first edit that still gets no answer, a 401, a 429 or a 5xx and keeps everything for the
+  next try. An edit the server refuses (4xx) is dropped with a toast and the list is re-read; a 404 (the line is gone) is dropped
   silently. While edits wait, the server's list does not replace the one on screen.
 - **A line added offline** has a local id until the server answers; edits made to it meanwhile are re-pointed at the real
   id. A retried add whose answer was lost can create the line twice; accepted for a two-person list.
