@@ -15,6 +15,9 @@ public enum DealKind
 
     /// <summary>Buy several: "2 for €4", "3 for 2", "buy 1 get 1 free".</summary>
     MultiBuy,
+
+    /// <summary>A Lidl Plus coupon the owner has activated brings the price below every other way to buy it.</summary>
+    Coupon,
 }
 
 /// <summary>What one shop's reading says about a product's price, before any size is known.</summary>

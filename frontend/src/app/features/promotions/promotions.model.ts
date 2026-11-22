@@ -1,7 +1,7 @@
 import type {StoreId} from '../prices/prices.model';
 
 /** How a shop is selling it: buy several, a price cut, the card price, or just the shelf price. */
-export type PromoKind = 'multi_buy' | 'percentage' | 'loyalty' | 'regular';
+export type PromoKind = 'multi_buy' | 'percentage' | 'loyalty' | 'coupon' | 'regular';
 
 /** What a unit price is per: `kg`, `l` or `each` (one piece). */
 export type PromoUnit = 'kg' | 'l' | 'each';

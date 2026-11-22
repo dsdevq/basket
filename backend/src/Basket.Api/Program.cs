@@ -87,6 +87,17 @@ builder.Services.AddHttpClient<ILidlPlusTickets, LidlPlusTicketsClient>((service
     client.DefaultRequestHeaders.UserAgent.ParseAdd("basket/1.0 (a household app reading its own Lidl Plus receipts once a night)");
     client.DefaultRequestHeaders.Accept.ParseAdd("application/json");
 });
+builder.Services.AddHttpClient<ILidlPlusCoupons, LidlPlusCouponsClient>((services, client) =>
+{
+    var options = services.GetRequiredService<Microsoft.Extensions.Options.IOptions<LidlPlusOptions>>().Value;
+    client.BaseAddress = new Uri(options.CouponsBase.TrimEnd('/') + "/");
+    client.Timeout = TimeSpan.FromSeconds(30);
+    client.MaxResponseContentBufferSize = 2 * 1024 * 1024;
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("basket/1.0 (a household app reading its own Lidl Plus coupons once a night)");
+    client.DefaultRequestHeaders.Accept.ParseAdd("application/json");
+});
+builder.Services.AddScoped<LidlCouponService>();
+builder.Services.AddScoped<LidlCouponsJob>();
 builder.Services.AddScoped<LidlReceiptImport>();
 builder.Services.AddScoped<LidlReceiptsJob>();
 builder.Services.AddScoped<PriceIngest>();
@@ -211,6 +222,7 @@ api.MapWalkEndpoints();
 api.MapCardEndpoints();
 api.MapPreferencesEndpoints();
 api.MapLidlPlusEndpoints();
+api.MapLidlCouponEndpoints();
 api.MapIngestEndpoints();
 api.MapFallback(() => Results.NotFound()).AllowAnonymous();
 if (metricsEnabled)
@@ -226,6 +238,7 @@ if (builder.Configuration.GetValue("Hangfire:Enabled", true))
     PricePullJob.Schedule(app.Services.GetRequiredService<IRecurringJobManager>());
     LidlCatalogJob.Schedule(app.Services.GetRequiredService<IRecurringJobManager>());
     LidlReceiptsJob.Schedule(app.Services.GetRequiredService<IRecurringJobManager>());
+    LidlCouponsJob.Schedule(app.Services.GetRequiredService<IRecurringJobManager>());
 }
 
 app.Run();

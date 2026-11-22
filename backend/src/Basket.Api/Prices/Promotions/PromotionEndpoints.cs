@@ -28,6 +28,6 @@ public static class PromotionEndpoints
                 .ToListAsync(ct))
             .ToLookup(o => o.ListingId);
 
-        return Results.Ok(PromotionBuilder.Build(products, listings, latest, today, history));
+        return Results.Ok(PromotionBuilder.Build(products, listings, latest, today, history, await CouponPricing.ActiveAsync(db, today, ct)));
     }
 }

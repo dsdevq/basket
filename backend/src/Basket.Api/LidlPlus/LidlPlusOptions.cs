@@ -18,6 +18,9 @@ public sealed class LidlPlusOptions
     /// <summary>Lidl Plus's receipts service (the receipts list of the app).</summary>
     public string TicketsBase { get; set; } = "https://tickets.lidlplus.com";
 
+    /// <summary>Lidl Plus's coupons service (the coupons tab of the app).</summary>
+    public string CouponsBase { get; set; } = "https://coupons.lidlplus.com/app/api";
+
     /// <summary>The country the Lidl Plus account belongs to; Lidl keeps receipts per country.</summary>
     public string Country { get; set; } = "IE";
 
@@ -38,4 +41,10 @@ public sealed class LidlPlusOptions
 
     /// <summary>The most new receipts one pull opens; a longer history is taken over the next nights.</summary>
     public int MaxNewReceiptsPerPull { get; set; } = 30;
+
+    /// <summary>The pause between two coupon activations, so activating a whole list stays polite.</summary>
+    public int CouponPauseMilliseconds { get; set; } = 300;
+
+    /// <summary>The most coupons one "activate all" turns on; Lidl lists a few dozen at a time.</summary>
+    public int MaxCouponActivations { get; set; } = 60;
 }

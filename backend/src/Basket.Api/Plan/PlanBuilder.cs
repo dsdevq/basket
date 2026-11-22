@@ -116,9 +116,10 @@ public static class PlanBuilder
         IReadOnlyDictionary<Guid, PriceObservation> latest,
         DateOnly today,
         IReadOnlyDictionary<(Guid ProductId, Store Store), PaidPrice>? paid = null,
-        WalkOrders? walk = null)
+        WalkOrders? walk = null,
+        IReadOnlyList<ActiveCoupon>? coupons = null)
     {
-        var items = lines.Select(line => Item(line, products, listings, latest, today, paid)).ToList();
+        var items = lines.Select(line => Item(line, products, listings, latest, today, paid, coupons)).ToList();
         return new PlanResponse(today, PromotionBuilder.StaleAfterDays, items, Coverage(items, walk));
     }
 
@@ -128,7 +129,8 @@ public static class PlanBuilder
         ILookup<Guid, StoreListing> listings,
         IReadOnlyDictionary<Guid, PriceObservation> latest,
         DateOnly today,
-        IReadOnlyDictionary<(Guid ProductId, Store Store), PaidPrice>? paid)
+        IReadOnlyDictionary<(Guid ProductId, Store Store), PaidPrice>? paid,
+        IReadOnlyList<ActiveCoupon>? coupons)
     {
         var picked = line.Store?.Slug();
         if (line.ProductId is not { } productId || !products.TryGetValue(productId, out var product))
@@ -136,7 +138,7 @@ public static class PlanBuilder
             return new PlanItem(line.Id, line.Text, null, null, picked, PlanFlags.Unmatched, null, [], []);
         }
 
-        var comparison = PromotionBuilder.Compare(product, listings, latest, today);
+        var comparison = PromotionBuilder.Compare(product, listings, latest, today, null, coupons);
         var stores = Stores.All
             .Select(store => Entry(store, product, listings, latest, comparison))
             .OfType<PlanStorePrice>()

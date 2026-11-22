@@ -69,12 +69,13 @@ public static class PromotionBuilder
         ILookup<Guid, StoreListing> listings,
         IReadOnlyDictionary<Guid, PriceObservation> latest,
         DateOnly today,
-        ILookup<Guid, PriceObservation>? history = null)
+        ILookup<Guid, PriceObservation>? history = null,
+        IReadOnlyList<ActiveCoupon>? coupons = null)
     {
         var result = new List<PromoProduct>();
         foreach (var product in products.OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase))
         {
-            var comparison = Compare(product, listings, latest, today, history);
+            var comparison = Compare(product, listings, latest, today, history, coupons);
             if (comparison.Offers.Any(o => o.IsPromo))
             {
                 result.Add(new PromoProduct(product.Id, product.Name, comparison.Unit, comparison.Ranked, comparison.Offers, comparison.Gaps));
@@ -89,13 +90,15 @@ public static class PromotionBuilder
     /// nothing usable today as a gap. The Promotions view lists only the products that have a promo; the plan reads every
     /// product on the list through the same rule, so the two never disagree about a price. <paramref name="history"/> (the
     /// last 90 days of readings by listing) is what "lowest in 90 days" is judged on; without it no offer carries the mark.
+    /// <paramref name="coupons"/> are the Lidl Plus coupons the owner has activated that are in date today (<see cref="CouponPricing"/>); without them no price counts a coupon.
     /// </summary>
     public static ProductComparison Compare(
         Product product,
         ILookup<Guid, StoreListing> listings,
         IReadOnlyDictionary<Guid, PriceObservation> latest,
         DateOnly today,
-        ILookup<Guid, PriceObservation>? history = null)
+        ILookup<Guid, PriceObservation>? history = null,
+        IReadOnlyList<ActiveCoupon>? coupons = null)
     {
         var offers = new List<PromoOffer>();
         var gaps = new List<PromoGap>();
@@ -120,7 +123,7 @@ public static class PromotionBuilder
                 continue;
             }
 
-            var offer = Offer(store, product, listing, observation, today, history);
+            var offer = Offer(store, product, listing, observation, today, history, coupons);
             if (offer is null)
             {
                 gaps.Add(new PromoGap(Slug(store), store.DisplayName(), "no_price", null));
@@ -141,13 +144,15 @@ public static class PromotionBuilder
         _ => new PromoGap(Slug(store), store.DisplayName(), "no_price", null),
     };
 
-    private static PromoOffer? Offer(Store store, Product product, StoreListing listing, PriceObservation o, DateOnly today, ILookup<Guid, PriceObservation>? history)
+    private static PromoOffer? Offer(Store store, Product product, StoreListing listing, PriceObservation o, DateOnly today, ILookup<Guid, PriceObservation>? history, IReadOnlyList<ActiveCoupon>? coupons)
     {
         var reading = new Reading(o.Price, o.WasPrice, o.LoyaltyPrice, o.LoyaltyScheme, o.PromoText);
-        if (OfferCalculator.Evaluate(reading) is not { } deal)
+        if (OfferCalculator.Evaluate(reading) is not { } plain)
         {
             return null;
         }
+
+        var (deal, couponUntil) = CouponPricing.Apply(plain, store, listing.Title, coupons);
 
         var flags = new List<string>();
         if (today.DayNumber - o.ObservedOn.DayNumber > StaleAfterDays)
@@ -203,7 +208,7 @@ public static class PromotionBuilder
             unitPrice,
             referenceUnit,
             o.ObservedOn,
-            o.ValidUntil,
+            couponUntil is { } ends && (o.ValidUntil is null || ends < o.ValidUntil) ? ends : o.ValidUntil,
             null,
             flags,
             isPromo && history is not null && PriceHistory.IsLowest(deal.EachPrice, history[listing.Id], today));
@@ -244,6 +249,7 @@ public static class PromotionBuilder
         DealKind.MultiBuy => "multi_buy",
         DealKind.Loyalty => "loyalty",
         DealKind.Percentage => "percentage",
+        DealKind.Coupon => "coupon",
         _ => "regular",
     };
 
