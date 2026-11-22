@@ -17,7 +17,7 @@ public sealed record HistoryPoint(
 public sealed record HistoryExtreme(decimal Price, DateOnly On);
 
 /// <summary>
-/// The last <see cref="PriceHistory.WindowDays"/> days of one shop page. <see cref="LowestIn90Days"/> says today's offer is the
+/// The last <see cref="PriceHistory.WindowDays"/> days of one shop page. <see cref="LowestIn90Days"/> says today's promo is the
 /// cheapest of the window and was dearer before, the check that shows a "discount" is not a fake one.
 /// </summary>
 public sealed record PriceHistoryResponse(
@@ -80,6 +80,12 @@ public static class PriceHistory
         var lowest = priced.Count == 0 ? null : priced.OrderBy(p => p.Effective).ThenByDescending(p => p.ObservedOn).First();
         var highest = priced.Count == 0 ? null : priced.OrderByDescending(p => p.Effective).ThenByDescending(p => p.ObservedOn).First();
         var current = priced.Count == 0 ? null : priced[^1].Effective;
+        var latest = observations
+            .Where(o => o.ObservedOn >= start && o.ObservedOn <= today)
+            .OrderBy(o => o.ObservedOn)
+            .LastOrDefault(o => Effective(o) is not null);
+        var isPromo = latest is not null
+            && OfferCalculator.Evaluate(new Reading(latest.Price, latest.WasPrice, latest.LoyaltyPrice, latest.LoyaltyScheme, latest.PromoText)) is { Kind: not DealKind.Regular };
         return new PriceHistoryResponse(
             productId,
             store.Slug(),
@@ -91,6 +97,6 @@ public static class PriceHistory
             lowest is null ? null : new HistoryExtreme(lowest.Effective!.Value, lowest.ObservedOn),
             highest is null ? null : new HistoryExtreme(highest.Effective!.Value, highest.ObservedOn),
             current,
-            current is { } now && IsLowest(now, observations, today));
+            isPromo && current is { } now && IsLowest(now, observations, today));
     }
 }

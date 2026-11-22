@@ -100,6 +100,17 @@ public sealed class PriceHistoryTests : IClassFixture<BasketFactory>
     }
 
     [Fact]
+    public void A_plain_shelf_price_drop_is_not_marked_the_lowest_in_the_history()
+    {
+        var plain = PriceHistory.Build(Guid.NewGuid(), Store.Lidl, [Read(40, 3.00m), Read(0, 2.50m)], Today);
+        var promo = PriceHistory.Build(Guid.NewGuid(), Store.Lidl, [Read(40, 3.00m), Read(0, 2.50m, was: 3.00m)], Today);
+
+        plain.Current.Should().Be(2.50m);
+        plain.LowestIn90Days.Should().BeFalse();
+        promo.LowestIn90Days.Should().BeTrue();
+    }
+
+    [Fact]
     public void The_promotions_mark_a_promo_that_is_the_lowest_and_never_a_plain_price()
     {
         var product = new Product { Id = Guid.NewGuid(), Name = "Butter 250g", AddedAt = DateTimeOffset.UtcNow };
@@ -129,7 +140,7 @@ public sealed class PriceHistoryTests : IClassFixture<BasketFactory>
             var listing = new StoreListing { Id = Guid.NewGuid(), ProductId = product.Id, Store = Store.Lidl, Url = "https://www.lidl.ie/p/milk/p11000", AddedAt = DateTimeOffset.UtcNow };
             db.Products.Add(product);
             db.StoreListings.Add(listing);
-            foreach (var (daysAgo, price) in new[] { (100, 0.80m), (20, 1.29m), (0, 1.09m) })
+            foreach (var (daysAgo, price, was) in new[] { (100, 0.80m, (decimal?)null), (20, 1.29m, null), (0, 1.09m, 1.29m) })
             {
                 db.PriceObservations.Add(new PriceObservation
                 {
@@ -138,6 +149,7 @@ public sealed class PriceHistoryTests : IClassFixture<BasketFactory>
                     ObservedOn = today.AddDays(-daysAgo),
                     ObservedAt = _factory.Clock.GetUtcNow().AddDays(-daysAgo),
                     Price = price,
+                    WasPrice = was,
                     InStock = true,
                 });
             }
