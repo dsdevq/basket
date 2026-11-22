@@ -12,6 +12,41 @@ function setup(api: Partial<AuthApi>): InstanceType<typeof SessionStore> {
 }
 
 describe('SessionStore', () => {
+  beforeEach(() => localStorage.clear());
+
+  it('opens as the person last seen when there is no signal, and not after an error status', async () => {
+    await setup({
+      session: vi.fn().mockResolvedValue({authenticated: true, user: OWNER}),
+    }).ensureLoaded();
+    TestBed.resetTestingModule();
+
+    const offline = setup({session: vi.fn().mockRejectedValue({status: 0})});
+    await offline.ensureLoaded();
+    expect(offline.user()).toEqual(OWNER);
+    expect(offline.loadFailure()).toBeNull();
+    TestBed.resetTestingModule();
+
+    const broken = setup({session: vi.fn().mockRejectedValue({status: 503})});
+    await broken.ensureLoaded();
+    expect(broken.user()).toBeNull();
+    expect(broken.loadFailure()).toBe('the server answered HTTP 503');
+  });
+
+  it('forgets the remembered person when the server says nobody is signed in', async () => {
+    await setup({
+      session: vi.fn().mockResolvedValue({authenticated: true, user: OWNER}),
+    }).ensureLoaded();
+    TestBed.resetTestingModule();
+    await setup({
+      session: vi.fn().mockResolvedValue({authenticated: false, user: null}),
+    }).ensureLoaded();
+    TestBed.resetTestingModule();
+
+    const offline = setup({session: vi.fn().mockRejectedValue({status: 0})});
+    await offline.ensureLoaded();
+    expect(offline.loadFailure()).toBe('no answer from the server');
+  });
+
   it('starts unknown and loads the signed-in user once', async () => {
     const session = vi.fn().mockResolvedValue({authenticated: true, user: OWNER});
     const store = setup({session});

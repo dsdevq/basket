@@ -441,6 +441,22 @@ not a new one.
   The e2e config keeps `serviceWorkers: 'block'` for every other spec (the worker fetches around `page.route`); only
   `offline-shell.spec.ts` allows it, against its own server that answers `/api`.
 
+## Cached read of the list when offline (2026-11-22, #193)
+
+Step 1 of "the list works offline in the shop"; the write queue that replays edits on reconnect is step 2, filed separately.
+This amends "Why a stale shell cannot show someone else's data" above for the one person on their own phone.
+
+- **The worker still caches nothing under `/api`.** The remembered data is in `localStorage` (`core/offline/offline-cache.ts`),
+  not Cache Storage: the last `/api/session` user and the last loaded list, saved on every successful load.
+- **Only with no answer at all.** When `/api/session` fails with no HTTP status (no signal), `SessionStore` opens as the
+  remembered person instead of sending them to "Cannot reach basket"; an HTTP error status (a 503) still does. When the list
+  call then fails the same way and nothing is on screen, `ListStore` shows the remembered list with a note of when it was saved.
+  The list is only used if it was saved for that same user id.
+- **Forgotten on sign-out and when the server says nobody is signed in** (`SessionStore.setUser(null)`, `signOut`, a
+  session answer with no user), so a shared phone shows nothing of a previous person. A session that ended while offline is
+  found by the first 401 once online, as before.
+- **Read only.** Edits made offline fail with the existing "could not ..." messages and roll back; queueing them is step 2.
+
 ## Fleet identity on the machine endpoints (2026-11-08, #62)
 
 Owner decision 2026-11-08 ("Agree, thats good"): the fleet gets a service identity on his own apps. In the owner's Logto it is

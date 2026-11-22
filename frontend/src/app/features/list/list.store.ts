@@ -4,6 +4,7 @@ import {patchState, signalStore, withComputed, withMethods, withState} from '@ng
 
 import {SessionStore} from '../../core/auth/session.store';
 import {HttpStatus, statusOf} from '../../core/http-status';
+import {offlineCache} from '../../core/offline/offline-cache';
 import type {StoreId} from '../prices/prices.model';
 import {ListApi} from './list.api';
 import type {ListItem} from './list.model';
@@ -21,6 +22,12 @@ const MESSAGES = {
   update: 'Could not update that item. It is back as it was.',
   boughtAt: 'Could not change the shop. It is back as it was.',
   remove: 'Could not delete that item.',
+  offline: (savedAt: string) =>
+    `No signal. Showing the list as it was on ${new Date(savedAt).toLocaleString('en-IE', {
+      weekday: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+    })}. Changes need a connection.`,
   close: 'Could not finish the trip. The list is as it was. Try again.',
   closeChanged: 'The list just changed. Check it and tap Done shopping again.',
 } as const;
@@ -55,7 +62,24 @@ export const ListStore = signalStore(
         try {
           const items = await api.items();
           patchState(store, changes === seen ? {items, status: 'ready'} : {status: 'ready'});
-        } catch {
+          const me = session.user();
+          if (me) {
+            offlineCache.writeList(me.id, store.items());
+          }
+        } catch (error) {
+          // No answer at all and nothing on screen: show the list as this phone last saw it.
+          const me = session.user();
+          const cached =
+            statusOf(error) === 0 && me && !store.items().length
+              ? offlineCache.readList<ListItem>(me.id)
+              : null;
+          if (cached) {
+            patchState(store, {items: cached.items, status: 'ready'});
+            if (!quiet) {
+              toast.info(MESSAGES.offline(cached.savedAt));
+            }
+            return;
+          }
           if (!quiet) {
             patchState(store, {status: store.items().length ? 'ready' : 'error'});
             toast.error(MESSAGES.load);
