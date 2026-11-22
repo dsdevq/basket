@@ -24,6 +24,7 @@ export function offer(over: Partial<PromoOffer> = {}): PromoOffer {
     validUntil: '2026-11-11',
     rank: 1,
     flags: [],
+    lowestIn90Days: false,
     ...over,
   };
 }

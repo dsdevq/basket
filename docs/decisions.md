@@ -2475,3 +2475,15 @@ Ticking a line off records no shop when the plan names none, and a receipt for t
   ticks teach the order, per #43's rules. Its 60-trip window counts only trips with a tick at a named shop, so tickless receipt trips
   do not push a rarely-used shop's tick-off trips out of it.
 - **No migration.** Nothing new is stored; a tick-off trip before the receipt is pulled is left as it was.
+
+## Price history and "lowest in 90 days" (2026-11-22, issue #194)
+
+Prices were stored and shown nowhere; the history exposes a "discount" that is only the price returning to what it was (Trolley.co.uk, heisse-preise).
+
+- **Which history.** The shelf's own: `price_observation`, one row per page per Dublin day, which every shelf screen already reads and which the catalog sweeps feed through `PriceRecorder` (#132). The catalog's write-on-change `store_product_price` is unchanged and not read here: a shelf product's page is what the offers and the Plan are built from, so the history and the offer cannot disagree. No migration, nothing new stored.
+- **A price is what a pack costs when the offer is met.** Each reading goes through `OfferCalculator` (a "2 for €4" is €2, a card price is the card price), the figure the ranking already uses. A reading with no price says nothing and is not drawn.
+- **The window is 90 Dublin days**, today and the 89 before (`PriceHistory.WindowDays`). Readings are daily at most and a gap stays a gap: nothing is filled in.
+- **The mark.** An offer carries `lowestIn90Days` when it is a promo (never a plain shelf price), its pack price is no higher than any price of the window, and the window holds a higher one. A price that never moved is not "the lowest", it is the price; a tie with the earlier low counts. Judged on the same pack price the ranking uses, so a multi-buy is compared with earlier multi-buys and shelf prices alike.
+- **The view.** `GET /api/products/{id}/stores/{store}/history`, people only like the rest of the group (404 for an unknown shop or a shop with no page; an empty `points` list for a page not read yet). It returns the window's points oldest first, the lowest and highest with their day, the current price and the same flag. On Promotions, tapping an offer opens a bottom sheet (a step line of the 90 days, one sentence, the days the price moved); the offer row carries a "Lowest in 90 days" tag.
+- **Honest about thin data.** With one reading, or an unchanged price, the sheet says so and the mark is not given. The mark is only as good as the days basket has read: history begins when a page was first linked or swept.
+- **Out of scope, not built.** A history entry from the Shelf or the Plan, receipts' paid prices on the line, a longer window, alerts when something hits its low.
