@@ -32,3 +32,7 @@ if (!('DOMMatrixReadOnly' in globalThis)) {
     value: IdentityMatrix,
   });
 }
+
+// The offline cache keeps the list and the waiting edits in `localStorage`, and a worker can run several spec files in
+// one jsdom window. Each test starts with an empty device, so what one spec leaves there is never read by the next.
+beforeEach(() => localStorage.clear());

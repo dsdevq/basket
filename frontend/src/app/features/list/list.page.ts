@@ -10,6 +10,7 @@ import {
 import {takeUntilDestroyed} from '@angular/core/rxjs-interop';
 import {FormControl, FormGroup, ReactiveFormsModule} from '@angular/forms';
 import {
+  AlertComponent,
   AsyncStateComponent,
   type AsyncStateStatus,
   ButtonComponent,
@@ -45,6 +46,7 @@ const USUAL_SHOWN = 5;
   selector: 'bk-list-page',
   imports: [
     NgTemplateOutlet,
+    AlertComponent,
     AsyncStateComponent,
     ReactiveFormsModule,
     ComposerBarComponent,
@@ -62,6 +64,16 @@ const USUAL_SHOWN = 5;
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <cmn-page [reload]="reload" kind="list" fill>
+      @if (store.waiting(); as waiting) {
+        <cmn-alert
+          [title]="
+            waiting +
+            (waiting === 1 ? ' change' : ' changes') +
+            ' waiting to send. Sent when there is a signal.'
+          "
+          variant="warning"
+        />
+      }
       <cmn-async-state
         [emptySubMessage]="emptyBody"
         [status]="asyncStatus()"
@@ -230,6 +242,13 @@ export class ListPage implements OnInit {
           void this.habits.load();
         }
       });
+    // Edits made with no signal go the moment the phone is back online, not on the next refresh.
+    const view = this.document.defaultView;
+    if (view) {
+      fromEvent(view, 'online')
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe(() => void this.store.load(true));
+    }
     fromEvent(this.document, 'visibilitychange')
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => {
