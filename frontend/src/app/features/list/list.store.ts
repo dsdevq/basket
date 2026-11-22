@@ -4,6 +4,7 @@ import {patchState, signalStore, withComputed, withMethods, withState} from '@ng
 
 import {SessionStore} from '../../core/auth/session.store';
 import {HttpStatus, statusOf} from '../../core/http-status';
+import {offlineCache} from '../../core/offline/offline-cache';
 import type {StoreId} from '../prices/prices.model';
 import {ListApi} from './list.api';
 import type {ListItem} from './list.model';
@@ -21,6 +22,12 @@ const MESSAGES = {
   update: 'Could not update that item. It is back as it was.',
   boughtAt: 'Could not change the shop. It is back as it was.',
   remove: 'Could not delete that item.',
+  offline: (savedAt: string) =>
+    `No signal. Showing the list as it was on ${new Date(savedAt).toLocaleString('en-IE', {
+      weekday: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+    })}. Changes need a connection.`,
   close: 'Could not finish the trip. The list is as it was. Try again.',
   closeChanged: 'The list just changed. Check it and tap Done shopping again.',
 } as const;
@@ -42,9 +49,17 @@ export const ListStore = signalStore(
     ) => {
       // Counts local writes to `items`; a refresh that started before a write is stale and must not overwrite it.
       let changes = 0;
+      // What this phone last knew of the list, kept for the next start with no signal; only once the list has loaded.
+      const remember = (): void => {
+        const me = session.user();
+        if (me && store.status() === 'ready') {
+          offlineCache.writeList(me.id, store.items());
+        }
+      };
       const setItems = (items: readonly ListItem[]): void => {
         changes++;
         patchState(store, {items});
+        remember();
       };
       const replace = (next: ListItem): void =>
         setItems(store.items().map(item => (item.id === next.id ? next : item)));
@@ -55,7 +70,21 @@ export const ListStore = signalStore(
         try {
           const items = await api.items();
           patchState(store, changes === seen ? {items, status: 'ready'} : {status: 'ready'});
-        } catch {
+          remember();
+        } catch (error) {
+          // No answer at all and the list never loaded this session: show it as this phone last saw it.
+          const me = session.user();
+          const cached =
+            statusOf(error) === 0 && me && store.status() !== 'ready'
+              ? offlineCache.readList<ListItem>(me.id)
+              : null;
+          if (cached) {
+            patchState(store, {items: cached.items, status: 'ready'});
+            if (!quiet) {
+              toast.info(MESSAGES.offline(cached.savedAt));
+            }
+            return;
+          }
           if (!quiet) {
             patchState(store, {status: store.items().length ? 'ready' : 'error'});
             toast.error(MESSAGES.load);

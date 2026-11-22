@@ -63,7 +63,10 @@ async function runOffline(guard: typeof authGuard, guarded = route): Promise<unk
 }
 
 describe('route guards', () => {
-  beforeEach(() => sessionStorage.clear());
+  beforeEach(() => {
+    sessionStorage.clear();
+    localStorage.clear();
+  });
 
   it('starts the lifekit sign-in once for an unlinked account, returning to the page asked for', async () => {
     const assign = vi.fn();

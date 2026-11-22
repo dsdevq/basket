@@ -26,7 +26,7 @@ function item(id: string, over: Partial<ListItem> = {}): ListItem {
 }
 
 function setup(api: Partial<ListApi>) {
-  const toast = {error: vi.fn(), success: vi.fn()};
+  const toast = {error: vi.fn(), success: vi.fn(), info: vi.fn()};
   TestBed.configureTestingModule({
     providers: [
       {provide: ListApi, useValue: api},
@@ -41,6 +41,32 @@ function setup(api: Partial<ListApi>) {
 }
 
 describe('ListStore', () => {
+  beforeEach(() => localStorage.clear());
+
+  it('shows the list as last seen when there is no signal, and says so', async () => {
+    const first = setup({items: vi.fn().mockResolvedValue([item('a')])});
+    await first.store.load();
+    TestBed.resetTestingModule();
+
+    const {store, toast} = setup({items: vi.fn().mockRejectedValue({status: 0})});
+    await store.load();
+
+    expect(store.status()).toBe('ready');
+    expect(store.toBuy().map(i => i.id)).toEqual(['a']);
+    expect(toast.info).toHaveBeenCalledOnce();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it("does not show another person's remembered list, nor one after a server error", async () => {
+    localStorage.setItem(
+      'basket.offline.list',
+      JSON.stringify({userId: 'someone-else', savedAt: '2026-11-20T10:00:00Z', items: [item('x')]})
+    );
+    const {store} = setup({items: vi.fn().mockRejectedValue({status: 0})});
+    await store.load();
+    expect(store.status()).toBe('error');
+  });
+
   it('loads the list and splits it into to-buy and ticked', async () => {
     const {store} = setup({
       items: vi.fn().mockResolvedValue([item('a'), item('b', {checked: true})]),
@@ -255,6 +281,27 @@ describe('ListStore', () => {
       expect(store.items().map(i => i.id)).toEqual(['a']);
       expect(toast.success).toHaveBeenCalledWith('Trip saved to History');
       expect(store.closing()).toBe(false);
+    });
+
+    it('does not bring the bought items back when the refresh after it has no signal', async () => {
+      const items = vi
+        .fn()
+        .mockResolvedValueOnce([item('b', {checked: true})])
+        .mockRejectedValue({status: 0});
+      const {store, toast} = setup({items, close: vi.fn().mockResolvedValue({})});
+      await store.load();
+
+      await store.closeTrip();
+      await Promise.resolve();
+      await store.load(true);
+
+      expect(store.items()).toEqual([]);
+      expect(toast.info).not.toHaveBeenCalled();
+
+      TestBed.resetTestingModule();
+      const next = setup({items: vi.fn().mockRejectedValue({status: 0})});
+      await next.store.load();
+      expect(next.store.items()).toEqual([]);
     });
 
     it('leaves the list as it was when the server refuses', async () => {
