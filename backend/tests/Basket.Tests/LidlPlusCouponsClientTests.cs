@@ -95,7 +95,7 @@ public sealed class LidlPlusCouponsClientTests
     [InlineData("2026-07-12T12:00:00Z", 2026, 7, 11)]
     public async Task A_coupon_never_counts_on_a_day_that_runs_past_its_stated_end(string end, int year, int month, int day)
     {
-        var body = $$"""{"sections":[{"promotions":[{"id":"C-1","title":"Test coupon","validity":{"end":"{{end}}"}}]}]}""";
+        var body = $$$"""{"sections":[{"promotions":[{"id":"C-1","title":"Test coupon","validity":{"end":"{{{end}}}"}}]}]}""";
         var (client, _) = Client(_ => Json(HttpStatusCode.OK, body));
 
         var list = await client.ListAsync(Access, CancellationToken.None);
