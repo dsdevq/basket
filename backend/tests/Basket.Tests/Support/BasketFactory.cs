@@ -50,6 +50,9 @@ public class BasketFactory : WebApplicationFactory<Program>
     /// <summary>Lidl Plus's receipts service, as a test sets it up: which receipts exist and which calls were made.</summary>
     public FakeLidlPlusTickets Receipts { get; } = new();
 
+    /// <summary>Lidl Plus's coupons service, as a test sets it up: which coupons exist and which were switched on.</summary>
+    public FakeLidlPlusCoupons Coupons { get; } = new();
+
     public int AuthRequestsPerMinute { get; init; } = 1000;
 
     /// <summary>The price and catalog ingest limit per client and minute; the app's own default unless a test needs more room.</summary>
@@ -139,6 +142,8 @@ public class BasketFactory : WebApplicationFactory<Program>
             services.AddSingleton<ILidlPlusAuth>(Lidl);
             services.RemoveAll<ILidlPlusTickets>();
             services.AddSingleton<ILidlPlusTickets>(Receipts);
+            services.RemoveAll<ILidlPlusCoupons>();
+            services.AddSingleton<ILidlPlusCoupons>(Coupons);
             services.RemoveAll<TimeProvider>();
             services.AddSingleton<TimeProvider>(Clock);
             if (FleetAgentEnabled)

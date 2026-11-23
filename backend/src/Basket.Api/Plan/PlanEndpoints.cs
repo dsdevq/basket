@@ -1,5 +1,6 @@
 using Basket.Api.Data;
 using Basket.Api.Prices;
+using Basket.Api.Prices.Promotions;
 using Basket.Api.Walk;
 using Microsoft.EntityFrameworkCore;
 
@@ -58,6 +59,6 @@ public static class PlanEndpoints
             .GroupBy(p => (p.ProductId, p.Store))
             .ToDictionary(g => g.Key, g => g.OrderByDescending(p => p.PaidOn).First());
 
-        return PlanBuilder.Build(lines, products, listingRows.ToLookup(l => l.ProductId), latest, today, paid, walk);
+        return PlanBuilder.Build(lines, products, listingRows.ToLookup(l => l.ProductId), latest, today, paid, walk, await CouponPricing.ActiveAsync(db, today, ct));
     }
 }

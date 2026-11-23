@@ -15,6 +15,14 @@ public sealed class PriceRecorder(AppDbContext db)
     public static DateOnly DublinDay(DateTimeOffset moment) =>
         DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(moment, Dublin).DateTime);
 
+    /// <summary>
+    /// The last Dublin day that is over by <paramref name="end"/> (rounded up to the minute): a coupon valid until then never counts on a
+    /// day that runs past its stated end, in summer time or winter time. An end of 23:59 Dublin time is that day; an end of 23:59 UTC in
+    /// July (00:59 Dublin the next day) is also that day, not the next.
+    /// </summary>
+    public static DateOnly LastDublinDayOver(DateTimeOffset end) =>
+        DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(end, Dublin).DateTime.AddMinutes(1)).AddDays(-1);
+
     /// <summary>Stores the reading as that day's one observation for the listing, replacing an earlier one of the same day.</summary>
     public async Task RecordAsync(StoreListing listing, PriceQuote quote, DateTimeOffset observedAt, CancellationToken ct)
     {

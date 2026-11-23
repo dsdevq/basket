@@ -19,6 +19,7 @@ import {
 import {firstValueFrom} from 'rxjs';
 
 import {HttpStatus, statusOf} from '../../core/http-status';
+import {LidlCouponsSectionComponent} from './lidl-coupons.section';
 import {LidlPlusApi} from './lidl-plus.api';
 import type {LidlPlusStatus} from './lidl-plus.model';
 import {LidlPlusTokenSheetComponent} from './lidl-plus-token.sheet';
@@ -29,7 +30,13 @@ import {LidlPlusTokenSheetComponent} from './lidl-plus-token.sheet';
  */
 @Component({
   selector: 'bk-lidl-plus-section',
-  imports: [AlertComponent, ButtonComponent, EmptyStateComponent, SkeletonComponent],
+  imports: [
+    AlertComponent,
+    ButtonComponent,
+    EmptyStateComponent,
+    LidlCouponsSectionComponent,
+    SkeletonComponent,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (loading()) {
@@ -47,6 +54,7 @@ import {LidlPlusTokenSheetComponent} from './lidl-plus-token.sheet';
         @switch (current.state) {
           @case ('connected') {
             <cmn-alert [title]="summary()" variant="success" />
+            <bk-lidl-coupons />
           }
           @case ('needs_new_token') {
             <cmn-alert [title]="summary()" variant="warning" />

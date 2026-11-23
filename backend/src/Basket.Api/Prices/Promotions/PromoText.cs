@@ -93,6 +93,26 @@ public static partial class PromoText
             : null;
     }
 
+    /// <summary>"€1 off", "€1.50 off", "Save €2", "1 € off": the euros the shop takes off. Null for anything else.</summary>
+    public static decimal? ParseAmountOff(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+
+        var match = AmountOff().Match(text);
+        if (!match.Success)
+        {
+            return null;
+        }
+
+        var value = match.Groups["a"].Success ? match.Groups["a"].Value : match.Groups["b"].Value;
+        return decimal.TryParse(value.Replace(',', '.'), NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var amount) && amount is > 0 and < 1000
+            ? amount
+            : null;
+    }
+
     private static int? Count(string value) =>
         Words.TryGetValue(value, out var word) ? word
         : int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var number) ? number
@@ -109,4 +129,7 @@ public static partial class PromoText
 
     [GeneratedRegex($@"(?<a>{Number})\s*%\s*(?:off|discount)|\bsave\s+(?<b>{Number})\s*%", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex PercentOff();
+
+    [GeneratedRegex($@"(?<![\w.,])€\s*(?<a>{Number})\s*(?:off|discount)\b|(?<![\w.,])(?<a>{Number})\s*€\s*(?:off|discount)\b|\bsave\s+€\s*(?<b>{Number})", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex AmountOff();
 }

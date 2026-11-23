@@ -1052,6 +1052,10 @@ export async function signedIn(page: Page): Promise<void> {
   await page.route('**/api/passkeys', r => r.fulfill({json: PASSKEYS}));
   await page.route('**/api/ingest-tokens', r => r.fulfill({json: INGEST_TOKENS}));
   await page.route('**/api/lidl-plus/connection', r => r.fulfill({json: LIDL_PLUS}));
+  // No coupons listed: the coupons block renders nothing, as it does when Lidl cannot be asked.
+  await page.route('**/api/lidl-plus/coupons', r =>
+    r.fulfill({json: {state: 'connected', fresh: true, coupons: [], activated: 0, refused: 0}})
+  );
   // The account's appearance: nothing saved yet, so every screen follows the system.
   await page.route('**/api/me/preferences', r =>
     r.fulfill({json: {appearance: {theme: 'system'}}})
