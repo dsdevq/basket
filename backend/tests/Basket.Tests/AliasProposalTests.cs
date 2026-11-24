@@ -123,6 +123,43 @@ public sealed class AliasProposalTests : IClassFixture<BasketFactory>
     }
 
     [Fact]
+    public async Task A_typed_line_set_to_another_shop_is_not_paired_with_the_lidl_receipt()
+    {
+        var (owner, eggs, _) = await SeedAsync();
+        await AddReceiptTripAsync(1, [], [eggs]);
+        await _factory.WithDb(async db =>
+        {
+            var trip = await db.Trips.SingleAsync(t => t.Source == TripSources.LidlPlus);
+            db.TripItems.Add(new TripItem { Id = Guid.NewGuid(), TripId = trip.Id, Text = "Яйця", CheckedAt = trip.ClosedAt, BoughtStore = Store.Tesco });
+            await db.SaveChangesAsync();
+            return 0;
+        });
+
+        (await ProposalsAsync(owner)).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Every_valid_pair_is_proposed_however_many_there_are()
+    {
+        var (owner, _, _) = await SeedAsync();
+        var products = await _factory.WithDb(async db =>
+        {
+            var by = await db.Users.Select(u => u.Id).FirstAsync();
+            var made = Enumerable.Range(0, 5).Select(i => new Product { Id = Guid.NewGuid(), Name = $"Receipt product {i}", AddedAt = DateTimeOffset.UtcNow, AddedByUserId = by }).ToList();
+            db.Products.AddRange(made);
+            await db.SaveChangesAsync();
+            return made.Select(p => p.Id).ToArray();
+        });
+        var texts = Enumerable.Range(0, 5).Select(i => $"words {i}").ToArray();
+        await AddReceiptTripAsync(1, texts, products);
+
+        var proposals = await ProposalsAsync(owner);
+
+        proposals.Should().HaveCount(25);
+        proposals.Count(p => p.GetProperty("text").GetString() == "words 0").Should().Be(5);
+    }
+
+    [Fact]
     public async Task Words_that_are_already_a_name_a_linked_tick_or_a_products_own_name_are_not_proposed()
     {
         var (owner, eggs, milk) = await SeedAsync();

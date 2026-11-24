@@ -24,11 +24,6 @@ public sealed record AliasPairRequest(string? Text, Guid? ProductId);
 /// </summary>
 public static class AliasProposals
 {
-    /// <summary>Most proposals asked for at once, and most products proposed for one set of words: a trip with many typed lines pairs each with each.</summary>
-    public const int MaxProposals = 20;
-
-    public const int MaxPerText = 3;
-
     public static void MapAliasProposalEndpoints(this IEndpointRouteBuilder api)
     {
         var group = api.MapGroup("/alias-proposals");
@@ -40,8 +35,7 @@ public static class AliasProposals
     /// <summary>
     /// A Lidl Plus receipt that took over a tick-off trip (issue #184) holds two kinds of line: the ones the person ticked (the shop is set
     /// to Lidl, and a typed one has no product) and the receipt's own lines (no shop, a product). Every typed line paired with every
-    /// receipt-only product of the same trip is a candidate; a pair seen on more trips ranks first, and within a count the trip with fewer
-    /// receipt-only lines counts for more, since there the words had fewer products to be. Pairs already turned down, words that already are
+    /// receipt-only product of the same trip is a candidate; a pair seen on more trips ranks first, then by product name. Pairs already turned down, words that already are
     /// a name of some product, and a product's own name are left out.
     /// </summary>
     public static async Task<IReadOnlyList<AliasProposalResponse>> ComputeAsync(AppDbContext db, CancellationToken ct)
@@ -82,7 +76,7 @@ public static class AliasProposals
             var bought = new HashSet<Guid>();
             foreach (var line in lines[tripId])
             {
-                if (line.BoughtStore is not null && line.ProductId is null)
+                if (line.BoughtStore == Store.Lidl && line.ProductId is null)
                 {
                     var words = UserNames.Clean(line.Text, ProductAlias.MaxLength);
                     if (words is not null && !taken.Contains(ProductAliases.Normalize(words)))
@@ -107,7 +101,6 @@ public static class AliasProposals
 
                     var tally = pairs.TryGetValue((key, product), out var seen) ? seen : new Tally(words);
                     tally.Trips++;
-                    tally.Weight += 1d / bought.Count;
                     if (day >= tally.LastSeen)
                     {
                         tally.LastSeen = day;
@@ -121,16 +114,8 @@ public static class AliasProposals
 
         return pairs
             .OrderByDescending(p => p.Value.Trips)
-            .ThenByDescending(p => p.Value.Weight)
             .ThenBy(p => names[p.Key.ProductId], StringComparer.OrdinalIgnoreCase)
             .ThenBy(p => p.Key.Key, StringComparer.Ordinal)
-            .GroupBy(p => p.Key.Key)
-            .SelectMany(g => g.Take(MaxPerText))
-            .OrderByDescending(p => p.Value.Trips)
-            .ThenByDescending(p => p.Value.Weight)
-            .ThenBy(p => names[p.Key.ProductId], StringComparer.OrdinalIgnoreCase)
-            .ThenBy(p => p.Key.Key, StringComparer.Ordinal)
-            .Take(MaxProposals)
             .Select(p => new AliasProposalResponse(p.Value.Text, p.Key.ProductId, names[p.Key.ProductId], p.Value.Trips, p.Value.LastSeen))
             .ToList();
     }
@@ -140,8 +125,6 @@ public static class AliasProposals
         public string Text { get; set; } = text;
 
         public int Trips { get; set; }
-
-        public double Weight { get; set; }
 
         public DateOnly LastSeen { get; set; }
     }

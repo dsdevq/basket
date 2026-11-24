@@ -2595,11 +2595,10 @@ No model and no guessing at the words: a pair is proposed only when a Lidl Plus 
 Nothing is saved without a tap.
 
 - **Where a pair comes from.** A Lidl Plus trip (issue #184: the receipt took over the day's tick-off trip) holds ticked lines (the shop
-  is Lidl) and the receipt's own lines (no shop, a product). Each typed ticked line (no product) is paired with each receipt-only product of
+  is Lidl) and the receipt's own lines (no shop, a product). Each typed line ticked at Lidl (no product; one set to another shop is not paired) is paired with each receipt-only product of
   the same trip. A pair needs at least one such trip; each trip counts once however many lines it has. A tick-off trip no receipt has
   taken over, and a receipt with no ticks, propose nothing.
-- **Ranking.** More trips first; within a count, the trip with fewer receipt-only lines counts for more (the words had fewer products to
-  be); then the product's name. At most 3 products per set of words and 20 pairs in all, so a long trip does not bury the list.
+- **Ranking.** More trips first, then the product's name. Every valid pair is listed.
 - **Left out.** Words that already are a name of a product, a pair whose words are the product's own name, a product that has its 20
   names, and any pair turned down.
 - **`GET /api/alias-proposals`** lists them (`text`, `productId`, `productName`, `trips`, `lastSeen`). It is worked out on every read from
