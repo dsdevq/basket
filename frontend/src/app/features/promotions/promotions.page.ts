@@ -27,11 +27,12 @@ import {
   type PriceHistorySheetData,
 } from '../prices/price-history.sheet';
 import {LOWEST_TAG} from '../prices/price-history-format';
-import type {PromoOffer, PromoUnit} from './promotions.model';
+import type {PromoOffer, PromoUnit, UsualOffer} from './promotions.model';
 import {PromotionsStore} from './promotions.store';
 import {byStore, gapText, headline, offerLines, placeText, UNIT_WORDS} from './promotions-format';
 
 const VIEWS: readonly SegmentedOption[] = [
+  {value: 'usual', label: 'Your usual'},
   {value: 'product', label: 'Best buy'},
   {value: 'store', label: 'By store'},
 ];
@@ -55,19 +56,38 @@ const VIEWS: readonly SegmentedOption[] = [
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <cmn-page kind="list">
-      <cmn-segmented [options]="views" [(value)]="view" label="Group promotions by" />
+      <cmn-segmented
+        [options]="views"
+        [value]="activeView()"
+        (valueChange)="view.set($event)"
+        label="Group promotions by"
+      />
 
-      <cmn-list-section heading="How offers are ranked" card>
-        <p
-          class="m-0 max-w-prose px-cmn-4 py-cmn-3 text-cmn-sm text-text-secondary"
-          data-testid="rule"
-        >
-          Each offer becomes the price of one kilo, litre or piece: 2 for €4 is €2 each, the pack
-          price is divided by the pack size, and a card price needs the card. Cheapest first.
-          Readings over {{ store.staleAfterDays() }} days old, packs with no size and mixed units
-          are shown but not ranked.
-        </p>
-      </cmn-list-section>
+      @if (activeView() === 'usual') {
+        <cmn-list-section heading="Your usual products on offer now" card>
+          <p
+            class="m-0 max-w-prose px-cmn-4 py-cmn-3 text-cmn-sm text-text-secondary"
+            data-testid="usual-rule"
+          >
+            Your usual products are the ones you bought on at least 2 of your last 10 trips. Their
+            offers are found in every shop's whole range, matched by barcode, or by name and size,
+            so a product you never linked still shows. Offers over {{ store.staleAfterDays() }} days
+            old are left out. Nothing is sent to your phone.
+          </p>
+        </cmn-list-section>
+      } @else {
+        <cmn-list-section heading="How offers are ranked" card>
+          <p
+            class="m-0 max-w-prose px-cmn-4 py-cmn-3 text-cmn-sm text-text-secondary"
+            data-testid="rule"
+          >
+            Each offer becomes the price of one kilo, litre or piece: 2 for €4 is €2 each, the pack
+            price is divided by the pack size, and a card price needs the card. Cheapest first.
+            Readings over {{ store.staleAfterDays() }} days old, packs with no size and mixed units
+            are shown but not ranked.
+          </p>
+        </cmn-list-section>
+      }
 
       @switch (store.status()) {
         @case ('loading') {
@@ -83,13 +103,45 @@ const VIEWS: readonly SegmentedOption[] = [
           />
         }
         @default {
-          @if (!store.products().length) {
+          @if (activeView() === 'usual') {
+            @if (store.usualFailed()) {
+              <cmn-empty-state
+                (action)="store.load()"
+                kind="error"
+                message="Your usual products did not load"
+                subMessage="Check your connection."
+                actionLabel="Try again"
+              />
+            } @else if (!store.usual().length) {
+              <cmn-empty-state
+                icon="Tag"
+                message="Nothing on offer from your usual products"
+                subMessage="When a shop has an offer on something you usually buy, it shows up here."
+              />
+            } @else {
+              @for (product of store.usual(); track product.id) {
+                <cmn-list-section [heading]="product.name" card>
+                  @for (usual of product.offers; track usual.catalogProductId) {
+                    <cmn-list-item-row
+                      [label]="usual.offer.storeName"
+                      [sublabel]="usualLines(usual)"
+                      class="[&_.truncate]:overflow-visible [&_.truncate]:whitespace-pre-line [&_.truncate]:break-words"
+                    >
+                      <span amount class="text-cmn-sm font-semibold text-text-primary">{{
+                        headline(usual.offer)
+                      }}</span>
+                    </cmn-list-item-row>
+                  }
+                </cmn-list-section>
+              }
+            }
+          } @else if (!store.products().length) {
             <cmn-empty-state
               icon="Tag"
               message="No promotions right now"
               subMessage="When a shop you track has an offer on one of your products it shows up here, ranked by price per kilo, litre or piece."
             />
-          } @else if (view() === 'product') {
+          } @else if (activeView() === 'product') {
             @for (product of store.products(); track product.id) {
               <cmn-list-section
                 [heading]="product.name + (product.unit ? ', per ' + unitWord(product.unit) : '')"
@@ -167,7 +219,11 @@ export class PromotionsPage implements OnInit {
   protected readonly store = inject(PromotionsStore);
 
   protected readonly views = VIEWS;
-  protected readonly view = signal('product');
+  /** What the person picked; until they pick, the usual products if any are on offer, else the best buys. */
+  protected readonly view = signal<string | null>(null);
+  protected readonly activeView = computed(
+    () => this.view() ?? (this.store.usual().length ? 'usual' : 'product')
+  );
   protected readonly stores = computed(() => byStore(this.store.products()));
   protected readonly headline = headline;
   protected readonly gapText = gapText;
@@ -188,6 +244,11 @@ export class PromotionsPage implements OnInit {
   /** One line per fact group; the row keeps the line breaks. */
   protected lines(offer: PromoOffer): string {
     return offerLines(offer).join('\n');
+  }
+
+  /** The shop's name for the product, then the offer's facts. */
+  protected usualLines(usual: UsualOffer): string {
+    return [usual.title, ...offerLines(usual.offer)].join('\n');
   }
 
   /** Tapping an offer opens its shop's last 90 days of prices for that product. */

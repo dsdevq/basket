@@ -3,10 +3,12 @@ import {ToastService} from '@lifekit-hq/ui';
 import {patchState, signalStore, withMethods, withState} from '@ngrx/signals';
 
 import {PromotionsApi} from './promotions.api';
-import type {PromoProduct} from './promotions.model';
+import type {PromoProduct, UsualProduct} from './promotions.model';
 
 interface PromotionsState {
   readonly products: readonly PromoProduct[];
+  readonly usual: readonly UsualProduct[];
+  readonly usualFailed: boolean;
   readonly staleAfterDays: number;
   readonly status: 'loading' | 'ready' | 'error';
 }
@@ -19,13 +21,22 @@ const LOAD_FAILED = 'Could not load the promotions. Try again.';
 /** The current promotions of every tracked product, ranked by the server. */
 export const PromotionsStore = signalStore(
   {providedIn: 'root'},
-  withState<PromotionsState>({products: [], staleAfterDays: DEFAULT_STALE_DAYS, status: 'loading'}),
+  withState<PromotionsState>({
+    products: [],
+    usual: [],
+    usualFailed: false,
+    staleAfterDays: DEFAULT_STALE_DAYS,
+    status: 'loading',
+  }),
   withMethods((store, api = inject(PromotionsApi), toast = inject(ToastService)) => ({
     async load(quiet = false): Promise<void> {
       try {
-        const all = await api.all();
+        // The usual-products view is an addition: when only it fails the promotions still show, and its view says so.
+        const [all, usual] = await Promise.all([api.all(), api.usual().catch(() => null)]);
         patchState(store, {
           products: all.products,
+          usual: usual?.products ?? store.usual(),
+          usualFailed: usual === null,
           staleAfterDays: all.staleAfterDays,
           status: 'ready',
         });

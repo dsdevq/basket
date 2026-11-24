@@ -8,8 +8,15 @@ public static class PromotionEndpoints
     private static readonly TimeZoneInfo Dublin = TimeZoneInfo.FindSystemTimeZoneById("Europe/Dublin");
 
     /// <summary>Signed-in people only, like every route that is not named as a machine route.</summary>
-    public static void MapPromotionEndpoints(this IEndpointRouteBuilder api) =>
+    public static void MapPromotionEndpoints(this IEndpointRouteBuilder api)
+    {
         api.MapGet("/promotions", GetPromotions);
+        api.MapGet("/promotions/usual", GetUsual);
+    }
+
+    /// <summary>Offers on the products the household usually buys, from the whole catalog (see <see cref="UsualOffers"/>).</summary>
+    private static async Task<IResult> GetUsual(AppDbContext db, TimeProvider clock, CancellationToken ct) =>
+        Results.Ok(await UsualOffers.BuildAsync(db, DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(clock.GetUtcNow(), Dublin).DateTime), ct));
 
     private static async Task<IResult> GetPromotions(AppDbContext db, TimeProvider clock, CancellationToken ct)
     {

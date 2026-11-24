@@ -1,4 +1,10 @@
-import type {PromoGap, PromoOffer, PromoProduct} from './promotions.model';
+import type {
+  PromoGap,
+  PromoOffer,
+  PromoProduct,
+  UsualOffer,
+  UsualProduct,
+} from './promotions.model';
 
 /** Test helpers: an offer with every field set, overridden per case. */
 export function offer(over: Partial<PromoOffer> = {}): PromoOffer {
@@ -35,4 +41,24 @@ export function product(over: Partial<PromoProduct> = {}): PromoProduct {
 
 export function gap(over: Partial<PromoGap> = {}): PromoGap {
   return {store: 'tesco', storeName: 'Tesco', reason: 'not_read', date: null, ...over};
+}
+
+export function usualOffer(over: Partial<UsualOffer> = {}): UsualOffer {
+  return {
+    catalogProductId: 'c1',
+    title: 'Milbona whole milk',
+    offer: offer({
+      unit: null,
+      unitPrice: null,
+      rank: null,
+      buyQuantity: 1,
+      payTotal: 1.49,
+      eachPrice: 1.49,
+    }),
+    ...over,
+  };
+}
+
+export function usualProduct(over: Partial<UsualProduct> = {}): UsualProduct {
+  return {id: 'u1', name: 'Whole milk 2L', boughtIn: 3, offers: [usualOffer()], ...over};
 }

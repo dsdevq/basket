@@ -25,7 +25,11 @@ public static class HabitEndpoints
     /// Most bought first: the number of trips that bought the product (a product twice in one trip counts once), then the
     /// most recent trip, then the name. A free-text line or a deleted product has no product to rank and is left out.
     /// </summary>
-    private static async Task<IResult> GetHabits(AppDbContext db, CancellationToken ct)
+    private static async Task<IResult> GetHabits(AppDbContext db, CancellationToken ct) =>
+        Results.Ok(new { products = await LoadAsync(db, ct) });
+
+    /// <summary>The habits as <c>GET /api/trips/habits</c> answers them, so other views (offers on usual products) use the same "usual".</summary>
+    public static async Task<List<HabitResponse>> LoadAsync(AppDbContext db, CancellationToken ct)
     {
         var rows = await (
             from i in db.TripItems.AsNoTracking()
@@ -46,6 +50,6 @@ public static class HabitEndpoints
                 g.Where(r => recent.Contains(r.TripId)).Select(r => r.TripId).Distinct().Count() >= UsualAfter))
             .OrderByDescending(h => h.BoughtIn).ThenByDescending(h => h.LastBoughtAt).ThenBy(h => h.Name, StringComparer.Ordinal)
             .ToList();
-        return Results.Ok(new { products = habits });
+        return habits;
     }
 }

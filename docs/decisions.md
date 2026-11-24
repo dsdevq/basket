@@ -682,6 +682,31 @@ price can be set side by side.
   "Update screen baselines" workflow on CI, not committed from a local run. The route scan, drift check and screen composition check
   pass locally on the new page at 390 and 1280 px, light and dark.
 
+## Promotions: offers on your usual products (2026-11-24, issue #195)
+
+The Promotions page said "No promotions right now" while Lidl's catalog held 179 current offers, because it reads only the pages
+linked to a Shelf product. Borrowed pattern: Flipp's Watch List, marktguru favourites and kaufDA, a list of the offers on what you
+already buy. A **Your usual** view, the page's first, lists them.
+
+- **"Usual" is the habits rule**, not a new one: a product bought in at least 2 of the latest 10 closed trips
+  (`HabitEndpoints.LoadAsync`, the same call `GET /api/trips/habits` makes).
+- **Found in the whole catalog.** `GET /api/promotions/usual` (signed-in people only) narrows each shop's catalog the way the candidate
+  search does (`CatalogRows.NarrowAsync`: barcode, or size plus the product's first generic word) and keeps the rows `CandidateMatcher`
+  accepts under the product's name or any other name the household gave it. The product's own linked pages count too. A page a person
+  rejected for the product is never shown. Nothing is proposed, linked or stored.
+- **Same promotion rule.** A row's price is read by the rule above (`PromotionBuilder.CatalogOffer`, then `OfferCalculator`, card prices,
+  multi-buys and activated Lidl Plus coupons), and only a promotion is shown. Out of stock, ended, not yet started and not listed by a
+  sweep in the last 3 days (`StaleAfterDays`) are left out: this view says "on offer now", so it hides what the other view would flag.
+  Offers here are not ranked across shops and none is dropped: every matching offer shows, by shop, then the cheaper first, bounded
+  only by the 300 rows per shop the narrowing reads. A row is told by its shop's name for it and the offer; it carries no "lowest in
+  90 days" mark, since a catalog row has no page history here.
+- **A match by name and size can be wrong**, so the sheet of the product's own page stays the place to confirm; this view never
+  changes a match.
+- **Never pushed.** It is a view the person opens; no notification, digest or badge is sent. No migration: the answer is computed on
+  each read from habits, the catalog and its prices. The page opens on this view when it has anything to show, else on Best buy.
+- **Screens.** The `promotions` mock now answers `/api/promotions/usual`, so its Linux baselines change; the Update screen baselines
+  workflow re-renders them on the branch, not a local run.
+
 ## Loyalty cards as barcodes at the till (2026-11-10, issue #46, epic #27)
 
 Owner's words: "I shop in 4 different stores. Lidl, aldi, tesco, dunnes. I want to have one app where I could sort things out."

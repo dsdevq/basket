@@ -173,7 +173,7 @@ public sealed class ServerCandidates(AppDbContext db, TimeProvider clock, ILogge
     /// What is known of the product: its name, and what its confirmed pages add (the barcode when the product has none, the size when
     /// its name states none, the category). A page a machine linked and no person confirmed is not evidence of anything.
     /// </summary>
-    private static ProductFacts FactsOf(Product product, List<StoreListing> listings, Dictionary<Guid, StoreProduct> linked)
+    internal static ProductFacts FactsOf(Product product, List<StoreListing> listings, Dictionary<Guid, StoreProduct> linked)
     {
         var confirmed = listings.Where(l => l.ConfirmedAt != null).OrderBy(l => l.Store).ToList();
         var rows = confirmed.Select(l => l.StoreProductId is { } id && linked.TryGetValue(id, out var row) ? row : null).Where(r => r is not null).Select(r => r!).ToList();
