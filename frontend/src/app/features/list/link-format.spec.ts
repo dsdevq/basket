@@ -1,5 +1,5 @@
 import type {Product} from '../prices/prices.model';
-import {fold, matchedAlias, productMatches, wouldAddName} from './link-format';
+import {exactAlias, fold, matchedAlias, productMatches, wouldAddName} from './link-format';
 
 const EGGS: Product = {
   id: 'p1',
@@ -39,5 +39,12 @@ describe('link-format', () => {
     expect(wouldAddName(EGGS, ' яйця ')).toBe(false);
     expect(wouldAddName(EGGS, 'free range EGGS')).toBe(false);
     expect(wouldAddName(EGGS, '  ')).toBe(false);
+  });
+
+  it('finds the product whose other name is exactly the words, and not one that only contains them', () => {
+    expect(exactAlias([EGGS], ' яйця ')).toBe(EGGS);
+    expect(exactAlias([EGGS], 'яйц')).toBeNull();
+    expect(exactAlias([EGGS], 'Free Range Eggs')).toBeNull();
+    expect(exactAlias([EGGS], '')).toBeNull();
   });
 });

@@ -6,6 +6,8 @@ import {of} from 'rxjs';
 import {SessionStore} from '../../core/auth/session.store';
 import {HabitsApi} from '../habits/habits.api';
 import type {Habit} from '../habits/habits.model';
+import {PricesApi} from '../prices/prices.api';
+import type {Product} from '../prices/prices.model';
 import {ListApi} from './list.api';
 import type {ListItem} from './list.model';
 import {ListPage} from './list.page';
@@ -56,6 +58,7 @@ interface Harness {
     addProduct: ReturnType<typeof vi.fn>;
   };
   readonly habitsApi: {all: ReturnType<typeof vi.fn>};
+  readonly toast: {info: ReturnType<typeof vi.fn>};
   readonly dialog: {confirm: ReturnType<typeof vi.fn>};
   readonly drawer: {open: ReturnType<typeof vi.fn>};
   readonly host: HTMLElement;
@@ -65,7 +68,11 @@ function habit(productId: string, name: string, boughtIn: number, usual = true):
   return {productId, name, boughtIn, lastBoughtAt: '2026-11-05T12:00:00Z', usual};
 }
 
-async function render(items: ListItem[], habits: Habit[] = []): Promise<Harness> {
+async function render(
+  items: ListItem[],
+  habits: Habit[] = [],
+  products: Product[] = []
+): Promise<Harness> {
   const api = {
     items: vi.fn().mockResolvedValue(items),
     add: vi.fn(),
@@ -79,6 +86,7 @@ async function render(items: ListItem[], habits: Habit[] = []): Promise<Harness>
       ),
   };
   const habitsApi = {all: vi.fn().mockResolvedValue(habits)};
+  const toast = {error: vi.fn(), info: vi.fn(), success: vi.fn()};
   const drawer = {open: vi.fn()};
   const dialog = {confirm: vi.fn().mockReturnValue(of(true))};
   TestBed.configureTestingModule({
@@ -87,7 +95,8 @@ async function render(items: ListItem[], habits: Habit[] = []): Promise<Harness>
       {provide: HabitsApi, useValue: habitsApi},
       {provide: CmnDrawerService, useValue: drawer},
       {provide: CmnDialogService, useValue: dialog},
-      {provide: ToastService, useValue: {error: vi.fn(), info: vi.fn(), success: vi.fn()}},
+      {provide: PricesApi, useValue: {all: vi.fn().mockResolvedValue({products, stores: []})}},
+      {provide: ToastService, useValue: toast},
       {
         provide: SessionStore,
         useValue: {user: signal({id: 'u1', displayName: 'Denys', role: 'owner'})},
@@ -98,7 +107,34 @@ async function render(items: ListItem[], habits: Habit[] = []): Promise<Harness>
   fixture.detectChanges();
   await settle(fixture);
   await loaded(fixture);
-  return {fixture, api, habitsApi, dialog, drawer, host: fixture.nativeElement as HTMLElement};
+  return {
+    fixture,
+    api,
+    habitsApi,
+    toast,
+    dialog,
+    drawer,
+    host: fixture.nativeElement as HTMLElement,
+  };
+}
+
+function product(id: string, name: string, aliases: string[] = []): Product {
+  return {
+    id,
+    name,
+    stores: [],
+    aliases: aliases.map((text, index) => ({id: `${id}-a${index}`, text})),
+  };
+}
+
+async function typeText(h: Harness, value: string): Promise<void> {
+  const input = h.host.querySelector<HTMLInputElement>('input[aria-label="Add an item"]');
+  if (!input) {
+    throw new Error('No add field');
+  }
+  input.value = value;
+  input.dispatchEvent(new Event('input'));
+  await settle(h.fixture);
 }
 
 function swipeButton(host: HTMLElement, name: string): HTMLButtonElement {
@@ -412,6 +448,74 @@ describe('ListPage', () => {
 
       expect(api.close).not.toHaveBeenCalled();
       expect(host.textContent).toContain('Butter');
+    });
+  });
+
+  describe('Shelf suggestions while typing', () => {
+    const eggs = product('eggs', 'Free Range Eggs', ['Яйця']);
+    const milk = product('milk', 'Whole milk 2L');
+
+    it('offers a product by a saved Cyrillic alias, and by its English name', async () => {
+      const h = await render([], [], [eggs, milk]);
+
+      await typeText(h, 'яйц');
+      expect(h.host.textContent).toContain('Free Range Eggs');
+      expect(h.host.textContent).toContain('Also called “Яйця”');
+      expect(h.host.textContent).not.toContain('Whole milk');
+
+      await typeText(h, 'milk');
+      expect(h.host.textContent).toContain('Whole milk 2L');
+      expect(h.host.textContent).not.toContain('Free Range Eggs');
+    });
+
+    it('offers nothing while the field is empty', async () => {
+      const h = await render([], [], [eggs, milk]);
+
+      expect(h.host.textContent).not.toContain('On your Shelf');
+    });
+
+    it('adds the product line in one tap and clears the field', async () => {
+      const h = await render([], [], [eggs]);
+      await typeText(h, 'eggs');
+
+      const row = h.host.querySelector<HTMLElement>(
+        'cmn-list-section[heading="On your Shelf"] cmn-list-item-row [role="button"], cmn-list-section[heading="On your Shelf"] cmn-list-item-row button'
+      );
+      row?.click();
+      await settle(h.fixture);
+
+      expect(h.api.addProduct).toHaveBeenCalledWith('eggs', null);
+    });
+
+    it('links text that is exactly a saved alias by itself, with Undo that removes the new line', async () => {
+      const h = await render([], [], [eggs]);
+      h.api.add.mockResolvedValue(item('n1', 'Free Range Eggs', {productId: 'eggs'}));
+      await typeText(h, 'яйця');
+
+      h.host.querySelector('form')?.dispatchEvent(new Event('submit'));
+      await settle(h.fixture);
+
+      expect(h.toast.info).toHaveBeenCalledTimes(1);
+      const [message, options] = h.toast.info.mock.calls[0] as [
+        string,
+        {action: {label: string; run: () => void}},
+      ];
+      expect(message).toContain('Free Range Eggs');
+      expect(options.action.label).toBe('Undo');
+      options.action.run();
+      await settle(h.fixture);
+      expect(h.api.remove).toHaveBeenCalledWith('n1');
+    });
+
+    it('offers no Undo for words that are not a saved alias', async () => {
+      const h = await render([], [], [eggs]);
+      h.api.add.mockResolvedValue(item('n2', 'Eggs'));
+      await typeText(h, 'Eggs');
+
+      h.host.querySelector('form')?.dispatchEvent(new Event('submit'));
+      await settle(h.fixture);
+
+      expect(h.toast.info).not.toHaveBeenCalled();
     });
   });
 });

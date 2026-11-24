@@ -2546,8 +2546,23 @@ encouraged over typing, and aliases should affect search and product matching.
   alternatives; neither was built. "Link to a product" is in the line's More sheet (there is no inline Link button: it failed the screen check beside the swipe Delete tray). The Plan's "Not matched" line now says to
   link it from the list.
 - **Each product lists its other names** in its More sheet on the Prices tab: add, tap to rename, delete.
-- **Not in this slice.** Suggestions while typing in the composer (slice 2), proposals from receipts (slice 3), re-linking a line
-  when a trip is reloaded, and the receipt import and the catalog search using names.
+- **Not in this slice.** Suggestions while typing in the composer (slice 2, below), proposals from receipts (slice 3), re-linking a
+  line when a trip is reloaded, and the receipt import and the catalog search using names.
+
+## Product aliases: suggestions while typing (2026-11-24, issue #186, slice 2 of 3)
+
+Frontend only: the endpoints, the schema and the matching rule are unchanged. No new route, so no route-scan change; the List screen
+gains a block above the composer, so its baselines are redrawn by the **Update screen baselines** workflow, never locally.
+
+- **Suggest.** While text is typed, the composer shows up to 4 Shelf products whose name or other names match, in Cyrillic or Latin
+  (`productMatches`: accents and case folded, every typed word found), under "On your Shelf", photo first, built from
+  `cmn-list-section` and `cmn-list-item-row` (no combobox exists in lifekit-ui, and none was needed). A product that matched on another
+  name says "Also called “…”". One tap adds the product line (`addProduct(productId, null)`, no shop) and clears the field. The Shelf
+  products come from the Prices store, which the List page loads when it is not ready.
+- **Exact name links by itself, with Undo.** Add with words that exactly equal a saved name (`exactAlias`; a product's own name is not
+  one) is linked by the server as before (slice 1, "Add by a known name"); the app then shows the toast "Added as <product>" with
+  **Undo**, which removes the line just added. No Undo when the product's open line already existed (nothing new was added) or the
+  add was only queued offline.
 
 ## Price history and "lowest in 90 days" (2026-11-22, issue #194)
 

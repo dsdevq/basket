@@ -7,7 +7,7 @@ import {
   inject,
   type OnInit,
 } from '@angular/core';
-import {takeUntilDestroyed} from '@angular/core/rxjs-interop';
+import {takeUntilDestroyed, toSignal} from '@angular/core/rxjs-interop';
 import {FormControl, FormGroup, ReactiveFormsModule} from '@angular/forms';
 import {
   AlertComponent,
@@ -24,14 +24,18 @@ import {
   PageComponent,
   SkeletonComponent,
   TagComponent,
+  ToastService,
 } from '@lifekit-hq/ui';
 import {firstValueFrom, fromEvent, interval} from 'rxjs';
 
 import {ComposerBarComponent} from '../../core/shell/composer-bar.component';
 import {HabitsStore} from '../habits/habits.store';
 import {STORE_NAMES} from '../prices/price-format';
-import type {StoreId} from '../prices/prices.model';
+import type {Product, StoreId} from '../prices/prices.model';
+import {PricesStore} from '../prices/prices.store';
+import {shelfTiles} from '../shelf/shelf-format';
 import {type ItemAction, ItemActionsSheetComponent} from './item-actions.sheet';
+import {exactAlias, matchedAlias, productMatches} from './link-format';
 import type {ListItem} from './list.model';
 import {ListStore} from './list.store';
 import {ListPhotoComponent} from './list-photo.component';
@@ -42,6 +46,9 @@ const REFRESH_MS = 15_000;
 
 /** How many "usually bought" suggestions the basket shows at once. */
 const USUAL_SHOWN = 5;
+
+/** How many Shelf products the composer offers while typing. */
+const SUGGESTIONS_SHOWN = 4;
 
 @Component({
   selector: 'bk-list-page',
@@ -141,6 +148,20 @@ const USUAL_SHOWN = 5;
         }
       </cmn-async-state>
       <bk-composer-bar>
+        @if (suggestions().length) {
+          <cmn-list-section heading="On your Shelf" class="mb-cmn-2 block" card>
+            @for (tile of suggestions(); track tile.product.id) {
+              <cmn-list-item-row
+                [label]="tile.product.name"
+                [sublabel]="alsoCalled(tile.product)"
+                [action]="true"
+                (activated)="addSuggestion(tile.product)"
+              >
+                <bk-list-photo [name]="tile.product.name" [src]="tile.imageUrl" avatar />
+              </cmn-list-item-row>
+            }
+          </cmn-list-section>
+        }
         <form [formGroup]="form" (ngSubmit)="add()" class="flex items-center gap-cmn-2">
           <cmn-input
             formControlName="text"
@@ -202,6 +223,8 @@ export class ListPage implements OnInit {
   private readonly document = inject(DOCUMENT);
   private readonly destroyRef = inject(DestroyRef);
   private readonly habits = inject(HabitsStore);
+  private readonly prices = inject(PricesStore);
+  private readonly toast = inject(ToastService);
 
   protected readonly store = inject(ListStore);
 
@@ -230,6 +253,20 @@ export class ListPage implements OnInit {
   protected readonly text = new FormControl('', {nonNullable: true});
   protected readonly form = new FormGroup({text: this.text});
 
+  protected readonly typed = toSignal(this.text.valueChanges, {initialValue: ''});
+
+  /** Shelf products whose name or other name matches what is typed (Cyrillic or Latin), with their photos, for a one-tap add. */
+  protected readonly suggestions = computed(() => {
+    const query = this.typed().trim();
+    if (!query) {
+      return [];
+    }
+    return shelfTiles(
+      this.prices.products().filter(product => productMatches(product, query)),
+      'all'
+    ).slice(0, SUGGESTIONS_SHOWN);
+  });
+
   /** Pull to refresh on this tab root: the shell's pull gesture calls it and waits for the promise. */
   protected readonly reload = async (): Promise<void> => {
     await Promise.all([this.store.load(), this.habits.load()]);
@@ -237,6 +274,9 @@ export class ListPage implements OnInit {
 
   public ngOnInit(): void {
     void this.store.load();
+    if (this.prices.status() !== 'ready') {
+      void this.prices.load(true);
+    }
     void this.habits.load();
     interval(REFRESH_MS)
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -268,8 +308,41 @@ export class ListPage implements OnInit {
     if (!value) {
       return;
     }
+    const known = exactAlias(this.prices.products(), value);
+    const before = new Set(this.store.items().map(item => item.id));
     if (await this.store.add(value)) {
       this.text.reset('');
+      if (known) {
+        this.offerUndo(known, before);
+      }
+    }
+  }
+
+  /** "Also called …" under a suggestion that matched on another name of the product, so it is clear why it is listed. */
+  protected alsoCalled(product: Product): string | null {
+    const name = matchedAlias(product, this.typed());
+    return name ? `Also called “${name}”` : null;
+  }
+
+  /** One tap on a suggestion puts the product on the list as its own line, with its photo. */
+  protected async addSuggestion(product: Product): Promise<void> {
+    if (await this.store.addProduct(product.id, null)) {
+      this.text.reset('');
+    }
+  }
+
+  /**
+   * Words that are exactly a saved alias are linked to the product by the server as the line is added. Say so, with Undo, which takes
+   * that new line back. Nothing is offered when the product was already waiting (nothing new was added) or the line was only queued.
+   */
+  private offerUndo(product: Product, before: ReadonlySet<string>): void {
+    const line = this.store
+      .items()
+      .find(item => !before.has(item.id) && item.productId === product.id);
+    if (line) {
+      this.toast.info(`Added as ${product.name}`, {
+        action: {label: 'Undo', run: () => this.remove(line)},
+      });
     }
   }
 
