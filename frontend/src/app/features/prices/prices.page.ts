@@ -29,10 +29,11 @@ import {firstValueFrom, fromEvent} from 'rxjs';
 
 import {ComposerBarComponent} from '../../core/shell/composer-bar.component';
 import {HabitsStore} from '../habits/habits.store';
+import {proposalKey, proposalLine} from './alias-proposal';
 import {healthLines, healthTag, healthWarnings} from './catalog-health-format';
 import {MatchSheetComponent, type MatchSheetData, type MatchSheetResult} from './match.sheet';
 import {detailLines, headline, storeProblem, suggestionLine} from './price-format';
-import type {Product, ProductStore, StoreStatus} from './prices.model';
+import type {AliasProposal, Product, ProductStore, StoreStatus} from './prices.model';
 import {PricesStore} from './prices.store';
 import {type ProductAction, ProductActionsSheetComponent} from './product-actions.sheet';
 import {ProductSearchSheetComponent} from './product-search.sheet';
@@ -76,6 +77,38 @@ import {isUnlinked, toCheckRows, unlinkedText} from './to-check';
         <cmn-skeleton shape="section" skeleton />
         @if (!store.products().length) {
           <cmn-empty-state [subMessage]="emptyBody" icon="Tag" message="No products yet" />
+        }
+        @if (store.proposals().length) {
+          <cmn-list-section
+            [heading]="'Other names (' + store.proposals().length + ')'"
+            card
+            data-testid="alias-proposals"
+          >
+            @for (proposal of store.proposals(); track key(proposal)) {
+              <cmn-list-item-row
+                [label]="proposal.text"
+                [sublabel]="line(proposal)"
+                class="[&_.truncate]:overflow-visible [&_.truncate]:whitespace-pre-line [&_.truncate]:break-words"
+              >
+                <cmn-button
+                  [aria-label]="'Not ' + proposal.productName + ': ' + proposal.text"
+                  [disabled]="answering() === key(proposal)"
+                  (clicked)="answer(proposal, false)"
+                  actions
+                  variant="ghost"
+                  icon="X"
+                />
+                <cmn-button
+                  [aria-label]="'Save ' + proposal.text + ' as a name of ' + proposal.productName"
+                  [disabled]="answering() === key(proposal)"
+                  (clicked)="answer(proposal, true)"
+                  actions
+                  variant="ghost"
+                  icon="Check"
+                />
+              </cmn-list-item-row>
+            }
+          </cmn-list-section>
         }
         @if (toCheck().length) {
           <cmn-list-section
@@ -180,6 +213,10 @@ export class PricesPage implements OnInit {
   protected readonly toCheck = computed(() =>
     toCheckRows(this.store.products(), this.habits.byProduct())
   );
+  /** The proposal being answered, so a second tap on it waits for the first. */
+  protected readonly answering = signal<string | null>(null);
+  protected readonly key = proposalKey;
+  protected readonly line = proposalLine;
   protected readonly expanded = signal<ReadonlySet<string>>(new Set());
   protected readonly unlinkedText = unlinkedText;
 
@@ -261,6 +298,20 @@ export class PricesPage implements OnInit {
       }
       return next;
     });
+  }
+
+  /** One tap: yes saves the words as a name of the product, no is remembered. The row leaves with the reload. */
+  protected async answer(proposal: AliasProposal, accept: boolean): Promise<void> {
+    if (this.answering()) {
+      return;
+    }
+
+    this.answering.set(proposalKey(proposal));
+    try {
+      await (accept ? this.store.acceptProposal(proposal) : this.store.rejectProposal(proposal));
+    } finally {
+      this.answering.set(null);
+    }
   }
 
   protected suggestionText(entry: ProductStore): string {

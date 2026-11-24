@@ -23,6 +23,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
 
     public DbSet<ProductAlias> ProductAliases => Set<ProductAlias>();
 
+    public DbSet<AliasRejection> AliasRejections => Set<AliasRejection>();
+
     public DbSet<StoreListing> StoreListings => Set<StoreListing>();
 
     public DbSet<StoreProduct> StoreProducts => Set<StoreProduct>();
@@ -149,6 +151,16 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             alias.HasIndex(a => a.ProductId);
             // The same words never mean two products: a typed line has exactly one product to link to.
             alias.HasIndex(a => a.NormalizedText).IsUnique();
+        });
+
+        builder.Entity<AliasRejection>(rejection =>
+        {
+            rejection.ToTable("alias_rejection");
+            rejection.HasKey(r => r.Id);
+            rejection.Property(r => r.NormalizedText).HasMaxLength(ProductAlias.MaxLength).IsRequired();
+            rejection.HasOne<Product>().WithMany().HasForeignKey(r => r.ProductId).OnDelete(DeleteBehavior.Cascade);
+            // A pair is turned down once; a second tap on it (two phones) is the same answer.
+            rejection.HasIndex(r => new { r.NormalizedText, r.ProductId }).IsUnique();
         });
 
         builder.Entity<StoreListing>(listing =>

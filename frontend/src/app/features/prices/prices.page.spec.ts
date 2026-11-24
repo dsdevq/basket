@@ -7,7 +7,7 @@ import {HabitsApi} from '../habits/habits.api';
 import {health, neverSwept} from './catalog-health-fixtures';
 import {MatchSheetComponent} from './match.sheet';
 import {PricesApi} from './prices.api';
-import type {PricesResponse, Product, ProductStore} from './prices.model';
+import type {AliasProposal, PricesResponse, Product, ProductStore} from './prices.model';
 import {PricesPage} from './prices.page';
 
 async function settle(fixture: ComponentFixture<unknown>): Promise<void> {
@@ -115,9 +115,13 @@ async function render(
     boughtIn: number;
     lastBoughtAt: string;
     usual: boolean;
-  }[] = []
+  }[] = [],
+  proposals: readonly AliasProposal[] = []
 ) {
   const api = {
+    aliasProposals: vi.fn().mockResolvedValue({proposals}),
+    acceptAliasProposal: vi.fn().mockResolvedValue({id: 'a1', text: 'Яйця'}),
+    rejectAliasProposal: vi.fn().mockResolvedValue(undefined),
     all: vi.fn().mockResolvedValue(response),
     add: vi.fn(),
     remove: vi.fn().mockResolvedValue(undefined),
@@ -379,6 +383,62 @@ describe('PricesPage', () => {
     const {host} = await render({products: [milk()], stores: []});
 
     expect(host.querySelector('[data-testid="to-check"]')).toBeNull();
+  });
+
+  describe('other names proposed from receipts', () => {
+    const EGGS: AliasProposal = {
+      text: 'Яйця',
+      productId: 'p9',
+      productName: 'Free Range Eggs',
+      trips: 3,
+      lastSeen: '2026-11-19',
+    };
+
+    const buttons = (host: HTMLElement): HTMLButtonElement[] =>
+      Array.from(
+        host.querySelectorAll<HTMLButtonElement>('[data-testid="alias-proposals"] button')
+      );
+
+    it('shows nothing when no pair is proposed', async () => {
+      const {host} = await render({products: [milk()], stores: []});
+
+      expect(host.querySelector('[data-testid="alias-proposals"]')).toBeNull();
+    });
+
+    it('names the words, the product and how many trips saw them, saving nothing by itself', async () => {
+      const {host, api} = await render({products: [milk()], stores: []}, {}, [], [EGGS]);
+
+      const section = host.querySelector('[data-testid="alias-proposals"]');
+      expect(section?.textContent).toContain('Other names (1)');
+      expect(section?.textContent).toContain('Яйця');
+      expect(section?.textContent).toContain('Probably Free Range Eggs · same trip 3 times');
+      expect(api.acceptAliasProposal).not.toHaveBeenCalled();
+      expect(api.rejectAliasProposal).not.toHaveBeenCalled();
+    });
+
+    it('saves the pair as a name with one tap on yes', async () => {
+      const {host, fixture, api} = await render({products: [milk()], stores: []}, {}, [], [EGGS]);
+
+      buttons(host)
+        .find(b => b.getAttribute('aria-label')?.startsWith('Save'))
+        ?.click();
+      await settle(fixture);
+
+      expect(api.acceptAliasProposal).toHaveBeenCalledWith(EGGS);
+      expect(api.rejectAliasProposal).not.toHaveBeenCalled();
+    });
+
+    it('remembers a no with one tap on the cross', async () => {
+      const {host, fixture, api} = await render({products: [milk()], stores: []}, {}, [], [EGGS]);
+
+      buttons(host)
+        .find(b => b.getAttribute('aria-label')?.startsWith('Not'))
+        ?.click();
+      await settle(fixture);
+
+      expect(api.rejectAliasProposal).toHaveBeenCalledWith(EGGS);
+      expect(api.acceptAliasProposal).not.toHaveBeenCalled();
+    });
   });
 
   it('fills the add box with the typed item that History sent, and adds nothing until Add is tapped', async () => {

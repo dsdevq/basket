@@ -77,6 +77,18 @@ export interface Alias {
   readonly text: string;
 }
 
+/**
+ * A pair the server proposes from a Lidl Plus receipt that landed on the day of a tick-off trip: the words typed on the list are
+ * probably this product. `trips` is how many such trips had both, `lastSeen` the day of the latest.
+ */
+export interface AliasProposal {
+  readonly text: string;
+  readonly productId: string;
+  readonly productName: string;
+  readonly trips: number;
+  readonly lastSeen: string;
+}
+
 export interface Product {
   readonly id: string;
   readonly name: string;

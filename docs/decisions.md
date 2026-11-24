@@ -2589,6 +2589,34 @@ gains a block above the composer, so its baselines are redrawn by the **Update s
   **Undo**, which removes the line just added. No Undo when the product's open line already existed (nothing new was added) or the
   add was only queued offline.
 
+## Product aliases: pairs proposed from receipts (2026-11-24, issue #187, slice 3 of 3)
+
+No model and no guessing at the words: a pair is proposed only when a Lidl Plus receipt and the household's own ticks were on one trip.
+Nothing is saved without a tap.
+
+- **Where a pair comes from.** A Lidl Plus trip (issue #184: the receipt took over the day's tick-off trip) holds ticked lines (the shop
+  is Lidl) and the receipt's own lines (no shop, a product). Each typed line ticked at Lidl (no product; one set to another shop is not paired) is paired with each receipt-only product of
+  the same trip. A pair needs at least one such trip; each trip counts once however many lines it has. A tick-off trip no receipt has
+  taken over, and a receipt with no ticks, propose nothing.
+- **Ranking.** More trips first, then the product's name. Every valid pair is listed.
+- **Left out.** Words that already are a name of a product, a pair whose words are the product's own name, a product that has its 20
+  names, and any pair turned down.
+- **`GET /api/alias-proposals`** lists them (`text`, `productId`, `productName`, `trips`, `lastSeen`). It is worked out on every read from
+  the trips; no proposal is stored.
+- **`POST /api/alias-proposals/accept`** (`{text, productId}`) saves the words as the product's name through the slice 1 rules (201, the
+  alias; the same refusals), and only for a pair that is proposed right now (404 `not_proposed` otherwise, for instance when it was
+  answered on another phone). The proposed words are the latest trip's, as typed.
+- **`POST /api/alias-proposals/reject`** (`{text, productId}`) writes one row to the new table `alias_rejection` (folded words and
+  product, unique, removed with the product) and answers 204, the same for a second tap. A rejected pair is never proposed again, however
+  many trips show it. The same words for another product are still proposed.
+- **The app.** Prices opens with "Other names (n)" above "To check": the words, "Probably Free Range Eggs · same trip 3 times", a cross
+  (no) and a check (yes). If the proposals cannot be read the shelf shows as before without the section. A 404 or 409 on yes is counted as
+  answered.
+- **One migration, additive: `20261124055548_AliasRejection`.** One new table, no row touched. No screen baseline changes: no route is
+  added and the screens' mock has no proposal.
+- **Not here.** Re-linking the old typed lines of past trips to the product once a name is accepted, and pairing from receipts of other
+  shops.
+
 ## Price history and "lowest in 90 days" (2026-11-22, issue #194)
 
 Prices were stored and shown nowhere; the history exposes a "discount" that is only the price returning to what it was (Trolley.co.uk, heisse-preise).
