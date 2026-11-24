@@ -1,8 +1,13 @@
 import {ChangeDetectionStrategy, Component, computed, inject, signal} from '@angular/core';
+import {takeUntilDestroyed} from '@angular/core/rxjs-interop';
+import {FormControl, FormGroup, ReactiveFormsModule, Validators} from '@angular/forms';
 import {
+  AlertComponent,
   ButtonComponent,
   CMN_DRAWER_DATA,
   CmnDrawerRef,
+  FormFieldComponent,
+  InputComponent,
   ListItemRowComponent,
   ListSectionComponent,
   TagComponent,
@@ -10,10 +15,13 @@ import {
 
 import {STORE_NAMES} from '../prices/price-format';
 import type {StoreId} from '../prices/prices.model';
-import type {ListItem} from './list.model';
+import {type ListItem, MAX_NOTE_LENGTH, MAX_QUANTITY} from './list.model';
 import {ListStore} from './list.store';
 
 const SHOPS = (Object.keys(STORE_NAMES) as StoreId[]).map(id => ({id, name: STORE_NAMES[id]}));
+
+/** A blank quantity (one pack) or a whole number from 1 to 99. */
+const QUANTITY = /^([1-9]\d?)?$/;
 
 export interface ItemActionsData {
   readonly item: ListItem;
@@ -28,7 +36,16 @@ export type ItemAction = 'delete' | 'link';
  */
 @Component({
   selector: 'bk-item-actions-sheet',
-  imports: [ButtonComponent, ListItemRowComponent, ListSectionComponent, TagComponent],
+  imports: [
+    ReactiveFormsModule,
+    AlertComponent,
+    ButtonComponent,
+    FormFieldComponent,
+    InputComponent,
+    ListItemRowComponent,
+    ListSectionComponent,
+    TagComponent,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="flex flex-col gap-cmn-3 px-cmn-6 pt-cmn-4 pb-cmn-6">
@@ -38,6 +55,44 @@ export type ItemAction = 'delete' | 'link';
           · ticked by {{ data.item.checkedBy.name }}
         }
       </p>
+      <form [formGroup]="form" (ngSubmit)="save()" class="flex flex-col gap-cmn-3">
+        <cmn-form-field
+          [control]="quantity"
+          label="Quantity"
+          hint="How many packs. The Plan prices them all."
+        >
+          <cmn-input
+            formControlName="quantity"
+            type="number"
+            inputmode="numeric"
+            enterkeyhint="next"
+            placeholder="1"
+            autocomplete="off"
+          />
+        </cmn-form-field>
+        @if (quantityProblem(); as problem) {
+          <cmn-alert [title]="problem" variant="error" />
+        }
+        <cmn-form-field [control]="note" label="Note">
+          <cmn-input
+            formControlName="note"
+            enterkeyhint="done"
+            placeholder="e.g. the green ones"
+            autocomplete="off"
+          />
+        </cmn-form-field>
+        <cmn-button
+          [disabled]="!!quantityProblem() || noteTooLong()"
+          [loading]="saving()"
+          class="block [&_button]:w-full"
+          type="submit"
+          variant="primary"
+          size="lg"
+          icon="Check"
+        >
+          Save
+        </cmn-button>
+      </form>
       @if (data.item.checked) {
         <cmn-list-section heading="Bought at" card>
           @for (shop of shops; track shop.id) {
@@ -57,7 +112,7 @@ export type ItemAction = 'delete' | 'link';
         <cmn-button
           (clicked)="choose('link')"
           class="block [&_button]:w-full"
-          variant="primary"
+          variant="secondary"
           size="lg"
           icon="Link"
         >
@@ -85,9 +140,30 @@ export type ItemAction = 'delete' | 'link';
 })
 export class ItemActionsSheetComponent {
   private readonly list = inject(ListStore);
+  private readonly line = inject<ItemActionsData>(CMN_DRAWER_DATA).item;
+  private readonly quantityText = signal(this.line.quantity?.toString() ?? '');
+  private readonly noteText = signal(this.line.note ?? '');
 
   protected readonly data = inject<ItemActionsData>(CMN_DRAWER_DATA);
   protected readonly ref = inject<CmnDrawerRef<ItemAction>>(CmnDrawerRef);
+
+  protected readonly quantity = new FormControl(this.data.item.quantity?.toString() ?? '', {
+    nonNullable: true,
+    validators: Validators.pattern(QUANTITY),
+  });
+  protected readonly note = new FormControl(this.data.item.note ?? '', {nonNullable: true});
+  protected readonly form = new FormGroup({quantity: this.quantity, note: this.note});
+  protected readonly saving = signal(false);
+
+  /** Why the quantity cannot be saved, or null: blank is one pack, otherwise a whole number from 1 to the cap. */
+  protected readonly quantityProblem = computed(() => {
+    const text = this.quantityText().trim();
+    if (!text) {
+      return null;
+    }
+    return QUANTITY.test(text) ? null : `Enter a whole number from 1 to ${MAX_QUANTITY}.`;
+  });
+  protected readonly noteTooLong = computed(() => this.noteText().trim().length > MAX_NOTE_LENGTH);
 
   protected readonly shops = SHOPS;
   protected readonly busy = signal(false);
@@ -97,6 +173,13 @@ export class ItemActionsSheetComponent {
     () => this.list.items().find(item => item.id === this.data.item.id)?.boughtStore ?? null
   );
 
+  constructor() {
+    this.quantity.valueChanges
+      .pipe(takeUntilDestroyed())
+      .subscribe(value => this.quantityText.set(String(value ?? '')));
+    this.note.valueChanges.pipe(takeUntilDestroyed()).subscribe(value => this.noteText.set(value));
+  }
+
   protected async boughtAt(shop: StoreId): Promise<void> {
     if (this.busy() || shop === this.current()) {
       return;
@@ -104,6 +187,23 @@ export class ItemActionsSheetComponent {
     this.busy.set(true);
     const saved = await this.list.setBoughtStore(this.data.item, shop);
     this.busy.set(false);
+    if (saved) {
+      this.ref.close();
+    }
+  }
+
+  protected async save(): Promise<void> {
+    if (this.saving() || this.quantityProblem() || this.noteTooLong()) {
+      return;
+    }
+    const text = String(this.quantity.value ?? '').trim();
+    this.saving.set(true);
+    const saved = await this.list.setDetails(
+      this.data.item,
+      text ? Number(text) : null,
+      this.note.value.trim() || null
+    );
+    this.saving.set(false);
     if (saved) {
       this.ref.close();
     }

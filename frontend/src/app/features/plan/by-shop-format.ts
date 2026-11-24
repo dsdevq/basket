@@ -94,9 +94,12 @@ export function storeDetail(store: ByShopStore, lineCount: number): string {
   return joined(parts);
 }
 
-/** "Seen 5 Nov · 2 for €4 · needs Clubcard · €4.00/kg": the date first, so it is the last thing a narrow row can lose. */
+/** "Seen 5 Nov · 6 × €0.80 · 2 for €4 · needs Clubcard · €4.00/kg": the date first, so it is the last thing a narrow row can lose. */
 export function lineDetail(line: ByShopLine): string {
   const parts = [`Seen ${shortDate(line.observedOn)}`];
+  if (line.quantity > 1) {
+    parts.push(`${line.quantity} × ${euro(line.price)}`);
+  }
   if (line.isPromo) {
     parts.push(line.deal);
   }

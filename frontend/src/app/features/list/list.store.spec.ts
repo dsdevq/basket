@@ -22,6 +22,8 @@ function item(id: string, over: Partial<ListItem> = {}): ListItem {
     store: null,
     imageUrl: null,
     boughtStore: null,
+    quantity: null,
+    note: null,
     ...over,
   };
 }
@@ -207,6 +209,57 @@ describe('ListStore', () => {
 
     expect(store.items()[0]?.boughtStore).toBe('lidl');
     expect(toast.error).toHaveBeenCalled();
+  });
+
+  it('sets the quantity and note at once, treats one pack as none, and keeps the server answer', async () => {
+    const line = item('a');
+    const setDetails = vi
+      .fn()
+      .mockResolvedValue({...line, quantity: 6, note: 'strawberry'} satisfies ListItem);
+    const {store} = setup({items: vi.fn().mockResolvedValue([line]), setDetails});
+    await store.load();
+
+    expect(await store.setDetails(line, 6, 'strawberry')).toBe(true);
+    expect(setDetails).toHaveBeenCalledWith('a', 6, 'strawberry');
+    expect(store.items()[0]).toMatchObject({quantity: 6, note: 'strawberry'});
+
+    await store.setDetails(line, 1, null);
+    expect(setDetails).toHaveBeenLastCalledWith('a', null, null);
+  });
+
+  it('puts the quantity and note back and says so when they are refused', async () => {
+    const line = item('a', {quantity: 3, note: 'old'});
+    const {store, toast} = setup({
+      items: vi.fn().mockResolvedValue([line]),
+      setDetails: vi.fn().mockRejectedValue({status: 400}),
+    });
+    await store.load();
+
+    expect(await store.setDetails(line, 9, 'new')).toBe(false);
+
+    expect(store.items()[0]).toMatchObject({quantity: 3, note: 'old'});
+    expect(toast.error).toHaveBeenCalled();
+  });
+
+  it('keeps a quantity set with no signal and sends it when the signal is back', async () => {
+    const line = item('a');
+    const setDetails = vi
+      .fn()
+      .mockRejectedValueOnce({status: 0})
+      .mockResolvedValue({...line, quantity: 4});
+    const {store} = setup({
+      items: vi.fn().mockResolvedValue([line]),
+      setDetails,
+    });
+    await store.load();
+
+    expect(await store.setDetails(line, 4, null)).toBe(true);
+    expect(store.waiting()).toBe(1);
+    expect(store.items()[0]?.quantity).toBe(4);
+
+    await store.load(true);
+    expect(store.waiting()).toBe(0);
+    expect(setDetails).toHaveBeenCalledTimes(2);
   });
 
   it('ignores a refresh that was read before a tick landed', async () => {

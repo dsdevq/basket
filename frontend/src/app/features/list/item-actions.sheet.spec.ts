@@ -22,15 +22,21 @@ function item(over: Partial<ListItem> = {}): ListItem {
     store: null,
     imageUrl: null,
     boughtStore: null,
+    quantity: null,
+    note: null,
     ...over,
   };
 }
 
-async function render(line: ListItem, setBoughtStore = vi.fn().mockResolvedValue(true)) {
+async function render(
+  line: ListItem,
+  setBoughtStore = vi.fn().mockResolvedValue(true),
+  setDetails = vi.fn().mockResolvedValue(true)
+) {
   const ref = {close: vi.fn()};
   TestBed.configureTestingModule({
     providers: [
-      {provide: ListStore, useValue: {items: signal([line]), setBoughtStore}},
+      {provide: ListStore, useValue: {items: signal([line]), setBoughtStore, setDetails}},
       {provide: CmnDrawerRef, useValue: ref},
       {provide: CMN_DRAWER_DATA, useValue: {item: line}},
     ],
@@ -46,12 +52,63 @@ async function render(line: ListItem, setBoughtStore = vi.fn().mockResolvedValue
     await fixture.whenStable();
     fixture.detectChanges();
   };
-  return {ref, host, rows, press, setBoughtStore};
+  return {ref, host, rows, press, setBoughtStore, setDetails, fixture};
 }
 
 describe('ItemActionsSheetComponent', () => {
   afterEach(() => {
     TestBed.resetTestingModule();
+  });
+
+  const field = (host: HTMLElement, label: string): HTMLInputElement =>
+    Array.from(host.querySelectorAll('cmn-form-field'))
+      .find(f => (f.textContent ?? '').includes(label))
+      ?.querySelector('input') as HTMLInputElement;
+  const type = async (
+    fixture: {detectChanges(): void; whenStable(): Promise<unknown>},
+    input: HTMLInputElement,
+    value: string
+  ): Promise<void> => {
+    input.value = value;
+    input.dispatchEvent(new Event('input'));
+    await fixture.whenStable();
+    fixture.detectChanges();
+  };
+  const save = (host: HTMLElement) =>
+    Array.from(host.querySelectorAll('button')).find(b =>
+      (b.textContent ?? '').includes('Save')
+    ) as HTMLButtonElement;
+
+  it('shows the quantity and note and saves the edited ones', async () => {
+    const {host, fixture, press, setDetails, ref} = await render(
+      item({quantity: 6, note: 'strawberry'})
+    );
+    expect(field(host, 'Quantity').value).toBe('6');
+    expect(field(host, 'Note').value).toBe('strawberry');
+
+    await type(fixture, field(host, 'Quantity'), '12');
+    await type(fixture, field(host, 'Note'), '  the green ones ');
+    await press(save(host));
+
+    expect(setDetails).toHaveBeenCalledWith(
+      expect.objectContaining({id: 'a'}),
+      12,
+      'the green ones'
+    );
+    expect(ref.close).toHaveBeenCalled();
+  });
+
+  it('clears the quantity and note when the fields are emptied, and refuses a quantity out of range', async () => {
+    const {host, fixture, press, setDetails} = await render(item({quantity: 6, note: 'x'}));
+
+    await type(fixture, field(host, 'Quantity'), '100');
+    expect(save(host).disabled).toBe(true);
+    expect(host.textContent).toContain('whole number from 1 to 99');
+
+    await type(fixture, field(host, 'Quantity'), '');
+    await type(fixture, field(host, 'Note'), '');
+    await press(save(host));
+    expect(setDetails).toHaveBeenCalledWith(expect.objectContaining({id: 'a'}), null, null);
   });
 
   it('offers no shop for an item that is still to buy', async () => {

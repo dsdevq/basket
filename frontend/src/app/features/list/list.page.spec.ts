@@ -41,6 +41,8 @@ function item(id: string, text: string, over: Partial<ListItem> = {}): ListItem 
     store: null,
     imageUrl: null,
     boughtStore: null,
+    quantity: null,
+    note: null,
     ...over,
   };
 }

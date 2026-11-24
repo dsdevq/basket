@@ -56,6 +56,8 @@ export function line(over: Partial<PlanItem> = {}): PlanItem {
     bestStore: null,
     stores: [],
     lastPaid: [],
+    quantity: 1,
+    note: null,
     ...over,
   };
 }

@@ -69,7 +69,9 @@ public sealed record PlanPaid(string Store, string StoreName, decimal Price, Dat
 /// <summary>
 /// One open line of the list. <see cref="BestStore"/> is the cheapest shop by unit price among the fresh, in-stock,
 /// comparable prices; null with a <see cref="Flag"/> saying why when there is none. <see cref="LastPaid"/> is the latest receipt
-/// price at each shop the product was bought at, whether or not that shop's page is linked.
+/// price at each shop the product was bought at, whether or not that shop's page is linked. <see cref="Quantity"/> is how many
+/// packs the line asks for (1 when none was set) and <see cref="Note"/> its note; the totals multiply by the quantity, the prices
+/// on the line stay the price of one pack.
 /// </summary>
 public sealed record PlanItem(
     Guid Id,
@@ -80,7 +82,9 @@ public sealed record PlanItem(
     string? Flag,
     string? BestStore,
     IReadOnlyList<PlanStorePrice> Stores,
-    IReadOnlyList<PlanPaid> LastPaid);
+    IReadOnlyList<PlanPaid> LastPaid,
+    int Quantity = 1,
+    string? Note = null);
 
 /// <summary>A line the reference shop cannot price. <see cref="Reason"/> is the line's flag when no shop prices it, else the shop's own state.</summary>
 public sealed record PlanBlocker(Guid ItemId, string Text, string Reason);
@@ -135,7 +139,7 @@ public static class PlanBuilder
         var picked = line.Store?.Slug();
         if (line.ProductId is not { } productId || !products.TryGetValue(productId, out var product))
         {
-            return new PlanItem(line.Id, line.Text, null, null, picked, PlanFlags.Unmatched, null, [], []);
+            return new PlanItem(line.Id, line.Text, null, null, picked, PlanFlags.Unmatched, null, [], [], line.Quantity ?? 1, line.Note);
         }
 
         var comparison = PromotionBuilder.Compare(product, listings, latest, today, null, coupons);
@@ -156,7 +160,7 @@ public static class PlanBuilder
                 : null)
             .OfType<PlanPaid>()
             .ToList();
-        return new PlanItem(line.Id, line.Text, product.Id, product.Name, picked, flag, best, stores, lastPaid);
+        return new PlanItem(line.Id, line.Text, product.Id, product.Name, picked, flag, best, stores, lastPaid, line.Quantity ?? 1, line.Note);
     }
 
     private static PlanStorePrice? Entry(

@@ -120,6 +120,53 @@ public sealed class ListTests : IClassFixture<BasketFactory>
     }
 
     [Fact]
+    public async Task A_line_takes_a_quantity_and_a_note_that_both_people_see_and_that_can_be_cleared()
+    {
+        var (owner, _) = await _factory.OwnerAsync();
+        var (her, _) = await _factory.MemberAsync(owner, "Her");
+        var item = await AddAsync(owner, "yoghurts " + Guid.NewGuid().ToString("N")[..6]);
+        item.GetProperty("quantity").ValueKind.Should().Be(JsonValueKind.Null);
+        item.GetProperty("note").ValueKind.Should().Be(JsonValueKind.Null);
+        var id = item.GetProperty("id").GetGuid();
+
+        var set = await her.PatchAsJsonAsync($"/api/list/items/{id}/details", new { quantity = 6, note = "  the strawberry ones " });
+        set.StatusCode.Should().Be(HttpStatusCode.OK);
+        var saved = await set.Content.ReadFromJsonAsync<JsonElement>();
+        saved.GetProperty("quantity").GetInt32().Should().Be(6);
+        saved.GetProperty("note").GetString().Should().Be("the strawberry ones");
+
+        var seen = (await owner.GetFromJsonAsync<JsonElement>("/api/list")).GetProperty("items").EnumerateArray()
+            .Single(i => i.GetProperty("id").GetGuid() == id);
+        seen.GetProperty("quantity").GetInt32().Should().Be(6);
+        seen.GetProperty("note").GetString().Should().Be("the strawberry ones");
+
+        var cleared = await owner.PatchAsJsonAsync($"/api/list/items/{id}/details", new { quantity = 1, note = "  " });
+        cleared.StatusCode.Should().Be(HttpStatusCode.OK);
+        var after = await cleared.Content.ReadFromJsonAsync<JsonElement>();
+        after.GetProperty("quantity").ValueKind.Should().Be(JsonValueKind.Null, "one pack is what a line without a quantity already means");
+        after.GetProperty("note").ValueKind.Should().Be(JsonValueKind.Null);
+    }
+
+    [Fact]
+    public async Task A_quantity_out_of_range_or_a_long_note_is_refused_and_an_unknown_line_is_not_found()
+    {
+        var (owner, _) = await _factory.OwnerAsync();
+        var id = (await AddAsync(owner, "tea " + Guid.NewGuid().ToString("N")[..6])).GetProperty("id").GetGuid();
+
+        foreach (var quantity in new[] { 0, -2, ListItem.MaxQuantity + 1 })
+        {
+            var response = await owner.PatchAsJsonAsync($"/api/list/items/{id}/details", new { quantity, note = (string?)null });
+            response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        }
+
+        var tooLong = await owner.PatchAsJsonAsync($"/api/list/items/{id}/details", new { quantity = 2, note = new string('n', ListItem.MaxNoteLength + 1) });
+        tooLong.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var missing = await owner.PatchAsJsonAsync($"/api/list/items/{Guid.NewGuid()}/details", new { quantity = 2, note = (string?)null });
+        missing.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
     public async Task Either_person_can_delete_an_item_and_it_disappears_for_both()
     {
         var (owner, _) = await _factory.OwnerAsync();

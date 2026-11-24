@@ -25,6 +25,7 @@ const MESSAGES = {
   update: 'Could not update that item. It is back as it was.',
   link: 'Could not link that line. Try again.',
   boughtAt: 'Could not change the shop. It is back as it was.',
+  details: 'Could not save the quantity and note. They are back as they were.',
   remove: 'Could not delete that item.',
   offline: (savedAt: string) =>
     `No signal. Showing the list as it was on ${new Date(savedAt).toLocaleString('en-IE', {
@@ -117,6 +118,8 @@ export const ListStore = signalStore(
             return api.setChecked(edit.id, edit.checked);
           case 'boughtAt':
             return api.setBoughtAt(edit.id, edit.store);
+          case 'details':
+            return api.setDetails(edit.id, edit.quantity, edit.note);
           case 'remove':
             return api.remove(edit.id).then(() => undefined);
         }
@@ -292,6 +295,8 @@ export const ListStore = signalStore(
                   store: null,
                   imageUrl: null,
                   boughtStore: null,
+                  quantity: null,
+                  note: null,
                 },
               ]);
             }
@@ -397,6 +402,30 @@ export const ListStore = signalStore(
           } catch {
             replace(item);
             toast.error(MESSAGES.boughtAt);
+            return false;
+          }
+        },
+
+        /**
+         * Sets how many packs a line is and its note; shown at once and put back if the server refuses. A quantity of 1 is
+         * the same as none, as on the server.
+         */
+        async setDetails(
+          item: ListItem,
+          quantity: number | null,
+          note: string | null
+        ): Promise<boolean> {
+          const next = {quantity: quantity !== null && quantity > 1 ? quantity : null, note};
+          replace({...item, ...next});
+          try {
+            const {item: answer} = await submit({kind: 'details', id: item.id, ...next});
+            if (answer) {
+              replace(answer);
+            }
+            return true;
+          } catch {
+            replace(item);
+            toast.error(MESSAGES.details);
             return false;
           }
         },

@@ -24,4 +24,14 @@ export interface ListItem {
    * until the person changes it. Null while the line is not ticked, or when no shop was known.
    */
   readonly boughtStore: StoreId | null;
+  /** How many packs to buy (2 to 99); null is one. The Plan multiplies its totals by it. */
+  readonly quantity: number | null;
+  /** A free-text note on the line ("the green ones"); null when there is none. */
+  readonly note: string | null;
 }
+
+/** The most packs of one line, as the server accepts. */
+export const MAX_QUANTITY = 99;
+
+/** The longest note, as the server accepts. */
+export const MAX_NOTE_LENGTH = 200;

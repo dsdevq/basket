@@ -133,6 +133,13 @@ describe('lineDetail', () => {
     ).toBe('Seen 5 Nov · 2 for €4 · needs Clubcard · €4.00/kg');
   });
 
+  it('says how many packs at what price, after the date, when the line is more than one', () => {
+    expect(lineDetail(bought({quantity: 6, price: 0.8, unit: null, unitPrice: null}))).toBe(
+      'Seen 5 Nov · 6 × €0.80'
+    );
+    expect(lineDetail(bought({quantity: 1, unit: null, unitPrice: null}))).toBe('Seen 5 Nov');
+  });
+
   it('does not repeat the card when the deal already names it', () => {
     expect(
       lineDetail(

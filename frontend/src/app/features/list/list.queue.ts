@@ -9,6 +9,12 @@ export type QueuedEdit =
   | {readonly kind: 'add'; readonly localId: string; readonly text: string}
   | {readonly kind: 'check'; readonly id: string; readonly checked: boolean}
   | {readonly kind: 'boughtAt'; readonly id: string; readonly store: StoreId}
+  | {
+      readonly kind: 'details';
+      readonly id: string;
+      readonly quantity: number | null;
+      readonly note: string | null;
+    }
   | {readonly kind: 'remove'; readonly id: string};
 
 const LOCAL_PREFIX = 'local-';

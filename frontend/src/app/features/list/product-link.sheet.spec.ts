@@ -20,6 +20,8 @@ const LINE: ListItem = {
   store: null,
   imageUrl: null,
   boughtStore: null,
+  quantity: null,
+  note: null,
 };
 
 const EGGS: Product = {id: 'p1', name: 'Free Range Eggs', stores: []};

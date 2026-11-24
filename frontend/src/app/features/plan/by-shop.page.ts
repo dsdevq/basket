@@ -121,7 +121,7 @@ import {flagText, missingTag} from './plan-format';
                     @for (line of walk.lines; track line.itemId) {
                       <cmn-list-item-row [label]="line.text" [sublabel]="lineText(line)">
                         <span amount class="font-semibold text-text-primary text-cmn-sm">{{
-                          price(line.price)
+                          price(line.total)
                         }}</span>
                       </cmn-list-item-row>
                     }
@@ -144,13 +144,14 @@ import {flagText, missingTag} from './plan-format';
                   class="m-0 max-w-prose px-cmn-4 py-cmn-3 text-cmn-sm text-text-secondary"
                   data-testid="rule"
                 >
-                  Prices as of {{ asOf() }}. A shop's total adds one pack of each line at what the
-                  shop charges now, a card price or a multi-buy deal included, using prices read in
-                  the last {{ basket.staleAfterDays }} days that are in stock. A line a shop cannot
-                  price adds nothing and is listed, so only a shop with none missing can be
-                  cheapest. The split buys each line at the shop with the lowest price per kilo,
-                  litre or piece, so it can cost more than a shop whose packs are smaller. Under
-                  each shop its lines come in the order that shop's sections are usually walked.
+                  Prices as of {{ asOf() }}. A shop's total adds each line's packs (its quantity,
+                  one when none is set) at what the shop charges now, a card price or a multi-buy
+                  deal included, using prices read in the last {{ basket.staleAfterDays }} days that
+                  are in stock. A line a shop cannot price adds nothing and is listed, so only a
+                  shop with none missing can be cheapest. The split buys each line at the shop with
+                  the lowest price per kilo, litre or piece, so it can cost more than a shop whose
+                  packs are smaller. Under each shop its lines come in the order that shop's
+                  sections are usually walked.
                 </p>
               </cmn-list-section>
             }

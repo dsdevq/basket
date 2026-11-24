@@ -110,7 +110,7 @@ import {
                   @for (bought of walk.lines; track bought.itemId) {
                     <cmn-list-item-row [label]="bought.text" [sublabel]="detail(bought)">
                       <span amount class="font-semibold text-text-primary text-cmn-sm">{{
-                        money(bought.price)
+                        money(bought.total)
                       }}</span>
                     </cmn-list-item-row>
                   }
@@ -119,7 +119,15 @@ import {
             }
 
             @for (item of store.items(); track item.id) {
-              <cmn-list-section [heading]="item.text" card>
+              <cmn-list-section [heading]="heading(item)" card>
+                @if (item.note) {
+                  <p
+                    class="m-0 px-cmn-4 py-cmn-3 text-cmn-sm text-text-secondary"
+                    data-testid="note"
+                  >
+                    {{ item.note }}
+                  </p>
+                }
                 @if (flag(item); as why) {
                   <div class="flex flex-wrap items-center gap-cmn-2 px-cmn-4 py-cmn-3">
                     <cmn-tag variant="warning">{{ why.tag }}</cmn-tag>
@@ -215,6 +223,11 @@ export class PlanPage implements OnInit {
           void this.store.load(true);
         }
       });
+  }
+
+  /** The line's name, with its quantity when it is more than one pack: the prices under it are for one. */
+  protected heading(item: PlanItem): string {
+    return item.quantity > 1 ? `${item.text} × ${item.quantity}` : item.text;
   }
 
   protected flag(item: PlanItem): FlagText | null {

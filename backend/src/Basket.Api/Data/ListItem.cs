@@ -10,6 +10,11 @@ public sealed class ListItem
 {
     public const int MaxTextLength = 200;
 
+    /// <summary>Most packs of one line; a guard against a typo, far above a household's need.</summary>
+    public const int MaxQuantity = 99;
+
+    public const int MaxNoteLength = 200;
+
     public Guid Id { get; set; }
 
     public string Text { get; set; } = string.Empty;
@@ -28,4 +33,10 @@ public sealed class ListItem
     public Guid? ProductId { get; set; }
 
     public Store? Store { get; set; }
+
+    /// <summary>How many packs to buy (1 to <see cref="MaxQuantity"/>); null is one, as a line has always been.</summary>
+    public int? Quantity { get; set; }
+
+    /// <summary>A free-text note on the line ("the green ones"); null when there is none.</summary>
+    public string? Note { get; set; }
 }

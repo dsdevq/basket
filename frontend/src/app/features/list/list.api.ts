@@ -47,6 +47,13 @@ export class ListApi {
     );
   }
 
+  /** Sets how many packs a line is and its note; both are replaced, null clears one. */
+  public setDetails(id: string, quantity: number | null, note: string | null): Promise<ListItem> {
+    return firstValueFrom(
+      this.http.patch<ListItem>(`/api/list/items/${id}/details`, {quantity, note}, DIRECT)
+    );
+  }
+
   /** Files the ticked items as a trip in the history and takes them off the list. */
   public close(): Promise<unknown> {
     return firstValueFrom(this.http.post('/api/list/close', {}, DIRECT));

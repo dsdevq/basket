@@ -27,6 +27,8 @@ const ITEMS: {
   productId: item.productId ?? null,
   store: item.store ?? null,
   boughtStore: item.boughtStore ?? null,
+  quantity: null,
+  note: null,
   imageUrl: null,
   addedAt: '2026-11-03T09:00:00Z',
   addedBy: {id: 'u1', name: 'Anna'},
@@ -471,6 +473,8 @@ function planLine(
     bestStore: over.bestStore ?? null,
     stores: over.stores ?? [],
     lastPaid: over.lastPaid ?? [],
+    quantity: 1,
+    note: null,
   };
 }
 
@@ -762,6 +766,8 @@ function byShopLine(
     itemId: `plan-${text}`,
     text,
     price,
+    quantity: 1,
+    total: price,
     deal: 'Shelf price',
     isPromo: false,
     card: null,

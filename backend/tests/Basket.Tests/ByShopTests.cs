@@ -58,8 +58,10 @@ public sealed class ByShopTests : IClassFixture<BasketFactory>
             return line;
         }
 
-        public ByShopResponse Build() =>
-            ByShopBuilder.Build(PlanBuilder.Build(_lines, _products.ToDictionary(p => p.Id), _listings.ToLookup(l => l.ProductId), _latest, Today));
+        public PlanResponse Plan() =>
+            PlanBuilder.Build(_lines, _products.ToDictionary(p => p.Id), _listings.ToLookup(l => l.ProductId), _latest, Today);
+
+        public ByShopResponse Build() => ByShopBuilder.Build(Plan());
     }
 
     private static ByShopStore At(ByShopResponse response, string store) => response.Stores.Single(s => s.Store == store);
@@ -81,6 +83,41 @@ public sealed class ByShopTests : IClassFixture<BasketFactory>
         response.Stores.Where(s => s.Cheapest).Select(s => s.Store).Should().Equal("aldi");
         At(response, "aldi").Complete.Should().BeTrue();
         At(response, "aldi").OldestSeenOn.Should().Be(Today);
+    }
+
+    [Fact]
+    public void A_quantity_multiplies_the_line_in_every_total_and_the_line_still_shows_the_price_of_one_pack()
+    {
+        var shelf = new Shelf();
+        var yoghurt = shelf.Line("Yoghurt", (Store.Lidl, 0.80m, "Yoghurt 150g"), (Store.Aldi, 0.90m, "Yoghurt 150g"));
+        yoghurt.Quantity = 6;
+        shelf.Line("Butter", (Store.Lidl, 2.50m, "Butter 250g"), (Store.Aldi, 2.40m, "Butter 250g"));
+
+        var response = shelf.Build();
+
+        At(response, "lidl").Total.Should().Be(7.30m, "6 x 0.80 + 2.50");
+        At(response, "aldi").Total.Should().Be(7.80m, "6 x 0.90 + 2.40");
+        response.Stores.Where(s => s.Cheapest).Select(s => s.Store).Should().Equal("lidl");
+        var line = response.Split.Groups.SelectMany(g => g.Lines).Single(l => l.Text == "Yoghurt");
+        (line.Quantity, line.Price, line.Total).Should().Be((6, 0.80m, 4.80m));
+        response.Split.Total.Should().Be(response.Split.Groups.Sum(g => g.Total));
+    }
+
+    [Fact]
+    public void A_line_with_no_quantity_counts_as_one_pack_and_the_plan_carries_the_quantity_and_note()
+    {
+        var shelf = new Shelf();
+        var milk = shelf.Line("Milk", (Store.Lidl, 1.20m, "Milk 1L"));
+        var tea = shelf.Line("Tea", (Store.Lidl, 2.00m, "Tea 80s"));
+        tea.Quantity = 3;
+        tea.Note = "decaf";
+
+        var response = shelf.Build();
+
+        At(response, "lidl").Total.Should().Be(7.20m);
+        var plan = shelf.Plan();
+        plan.Items.Single(i => i.Id == milk.Id).Quantity.Should().Be(1);
+        plan.Items.Single(i => i.Id == tea.Id).Should().Match<PlanItem>(i => i.Quantity == 3 && i.Note == "decaf");
     }
 
     [Fact]
