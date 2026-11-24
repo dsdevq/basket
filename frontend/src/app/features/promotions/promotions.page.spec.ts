@@ -2,9 +2,9 @@ import {type ComponentFixture, TestBed} from '@angular/core/testing';
 import {ToastService} from '@lifekit-hq/ui';
 
 import {PromotionsApi} from './promotions.api';
-import type {PromotionsResponse} from './promotions.model';
+import type {PromotionsResponse, UsualOffersResponse} from './promotions.model';
 import {PromotionsPage} from './promotions.page';
-import {gap, offer, product} from './promotions-fixtures';
+import {gap, offer, product, usualOffer, usualProduct} from './promotions-fixtures';
 
 async function settle(fixture: ComponentFixture<unknown>): Promise<void> {
   await new Promise(resolve => setTimeout(resolve, 0));
@@ -53,8 +53,10 @@ const RESPONSE: PromotionsResponse = {
   ],
 };
 
-async function render(response: PromotionsResponse) {
-  const api = {all: vi.fn().mockResolvedValue(response)};
+const NO_USUAL: UsualOffersResponse = {asOf: '2026-11-10', staleAfterDays: 3, products: []};
+
+async function render(response: PromotionsResponse, usual: UsualOffersResponse = NO_USUAL) {
+  const api = {all: vi.fn().mockResolvedValue(response), usual: vi.fn().mockResolvedValue(usual)};
   TestBed.configureTestingModule({
     providers: [
       {provide: PromotionsApi, useValue: api},
@@ -130,6 +132,57 @@ describe('PromotionsPage', () => {
     );
   });
 
+  it('opens on the usual products on offer, found in a shop with no linked page, and sends nothing', async () => {
+    const {host} = await render(RESPONSE, {
+      ...NO_USUAL,
+      products: [
+        usualProduct({name: 'Whole milk 2L', offers: [usualOffer({title: 'Milbona whole milk'})]}),
+      ],
+    });
+
+    const text = host.textContent ?? '';
+    expect(text).toContain('Your usual products on offer now');
+    expect(text).toContain('Whole milk 2L');
+    expect(text).toContain('Milbona whole milk');
+    expect(text).toContain('Lidl');
+    expect(text).toContain('€1.49 a pack');
+    expect(host.querySelector('[data-testid="usual-rule"]')?.textContent).toContain(
+      'Nothing is sent'
+    );
+    expect(text).not.toContain('No promotions right now');
+  });
+
+  it('opens on the best buys when no usual product is on offer, and the usual view says so', async () => {
+    const {fixture, host} = await render(RESPONSE);
+
+    expect(host.textContent).toContain('Chicken fillets, per kg');
+    const usualTab = [...host.querySelectorAll<HTMLElement>('cmn-segmented button')].find(cell =>
+      cell.textContent?.includes('Your usual')
+    );
+    usualTab?.click();
+    await settle(fixture);
+
+    expect(host.textContent).toContain('Nothing on offer from your usual products');
+  });
+
+  it('keeps the promotions when only the usual products fail to load', async () => {
+    const api = {
+      all: vi.fn().mockResolvedValue(RESPONSE),
+      usual: vi.fn().mockRejectedValue(new Error('offline')),
+    };
+    TestBed.configureTestingModule({
+      providers: [
+        {provide: PromotionsApi, useValue: api},
+        {provide: ToastService, useValue: {error: vi.fn(), success: vi.fn()}},
+      ],
+    });
+    const fixture = TestBed.createComponent(PromotionsPage);
+    fixture.detectChanges();
+    await settle(fixture);
+
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('Chicken fillets');
+  });
+
   it('says so when nothing is on offer', async () => {
     const {host} = await render({asOf: '2026-11-10', staleAfterDays: 3, products: []});
 
@@ -137,7 +190,7 @@ describe('PromotionsPage', () => {
   });
 
   it('offers a retry when the promotions did not load', async () => {
-    const api = {all: vi.fn().mockRejectedValue(new Error('offline'))};
+    const api = {all: vi.fn().mockRejectedValue(new Error('offline')), usual: vi.fn()};
     TestBed.configureTestingModule({
       providers: [
         {provide: PromotionsApi, useValue: api},

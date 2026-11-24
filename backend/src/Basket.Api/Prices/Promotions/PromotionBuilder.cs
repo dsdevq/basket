@@ -137,6 +137,31 @@ public static class PromotionBuilder
         return new ProductComparison(unit, count, ranked, gaps);
     }
 
+    /// <summary>
+    /// One catalog row as an offer, by the same rule as a linked page's reading (<see cref="Offer"/>): null when the row has no
+    /// usable price today. A catalog price's own date is only when its value first appeared, so freshness is judged on the day a
+    /// sweep last listed the row (<paramref name="lastSeen"/>), as the equivalents answer does. The offer is unranked: it is not
+    /// compared with the product's other shops here.
+    /// </summary>
+    public static PromoOffer? CatalogOffer(Store store, string title, string productName, StoreProductPrice price, DateOnly lastSeen, DateOnly today, IReadOnlyList<ActiveCoupon>? coupons)
+    {
+        var reading = new PriceObservation
+        {
+            ObservedOn = lastSeen,
+            Price = price.Price,
+            WasPrice = price.WasPrice,
+            LoyaltyPrice = price.LoyaltyPrice,
+            LoyaltyScheme = price.LoyaltyScheme,
+            PromoText = price.PromoText,
+            ValidFrom = price.ValidFrom,
+            ValidUntil = price.ValidUntil,
+            InStock = price.InStock,
+        };
+        return PriceStates.Of(reading, today) == PriceStates.Current
+            ? Offer(store, new Product { Name = productName }, new StoreListing { Store = store, Title = title }, reading, today, null, coupons)
+            : null;
+    }
+
     private static PromoGap Gap(Store store, string state, PriceObservation observation) => state switch
     {
         PriceStates.Upcoming => new PromoGap(Slug(store), store.DisplayName(), "upcoming", observation.ValidFrom),

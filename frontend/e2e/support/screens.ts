@@ -289,6 +289,51 @@ const SCORECARD_EMPTY = {
   trend: SCORECARD.trend.map(month => ({...month, trips: 0, compared: 0, saved: 0})),
 };
 
+const USUAL_PROMOTIONS = {
+  asOf: '2026-11-06',
+  staleAfterDays: 3,
+  products: [
+    {
+      id: 'p1',
+      name: 'Whole milk 2L',
+      boughtIn: 3,
+      offers: [
+        {
+          catalogProductId: 'c1',
+          title: 'Milbona whole milk',
+          imageUrl: null,
+          url: 'https://www.lidl.ie/p/p1',
+          basis: 'name_size',
+          offer: {
+            store: 'lidl',
+            storeName: 'Lidl',
+            kind: 'percentage',
+            isPromo: true,
+            deal: 'Price cut',
+            promoText: null,
+            card: null,
+            buyQuantity: 1,
+            payTotal: 1.49,
+            eachPrice: 1.49,
+            shelfPrice: 1.49,
+            referencePrice: 1.99,
+            savingPercent: 25,
+            packSize: '2 l',
+            unit: 'l',
+            unitPrice: 0.75,
+            referenceUnitPrice: 1,
+            observedOn: '2026-11-06',
+            validUntil: '2026-11-12',
+            rank: null,
+            flags: [],
+            lowestIn90Days: false,
+          },
+        },
+      ],
+    },
+  ],
+};
+
 const PROMOTIONS = {
   asOf: '2026-11-06',
   staleAfterDays: 3,
@@ -1048,6 +1093,7 @@ export async function signedIn(page: Page): Promise<void> {
   await page.route('**/api/trips/habits', r => r.fulfill({json: HABITS}));
   await page.route('**/api/products', r => r.fulfill({json: PRODUCTS}));
   await page.route('**/api/promotions', r => r.fulfill({json: PROMOTIONS}));
+  await page.route('**/api/promotions/usual', r => r.fulfill({json: USUAL_PROMOTIONS}));
   await page.route('**/api/plan', r => r.fulfill({json: PLAN}));
   await page.route('**/api/plan/by-shop', r => r.fulfill({json: BY_SHOP}));
   await page.route('**/api/scorecard', r => r.fulfill({json: SCORECARD}));
