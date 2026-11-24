@@ -64,14 +64,11 @@ export interface PromotionsResponse {
   readonly products: readonly PromoProduct[];
 }
 
-/** One shop's offer on a catalog product that is the usual product. `basis` is `linked` or why the matcher proposed it. */
+/** One shop's offer on a catalog product that is the usual product. */
 export interface UsualOffer {
   readonly catalogProductId: string;
   /** The shop's own name for it. */
   readonly title: string;
-  readonly imageUrl: string | null;
-  readonly url: string;
-  readonly basis: string;
   readonly offer: PromoOffer;
 }
 

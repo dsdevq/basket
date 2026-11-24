@@ -301,9 +301,6 @@ const USUAL_PROMOTIONS = {
         {
           catalogProductId: 'c1',
           title: 'Milbona whole milk',
-          imageUrl: null,
-          url: 'https://www.lidl.ie/p/p1',
-          basis: 'name_size',
           offer: {
             store: 'lidl',
             storeName: 'Lidl',

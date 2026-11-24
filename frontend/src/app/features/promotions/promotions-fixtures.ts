@@ -47,9 +47,6 @@ export function usualOffer(over: Partial<UsualOffer> = {}): UsualOffer {
   return {
     catalogProductId: 'c1',
     title: 'Milbona whole milk',
-    imageUrl: null,
-    url: 'https://www.lidl.ie/p/p1',
-    basis: 'name_size',
     offer: offer({
       unit: null,
       unitPrice: null,

@@ -180,7 +180,17 @@ describe('PromotionsPage', () => {
     fixture.detectChanges();
     await settle(fixture);
 
-    expect((fixture.nativeElement as HTMLElement).textContent).toContain('Chicken fillets');
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.textContent).toContain('Chicken fillets');
+    const usualTab = [...host.querySelectorAll<HTMLElement>('cmn-segmented button')].find(cell =>
+      cell.textContent?.includes('Your usual')
+    );
+    usualTab?.click();
+    await settle(fixture);
+
+    expect(host.textContent).toContain('Your usual products did not load');
+    expect(host.textContent).not.toContain('Nothing on offer from your usual products');
+    expect(host.textContent).toContain('Try again');
   });
 
   it('says so when nothing is on offer', async () => {

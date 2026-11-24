@@ -697,7 +697,9 @@ already buy. A **Your usual** view, the page's first, lists them.
 - **Same promotion rule.** A row's price is read by the rule above (`PromotionBuilder.CatalogOffer`, then `OfferCalculator`, card prices,
   multi-buys and activated Lidl Plus coupons), and only a promotion is shown. Out of stock, ended, not yet started and not listed by a
   sweep in the last 3 days (`StaleAfterDays`) are left out: this view says "on offer now", so it hides what the other view would flag.
-  Offers here are not ranked across shops; at most 2 per product per shop, linked page first, then the best match, then the bigger saving.
+  Offers here are not ranked across shops and none is dropped: every matching offer shows, by shop, then the cheaper first, bounded
+  only by the 300 rows per shop the narrowing reads. A row is told by its shop's name for it and the offer; it carries no "lowest in
+  90 days" mark, since a catalog row has no page history here.
 - **A match by name and size can be wrong**, so the sheet of the product's own page stays the place to confirm; this view never
   changes a match.
 - **Never pushed.** It is a view the person opens; no notification, digest or badge is sent. No migration: the answer is computed on

@@ -6,8 +6,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Basket.Api.Prices.Promotions;
 
-/// <summary>One shop's offer on a catalog row that is the usual product. <see cref="Basis"/> is <c>linked</c> (the product's own page) or the matcher's basis.</summary>
-public sealed record UsualOffer(Guid CatalogProductId, string Title, string? ImageUrl, string Url, string Basis, PromoOffer Offer);
+/// <summary>One shop's offer on a catalog row that is the usual product.</summary>
+public sealed record UsualOffer(Guid CatalogProductId, string Title, PromoOffer Offer);
 
 public sealed record UsualProduct(Guid Id, string Name, int BoughtIn, IReadOnlyList<UsualOffer> Offers);
 
@@ -24,9 +24,6 @@ public sealed record UsualOffersResponse(DateOnly AsOf, int StaleAfterDays, IRea
 /// </summary>
 public static class UsualOffers
 {
-    /// <summary>Most offers shown per product per shop: a product with a dozen near-identical rows must not fill the screen.</summary>
-    public const int PerStore = 2;
-
     public static async Task<UsualOffersResponse> BuildAsync(AppDbContext db, DateOnly today, CancellationToken ct)
     {
         var usual = (await HabitEndpoints.LoadAsync(db, ct)).Where(h => h.Usual).ToList();
@@ -55,13 +52,13 @@ public static class UsualOffers
             var names = ProductAliases.FactsWithAliases(facts, aliases[product.Id]);
             var refused = rejected[product.Id].ToHashSet(StringComparer.Ordinal);
 
-            var rows = new Dictionary<Guid, (StoreProduct Row, string Basis, int Score)>();
+            var rows = new Dictionary<Guid, StoreProduct>();
             foreach (var listing in own.Where(l => l.StoreProductId != null))
             {
                 // The product's own page, whoever linked it: it is what the household reads prices from.
                 if (await db.StoreProducts.AsNoTracking().FirstOrDefaultAsync(p => p.Id == listing.StoreProductId && p.DiscontinuedAt == null, ct) is { } row)
                 {
-                    rows[row.Id] = (row, "linked", 100);
+                    rows[row.Id] = row;
                 }
             }
 
@@ -76,9 +73,9 @@ public static class UsualOffers
                             continue;
                         }
 
-                        if (CandidateMatcher.EvaluateAny(names, new CandidateFacts(CatalogRows.TitleOf(row), row.Barcode, row.Category, CatalogRows.SizeOf(row))) is { } verdict)
+                        if (CandidateMatcher.EvaluateAny(names, new CandidateFacts(CatalogRows.TitleOf(row), row.Barcode, row.Category, CatalogRows.SizeOf(row))) is not null)
                         {
-                            rows[row.Id] = (row, verdict.Basis, verdict.Score);
+                            rows[row.Id] = row;
                         }
                     }
                 }
@@ -86,7 +83,7 @@ public static class UsualOffers
 
             var prices = await CatalogEndpoints.LatestPricesAsync(db, rows.Keys.ToList(), ct);
             var offers = new List<UsualOffer>();
-            foreach (var (id, (row, basis, score)) in rows)
+            foreach (var (id, row) in rows)
             {
                 var seen = PriceRecorder.DublinDay(row.LastSeenAt);
                 if (!prices.TryGetValue(id, out var price) || today.DayNumber - seen.DayNumber > PromotionBuilder.StaleAfterDays)
@@ -98,21 +95,14 @@ public static class UsualOffers
                 var offer = PromotionBuilder.CatalogOffer(row.Store, row.SizeText is { Length: > 0 } size && !title.Contains(size, StringComparison.OrdinalIgnoreCase) ? $"{title} {size}" : title, product.Name, price, seen, today, coupons);
                 if (offer is { IsPromo: true } && !offer.Flags.Contains(PromotionBuilder.FlagOutOfStock))
                 {
-                    offers.Add(new UsualOffer(row.Id, title, row.ImageUrl, row.Url, basis, offer));
+                    offers.Add(new UsualOffer(row.Id, title, offer));
                 }
             }
 
             var shown = offers
-                .GroupBy(o => o.Offer.Store)
-                .SelectMany(g => g
-                    .OrderBy(o => o.Basis == "linked" ? 0 : 1)
-                    .ThenByDescending(o => rows[o.CatalogProductId].Score)
-                    .ThenByDescending(o => o.Offer.SavingPercent ?? 0)
-                    .ThenBy(o => o.Offer.EachPrice)
-                    .ThenBy(o => o.Title, StringComparer.Ordinal)
-                    .Take(PerStore))
                 .OrderBy(o => o.Offer.Store, StringComparer.Ordinal)
                 .ThenBy(o => o.Offer.EachPrice)
+                .ThenBy(o => o.Title, StringComparer.Ordinal)
                 .ToList();
             if (shown.Count > 0)
             {

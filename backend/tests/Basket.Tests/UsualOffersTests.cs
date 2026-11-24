@@ -110,7 +110,24 @@ public sealed class UsualOffersTests
         offer.GetProperty("offer").GetProperty("isPromo").GetBoolean().Should().BeTrue();
         offer.GetProperty("offer").GetProperty("eachPrice").GetDecimal().Should().Be(1.49m);
         offer.GetProperty("offer").GetProperty("referencePrice").GetDecimal().Should().Be(1.99m);
-        offer.GetProperty("basis").GetString().Should().Be("name_size");
+    }
+
+    [Fact]
+    public async Task Every_current_offer_on_a_usual_product_is_shown_not_only_the_first_few()
+    {
+        await using var factory = new BasketFactory();
+        var (owner, _) = await factory.OwnerAsync();
+        var milk = await ProductAsync(factory, "Whole milk 2L");
+        await BuyUsuallyAsync(factory, owner, milk);
+        foreach (var price in new[] { 1.19m, 1.29m, 1.39m, 1.49m })
+        {
+            await CatalogAsync(factory, Store.Lidl, "Whole milk", "2 l", 2000, StoreProduct.Millilitres, price, was: 1.99m);
+        }
+
+        var product = (await UsualAsync(owner)).Should().ContainSingle().Subject;
+
+        product.GetProperty("offers").EnumerateArray().Select(o => o.GetProperty("offer").GetProperty("eachPrice").GetDecimal())
+            .Should().Equal(1.19m, 1.29m, 1.39m, 1.49m);
     }
 
     [Fact]

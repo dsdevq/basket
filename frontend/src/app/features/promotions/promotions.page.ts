@@ -104,7 +104,15 @@ const VIEWS: readonly SegmentedOption[] = [
         }
         @default {
           @if (activeView() === 'usual') {
-            @if (!store.usual().length) {
+            @if (store.usualFailed()) {
+              <cmn-empty-state
+                (action)="store.load()"
+                kind="error"
+                message="Your usual products did not load"
+                subMessage="Check your connection."
+                actionLabel="Try again"
+              />
+            } @else if (!store.usual().length) {
               <cmn-empty-state
                 icon="Tag"
                 message="Nothing on offer from your usual products"
@@ -119,9 +127,6 @@ const VIEWS: readonly SegmentedOption[] = [
                       [sublabel]="usualLines(usual)"
                       class="[&_.truncate]:overflow-visible [&_.truncate]:whitespace-pre-line [&_.truncate]:break-words"
                     >
-                      @if (usual.offer.lowestIn90Days) {
-                        <cmn-tag variant="success" meta>{{ lowestTag }}</cmn-tag>
-                      }
                       <span amount class="text-cmn-sm font-semibold text-text-primary">{{
                         headline(usual.offer)
                       }}</span>
