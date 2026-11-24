@@ -62,6 +62,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options)
             item.HasOne<AppUser>().WithMany().HasForeignKey(i => i.CheckedByUserId).OnDelete(DeleteBehavior.SetNull);
             item.HasIndex(i => new { i.IsChecked, i.AddedAt });
             item.Property(i => i.Store).HasConversion<string>().HasMaxLength(16);
+            item.Property(i => i.Note).HasMaxLength(ListItem.MaxNoteLength);
+            item.ToTable(t => t.HasCheckConstraint("ck_list_item_quantity", "quantity IS NULL OR (quantity >= 1 AND quantity <= 99)"));
             item.HasOne<Product>().WithMany().HasForeignKey(i => i.ProductId).OnDelete(DeleteBehavior.SetNull);
             // One open line per product and shop (a null shop counts as one value): tapping a Shelf tile twice, or two
             // phones tapping at once, cannot put the same thing on the list twice. A ticked line is history, not a duplicate.

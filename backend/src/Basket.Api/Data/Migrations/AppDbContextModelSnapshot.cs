@@ -340,9 +340,18 @@ namespace Basket.Api.Data.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("is_checked");
 
+                    b.Property<string>("Note")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("note");
+
                     b.Property<Guid?>("ProductId")
                         .HasColumnType("uuid")
                         .HasColumnName("product_id");
+
+                    b.Property<int?>("Quantity")
+                        .HasColumnType("integer")
+                        .HasColumnName("quantity");
 
                     b.Property<string>("Store")
                         .HasMaxLength(16)
@@ -369,7 +378,10 @@ namespace Basket.Api.Data.Migrations
 
                     NpgsqlIndexBuilderExtensions.AreNullsDistinct(b.HasIndex("ProductId", "Store"), false);
 
-                    b.ToTable("list_item", (string)null);
+                    b.ToTable("list_item", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_list_item_quantity", "quantity IS NULL OR (quantity >= 1 AND quantity <= 99)");
+                        });
                 });
 
             modelBuilder.Entity("Basket.Api.Data.LoyaltyCard", b =>

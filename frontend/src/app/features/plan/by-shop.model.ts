@@ -6,6 +6,9 @@ export interface ByShopLine {
   readonly itemId: string;
   readonly text: string;
   readonly price: number;
+  /** How many packs the line asks for; the line costs `total`, `quantity` times `price`. */
+  readonly quantity: number;
+  readonly total: number;
   readonly deal: string;
   readonly isPromo: boolean;
   /** The loyalty card the price needs; null when it needs none. */

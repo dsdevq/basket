@@ -19,10 +19,12 @@ export function shop(over: Partial<ByShopStore> = {}): ByShopStore {
 }
 
 export function bought(over: Partial<ByShopLine> = {}): ByShopLine {
-  return {
+  const line: ByShopLine = {
     itemId: 'a',
     text: 'Whole milk 2L',
     price: 1.29,
+    quantity: 1,
+    total: 1.29,
     deal: 'Shelf price',
     isPromo: false,
     card: null,
@@ -33,6 +35,8 @@ export function bought(over: Partial<ByShopLine> = {}): ByShopLine {
     section: 'Other',
     ...over,
   };
+  // The cost of the line follows its price and quantity unless a test sets it.
+  return {...line, total: over.total ?? line.price * line.quantity};
 }
 
 export function basket(over: Partial<ByShopResponse> = {}): ByShopResponse {

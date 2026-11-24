@@ -181,7 +181,7 @@ const SUGGESTIONS_SHOWN = 4;
     <ng-template #row let-item>
       <cmn-list-item-row
         [label]="item.text"
-        [sublabel]="item.addedBy.name"
+        [sublabel]="sublabel(item)"
         [dimmed]="item.checked"
         [swipeLeading]="{
           label: item.checked ? 'Untick' : 'Tick',
@@ -193,6 +193,9 @@ const SUGGESTIONS_SHOWN = 4;
         (swipeTrailingAction)="remove(item)"
         class="[&_.truncate]:overflow-visible [&_.truncate]:whitespace-normal [&_.truncate]:break-words"
       >
+        @if (item.quantity) {
+          <cmn-tag meta variant="info">×{{ item.quantity }}</cmn-tag>
+        }
         @if (!item.productId) {
           <cmn-tag meta variant="warning">Not linked</cmn-tag>
         }
@@ -354,6 +357,11 @@ export class ListPage implements OnInit {
   protected shop(item: ListItem): string | null {
     const store: StoreId | null = item.checked ? item.boughtStore : item.store;
     return store ? STORE_NAMES[store] : null;
+  }
+
+  /** The line under a row's name: its note first, then who added it. */
+  protected sublabel(item: ListItem): string {
+    return item.note ? `${item.note} · ${item.addedBy.name}` : item.addedBy.name;
   }
 
   protected toggle(item: ListItem, checked: boolean): void {

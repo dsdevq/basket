@@ -8,6 +8,7 @@ namespace Basket.Api.Plan;
 /// One line bought at one shop: what the shop's usable offer charges for one pack (a card price or a multi-buy counts, as in the
 /// plan), the deal behind it and the day the price was read. <see cref="Section"/> is where the shop keeps it, one of
 /// <see cref="SeededSectionOrder.For"/> (the walk-order section its category falls in, "Other" when it has none).
+/// <see cref="Price"/> is one pack; the line is <see cref="Quantity"/> of them and costs <see cref="Total"/>.
 /// </summary>
 public sealed record ByShopLine(
     Guid ItemId,
@@ -20,7 +21,12 @@ public sealed record ByShopLine(
     decimal? UnitPrice,
     string? Unit,
     DateOnly ObservedOn,
-    string Section);
+    string Section,
+    int Quantity = 1)
+{
+    /// <summary>What the line costs: one pack times how many the list asks for.</summary>
+    public decimal Total => Price * Quantity;
+}
 
 /// <summary>
 /// The whole list priced at one shop. <see cref="Total"/> adds only the <see cref="Priced"/> lines (fresh, in stock, current); a
@@ -112,7 +118,7 @@ public static class ByShopBuilder
             slug,
             name,
             priced.Count,
-            priced.Sum(p => p.Entry.Offer!.EachPrice),
+            priced.Sum(p => p.Entry.Offer!.EachPrice * p.Item.Quantity),
             items.Count > 0 && missing.Count == 0,
             false,
             seen.Count > 0 ? seen.Min() : null,
@@ -178,7 +184,7 @@ public static class ByShopBuilder
     internal static ByShopGroup Group(Store store, IEnumerable<ByShopLine> lines, WalkOrders walk)
     {
         var ordered = lines.OrderBy(l => walk.RankOfSection(store, l.Section)).ToList();
-        return new ByShopGroup(store.Slug(), store.DisplayName(), ordered.Sum(l => l.Price), ordered);
+        return new ByShopGroup(store.Slug(), store.DisplayName(), ordered.Sum(l => l.Total), ordered);
     }
 
     internal static ByShopLine Line(PlanItem item, PlanStorePrice entry)
@@ -195,6 +201,7 @@ public static class ByShopBuilder
             offer.UnitPrice,
             offer.Unit,
             offer.ObservedOn,
-            SeededSectionOrder.SectionOf(entry.Category));
+            SeededSectionOrder.SectionOf(entry.Category),
+            item.Quantity);
     }
 }

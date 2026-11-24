@@ -46,6 +46,10 @@ export interface PlanItem {
   readonly stores: readonly PlanStorePrice[];
   /** The latest receipt price at each shop the product was bought at, whether or not that shop's page is linked. */
   readonly lastPaid: readonly PlanPaid[];
+  /** How many packs the line asks for (1 when none was set). The prices on the line are one pack's. */
+  readonly quantity: number;
+  /** The line's note; null when there is none. */
+  readonly note: string | null;
 }
 
 export interface PlanBlocker {

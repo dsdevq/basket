@@ -6,7 +6,7 @@ namespace Basket.Api.Plan;
 /// <summary>
 /// The cheapest two shops that together price every open line, with what each one is bought at. <see cref="Groups"/> are the shops
 /// in the fixed order (Lidl, Aldi, Tesco, Dunnes) with their lines in walk order, dated prices and subtotals, the same shape as the
-/// By shop split. <see cref="Total"/> adds one pack of each line at the shop with the lower unit price, a card price or a multi-buy counted.
+/// By shop split. <see cref="Total"/> adds the packs of each line (its quantity) at the shop with the lower unit price, a card price or a multi-buy counted.
 /// </summary>
 public sealed record PlanPairSplit(
     decimal Total,

@@ -25,6 +25,9 @@ public sealed record LinkProductRequest(Guid? ProductId, bool? Remember = null);
 /// <summary>The shop a ticked item was bought at, when it was not the one the plan suggested.</summary>
 public sealed record SetBoughtAtRequest(string? Store);
 
+/// <summary>The line's quantity and note, both replaced: null or empty clears one. A quantity of 1 is the same as none.</summary>
+public sealed record SetDetailsRequest(int? Quantity, string? Note);
+
 public sealed record Person(Guid Id, string Name);
 
 public sealed record ListItemResponse(
@@ -38,7 +41,9 @@ public sealed record ListItemResponse(
     Guid? ProductId,
     string? Store,
     string? ImageUrl,
-    string? BoughtStore);
+    string? BoughtStore,
+    int? Quantity = null,
+    string? Note = null);
 
 public static class ListEndpoints
 {
@@ -52,6 +57,7 @@ public static class ListEndpoints
         list.MapPost("/items", AddItem);
         list.MapPatch("/items/{id:guid}", SetChecked);
         list.MapPatch("/items/{id:guid}/bought-at", SetBoughtAt);
+        list.MapPatch("/items/{id:guid}/details", SetDetails);
         list.MapPut("/items/{id:guid}/product", LinkProduct);
         list.MapDelete("/items/{id:guid}", DeleteItem);
     }
@@ -68,10 +74,12 @@ public static class ListEndpoints
         Guid? ProductId,
         Store? Store,
         string? ImageUrl,
-        Store? BoughtStore);
+        Store? BoughtStore,
+        int? Quantity,
+        string? Note);
 
     private static ListItemResponse ToResponse(Row r) =>
-        new(r.Id, r.Text, r.Checked, r.AddedAt, r.AddedBy, r.CheckedAt, r.CheckedBy, r.ProductId, r.Store?.Slug(), r.ImageUrl, r.BoughtStore?.Slug());
+        new(r.Id, r.Text, r.Checked, r.AddedAt, r.AddedBy, r.CheckedAt, r.CheckedBy, r.ProductId, r.Store?.Slug(), r.ImageUrl, r.BoughtStore?.Slug(), r.Quantity, r.Note);
 
     private static IQueryable<Row> Project(AppDbContext db, Guid? id = null) =>
         from i in db.ListItems.AsNoTracking().Where(i => id == null || i.Id == id)
@@ -96,7 +104,9 @@ public static class ListEndpoints
                 .Select(l => l.ImageUrl)
                 .FirstOrDefault(),
             // Where a ticked line was bought, from its record in the open trip; a closed trip's items point at no line.
-            db.TripItems.Where(t => t.ListItemId == i.Id).Select(t => t.BoughtStore).FirstOrDefault());
+            db.TripItems.Where(t => t.ListItemId == i.Id).Select(t => t.BoughtStore).FirstOrDefault(),
+            i.Quantity,
+            i.Note);
 
     private static async Task<IResult> GetList(AppDbContext db, CancellationToken ct)
     {
@@ -381,6 +391,30 @@ public static class ListEndpoints
         }
 
         return Results.Ok(ToResponse(await Project(db, id).SingleAsync(ct)));
+    }
+
+    /// <summary>
+    /// Sets how many packs a line is and its note. Both are replaced as sent: no quantity (or 1) is one pack, no note is none.
+    /// A quantity outside 1 to <see cref="ListItem.MaxQuantity"/> or a note over <see cref="ListItem.MaxNoteLength"/> is refused, not cut.
+    /// </summary>
+    private static async Task<IResult> SetDetails(Guid id, SetDetailsRequest request, AppDbContext db, CancellationToken ct)
+    {
+        if (request.Quantity is < 1 or > ListItem.MaxQuantity)
+        {
+            return Results.Json(new { error = "quantity_invalid", message = $"Quantity is 1 to {ListItem.MaxQuantity}." }, statusCode: 400);
+        }
+
+        var note = string.IsNullOrWhiteSpace(request.Note) ? null : request.Note.Trim();
+        if (note is not null && note.Length > ListItem.MaxNoteLength)
+        {
+            return Results.Json(new { error = "note_too_long", message = $"A note is at most {ListItem.MaxNoteLength} characters." }, statusCode: 400);
+        }
+
+        var quantity = request.Quantity is > 1 ? request.Quantity : null;
+        var rows = await db.ListItems.Where(i => i.Id == id).ExecuteUpdateAsync(s => s
+            .SetProperty(i => i.Quantity, quantity)
+            .SetProperty(i => i.Note, note), ct);
+        return rows == 0 ? Results.NotFound() : Results.Ok(ToResponse(await Project(db, id).SingleAsync(ct)));
     }
 
     /// <summary>The person changes where a ticked item was bought, when it was not the shop the plan suggested.</summary>
