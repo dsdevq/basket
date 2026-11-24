@@ -1089,6 +1089,7 @@ export async function signedIn(page: Page): Promise<void> {
   await page.route('**/api/trips', r => r.fulfill({json: TRIPS}));
   await page.route('**/api/trips/habits', r => r.fulfill({json: HABITS}));
   await page.route('**/api/products', r => r.fulfill({json: PRODUCTS}));
+  await page.route('**/api/alias-proposals', r => r.fulfill({json: {proposals: []}}));
   await page.route('**/api/promotions', r => r.fulfill({json: PROMOTIONS}));
   await page.route('**/api/promotions/usual', r => r.fulfill({json: USUAL_PROMOTIONS}));
   await page.route('**/api/plan', r => r.fulfill({json: PLAN}));

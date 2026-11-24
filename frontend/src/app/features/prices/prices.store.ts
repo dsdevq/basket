@@ -5,11 +5,13 @@ import {patchState, signalStore, withMethods, withState} from '@ngrx/signals';
 import {HttpStatus, statusOf} from '../../core/http-status';
 import type {CatalogItem} from '../catalog/catalog.model';
 import {PricesApi} from './prices.api';
-import type {Alias, Candidate, Product, StoreId, StoreStatus} from './prices.model';
+import type {Alias, AliasProposal, Candidate, Product, StoreId, StoreStatus} from './prices.model';
 
 interface PricesState {
   readonly products: readonly Product[];
   readonly stores: readonly StoreStatus[];
+  /** Other names the receipts suggest, waiting for a tap; empty when they could not be read. */
+  readonly proposals: readonly AliasProposal[];
   readonly status: 'loading' | 'ready' | 'error';
   readonly adding: boolean;
 }
@@ -24,13 +26,20 @@ const MESSAGES = {
   candidates: 'Could not load the suggestions. Try again.',
   decide: 'Could not save that answer. Try again.',
   alias: 'Could not save that name. Try again.',
+  proposal: 'Could not save that answer. Try again.',
   answered: 'Someone already answered that suggestion. Check the list again.',
 } as const;
 
 /** The household's products with the latest price each shop showed for them. */
 export const PricesStore = signalStore(
   {providedIn: 'root'},
-  withState<PricesState>({products: [], stores: [], status: 'loading', adding: false}),
+  withState<PricesState>({
+    products: [],
+    stores: [],
+    proposals: [],
+    status: 'loading',
+    adding: false,
+  }),
   withMethods((store, api = inject(PricesApi), toast = inject(ToastService)) => {
     // Counts loads and local writes to `products`; a response that is no longer the latest of them is stale and dropped.
     let changes = 0;
@@ -45,11 +54,11 @@ export const PricesStore = signalStore(
       async load(quiet = false): Promise<void> {
         const seen = ++changes;
         try {
-          const all = await api.all();
+          const [all, proposals] = await Promise.all([api.all(), this.readProposals()]);
           patchState(
             store,
             changes === seen
-              ? {products: all.products, stores: all.stores, status: 'ready'}
+              ? {products: all.products, stores: all.stores, proposals, status: 'ready'}
               : {status: 'ready'}
           );
         } catch {
@@ -58,6 +67,43 @@ export const PricesStore = signalStore(
             toast.error(MESSAGES.load);
           }
         }
+      },
+
+      /** The pairs worth a tap. They are an extra: when they cannot be read the shelf still shows, with none. */
+      async readProposals(): Promise<readonly AliasProposal[]> {
+        try {
+          return (await api.aliasProposals()).proposals;
+        } catch {
+          return [];
+        }
+      },
+
+      /** Yes: the words become another name of the product. A 404 (answered meanwhile) or 409 (the name is taken) just drops the row. */
+      async acceptProposal(proposal: AliasProposal): Promise<boolean> {
+        try {
+          await api.acceptAliasProposal(proposal);
+        } catch (error) {
+          if (statusOf(error) !== HttpStatus.notFound && statusOf(error) !== HttpStatus.conflict) {
+            toast.error(MESSAGES.proposal);
+            return false;
+          }
+        }
+        await this.load(true);
+        return true;
+      },
+
+      /** No: the pair is never proposed again. */
+      async rejectProposal(proposal: AliasProposal): Promise<boolean> {
+        try {
+          await api.rejectAliasProposal(proposal);
+        } catch (error) {
+          if (statusOf(error) !== HttpStatus.notFound) {
+            toast.error(MESSAGES.proposal);
+            return false;
+          }
+        }
+        await this.load(true);
+        return true;
       },
 
       async add(name: string): Promise<boolean> {

@@ -213,6 +213,7 @@ api.MapTripEndpoints();
 api.MapHabitEndpoints();
 api.MapProductEndpoints();
 api.MapProductAliasEndpoints();
+api.MapAliasProposalEndpoints();
 api.MapCatalogEndpoints();
 api.MapMatchEndpoints();
 api.MapPromotionEndpoints();

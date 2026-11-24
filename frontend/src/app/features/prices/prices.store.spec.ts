@@ -5,7 +5,7 @@ import {ToastService} from '@lifekit-hq/ui';
 import type {CatalogItem} from '../catalog/catalog.model';
 import {health} from './catalog-health-fixtures';
 import {PricesApi} from './prices.api';
-import type {Product} from './prices.model';
+import type {AliasProposal, Product} from './prices.model';
 import {PricesStore} from './prices.store';
 
 const PRODUCT: Product = {id: 'p1', name: 'Milk', stores: []};
@@ -227,6 +227,65 @@ describe('PricesStore', () => {
 
       expect(await store.confirm(PRODUCT, CANDIDATE)).toBe(false);
       expect(toast.error).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('proposed names', () => {
+    const PROPOSAL: AliasProposal = {
+      text: 'Яйця',
+      productId: 'p1',
+      productName: 'Free Range Eggs',
+      trips: 2,
+      lastSeen: '2026-11-19',
+    };
+
+    it('loads them with the shelf, and loads the shelf without them when they cannot be read', async () => {
+      const all = vi.fn().mockResolvedValue({products: [PRODUCT], stores: []});
+      const aliasProposals = vi
+        .fn()
+        .mockResolvedValueOnce({proposals: [PROPOSAL]})
+        .mockRejectedValueOnce(new Error('offline'));
+      const {store} = setup({all, aliasProposals});
+
+      await store.load();
+      expect(store.proposals()).toEqual([PROPOSAL]);
+
+      await store.load();
+      expect(store.status()).toBe('ready');
+      expect(store.proposals()).toEqual([]);
+    });
+
+    it('re-reads after a yes and after a no, and counts an answer given elsewhere as done', async () => {
+      const acceptAliasProposal = vi.fn().mockResolvedValue({id: 'a1', text: 'Яйця'});
+      const rejectAliasProposal = vi.fn().mockRejectedValue(new HttpErrorResponse({status: 404}));
+      const all = vi.fn().mockResolvedValue({products: [PRODUCT], stores: []});
+      const {store, toast} = setup({
+        all,
+        aliasProposals: vi.fn().mockResolvedValue({proposals: []}),
+        acceptAliasProposal,
+        rejectAliasProposal,
+      });
+
+      expect(await store.acceptProposal(PROPOSAL)).toBe(true);
+      expect(await store.rejectProposal(PROPOSAL)).toBe(true);
+
+      expect(acceptAliasProposal).toHaveBeenCalledWith(PROPOSAL);
+      expect(all).toHaveBeenCalledTimes(2);
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    it('keeps the row and says so when an answer cannot be saved', async () => {
+      const {store, toast} = setup({
+        all: vi.fn().mockResolvedValue({products: [], stores: []}),
+        aliasProposals: vi.fn().mockResolvedValue({proposals: [PROPOSAL]}),
+        acceptAliasProposal: vi.fn().mockRejectedValue(new HttpErrorResponse({status: 500})),
+      });
+      await store.load();
+
+      expect(await store.acceptProposal(PROPOSAL)).toBe(false);
+
+      expect(store.proposals()).toEqual([PROPOSAL]);
+      expect(toast.error).toHaveBeenCalledWith('Could not save that answer. Try again.');
     });
   });
 

@@ -3,7 +3,15 @@ import {inject, Injectable} from '@angular/core';
 import {firstValueFrom} from 'rxjs';
 
 import type {PriceHistory} from './price-history.model';
-import type {Alias, Candidate, Listing, PricesResponse, Product, StoreId} from './prices.model';
+import type {
+  Alias,
+  AliasProposal,
+  Candidate,
+  Listing,
+  PricesResponse,
+  Product,
+  StoreId,
+} from './prices.model';
 
 @Injectable({providedIn: 'root'})
 export class PricesApi {
@@ -43,6 +51,30 @@ export class PricesApi {
 
   public removeAlias(id: string, aliasId: string): Promise<void> {
     return firstValueFrom(this.http.delete<void>(`/api/products/${id}/aliases/${aliasId}`));
+  }
+
+  public aliasProposals(): Promise<{proposals: readonly AliasProposal[]}> {
+    return firstValueFrom(
+      this.http.get<{proposals: readonly AliasProposal[]}>('/api/alias-proposals')
+    );
+  }
+
+  public acceptAliasProposal(proposal: AliasProposal): Promise<Alias> {
+    return firstValueFrom(
+      this.http.post<Alias>('/api/alias-proposals/accept', {
+        text: proposal.text,
+        productId: proposal.productId,
+      })
+    );
+  }
+
+  public rejectAliasProposal(proposal: AliasProposal): Promise<void> {
+    return firstValueFrom(
+      this.http.post<void>('/api/alias-proposals/reject', {
+        text: proposal.text,
+        productId: proposal.productId,
+      })
+    );
   }
 
   public link(id: string, store: StoreId, url: string, imageUrl?: string): Promise<Listing> {
