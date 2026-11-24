@@ -36,3 +36,15 @@ export function wouldAddName(product: Product, words: string): boolean {
     !(product.aliases ?? []).some(alias => fold(alias.text) === folded)
   );
 }
+
+/** The product that has these words, exactly, as one of its other names; null when none does (a product's own name is not an alias). */
+export function exactAlias(products: readonly Product[], words: string): Product | null {
+  const folded = fold(words);
+  if (!folded) {
+    return null;
+  }
+  return (
+    products.find(product => (product.aliases ?? []).some(alias => fold(alias.text) === folded)) ??
+    null
+  );
+}
